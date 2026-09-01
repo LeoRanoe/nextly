@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { cacheLife, cacheTag } from 'next/cache';
+import { isDatabaseConfigured } from '@/lib/env';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
 import { OVERVIEW_TAGS, TAGS } from './cache';
@@ -29,6 +30,12 @@ export async function getPosition(): Promise<Position> {
   'use cache';
   cacheTag(...OVERVIEW_TAGS);
   cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured())
+    return { cashCents: 0, inventoryCents: 0, committedCents: 0, netCents: 0 };
 
   const [row] = await db.execute<{
     cash: string;
@@ -68,6 +75,11 @@ export async function getCashFlow(weeks = 12): Promise<CashPoint[]> {
   'use cache';
   cacheTag(TAGS.ledger);
   cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<{
     week: string;
@@ -127,6 +139,12 @@ export async function getWaterfall(): Promise<Waterfall> {
   cacheTag(TAGS.sales, TAGS.expenses);
   cacheLife('max');
 
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured())
+    return { revenueCents: 0, cogsCents: 0, grossCents: 0, expensesCents: 0, netCents: 0 };
+
   const [row] = await db.execute<{ revenue: string; cogs: string; expenses: string }>(sql`
     SELECT
       COALESCE((
@@ -167,6 +185,11 @@ export async function getInventoryHealth(limit = 8): Promise<StockRow[]> {
   'use cache';
   cacheTag(TAGS.inventory, TAGS.purchaseOrders, TAGS.products);
   cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<{
     variant_id: string;
@@ -219,6 +242,11 @@ export async function getOwnerEquity(): Promise<OwnerRow[]> {
   cacheTag(TAGS.ledger, TAGS.members);
   cacheLife('max');
 
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
   const rows = await db.execute<{
     member_id: string;
     full_name: string;
@@ -251,6 +279,11 @@ export async function getCurrentRate(): Promise<{
   'use cache';
   cacheTag(TAGS.fxRates);
   cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return null;
 
   const [row] = await db.execute<{ rate_micros: string; effective_from: string }>(sql`
     SELECT rate_micros::text, effective_from::text

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { cacheLife, cacheTag } from 'next/cache';
+import { isDatabaseConfigured } from '@/lib/env';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
 import { TAGS } from './cache';
@@ -18,6 +19,11 @@ export async function listCategories(): Promise<CategoryRow[]> {
   'use cache';
   cacheTag(TAGS.products);
   cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<Record<string, string>>(sql`
     SELECT c.id, c.name, c.slug,
@@ -47,6 +53,11 @@ export async function listSuppliers(): Promise<SupplierRow[]> {
   'use cache';
   cacheTag(TAGS.products, TAGS.purchaseOrders);
   cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<Record<string, string>>(sql`
     SELECT
@@ -88,6 +99,11 @@ export async function listMembers(): Promise<MemberRow[]> {
   cacheTag(TAGS.members);
   cacheLife('max');
 
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT id, full_name, email, role::text AS role,
            is_principal::text AS is_principal,
@@ -119,6 +135,11 @@ export async function listRates(limit = 24): Promise<RateRow[]> {
   cacheTag(TAGS.fxRates);
   cacheLife('max');
 
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT id, rate_micros::text, effective_from::text, source, note
       FROM fx_rates
@@ -148,6 +169,11 @@ export async function getSettings(): Promise<SettingsRow | null> {
   cacheTag(TAGS.settings);
   cacheLife('max');
 
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return null;
+
   const [row] = await db.execute<Record<string, string>>(sql`
     SELECT business_name, base_currency, display_currency, low_stock_threshold::text
       FROM settings LIMIT 1
@@ -159,5 +185,87 @@ export async function getSettings(): Promise<SettingsRow | null> {
     baseCurrency: text(row.base_currency, 'USD'),
     displayCurrency: text(row.display_currency, 'SRD'),
     lowStockThreshold: num(row.low_stock_threshold, 5),
+  };
+}
+
+export type ProductDetail = {
+  id: string;
+  code: string;
+  name: string;
+  slug: string;
+  categoryId: string | null;
+  supplierId: string | null;
+  sourceUrl: string | null;
+  summary: string | null;
+  description: string | null;
+  status: 'draft' | 'active' | 'archived';
+  catalogPublished: boolean;
+  notes: string | null;
+  variants: {
+    id: string;
+    name: string;
+    sku: string;
+    listPriceCents: Cents;
+    referenceCostCents: Cents;
+    isActive: boolean;
+    onHand: number;
+    valueCents: Cents;
+  }[];
+};
+
+/** Everything the edit form needs, in one round trip. */
+export async function getProduct(id: string): Promise<ProductDetail | null> {
+  'use cache';
+  cacheTag(TAGS.products, TAGS.inventory);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return null;
+
+  const [row] = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, code, name, slug, category_id, supplier_id, source_url,
+           summary, description, status::text AS status,
+           catalog_published::text AS catalog_published, notes
+      FROM products WHERE id = ${id} LIMIT 1
+  `);
+
+  if (!row) return null;
+
+  const variants = await db.execute<Record<string, string | null>>(sql`
+    SELECT v.id, v.name, v.sku, v.list_price_cents::text, v.reference_cost_cents::text,
+           v.is_active::text AS is_active,
+           COALESCE(s.on_hand, 0)::text     AS on_hand,
+           COALESCE(s.value_cents, 0)::text AS value_cents
+      FROM product_variants v
+      LEFT JOIN v_stock_levels s ON s.variant_id = v.id
+     WHERE v.product_id = ${id}
+     ORDER BY v.position
+  `);
+
+  return {
+    id: text(row.id),
+    code: text(row.code),
+    name: text(row.name),
+    slug: text(row.slug),
+    categoryId: maybe(row.category_id),
+    supplierId: maybe(row.supplier_id),
+    sourceUrl: maybe(row.source_url),
+    summary: maybe(row.summary),
+    description: maybe(row.description),
+    status: text(row.status) as ProductDetail['status'],
+    catalogPublished: bool(row.catalog_published),
+    notes: maybe(row.notes),
+    variants: variants.map((variant) => ({
+      id: text(variant.id),
+      name: text(variant.name),
+      sku: text(variant.sku),
+      listPriceCents: num(variant.list_price_cents),
+      referenceCostCents: num(variant.reference_cost_cents),
+      isActive: bool(variant.is_active),
+      onHand: num(variant.on_hand),
+      valueCents: num(variant.value_cents),
+    })),
   };
 }

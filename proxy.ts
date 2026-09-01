@@ -19,9 +19,20 @@ const PUBLIC_PATHS = [
   '/auth/error',
   // Living design documentation. The page itself 404s in production.
   '/design-system',
+  // Reachable before any credentials exist; it redirects away once they do.
+  '/setup',
 ];
 
 export default async function proxy(request: NextRequest) {
+  // Nothing can work without a database, and a sign-in form that could never
+  // succeed is worse than an explanation.
+  if (!process.env.DATABASE_URL && !request.nextUrl.pathname.startsWith('/setup')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/setup';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

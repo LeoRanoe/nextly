@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { eq, isNull, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+import { isDatabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 import { db } from './db/client';
 import { members } from './db/schema';
@@ -33,6 +34,10 @@ export const getAuthUser = cache(async (): Promise<User | null> => {
 });
 
 export const getCurrentMember = cache(async (): Promise<Member | null> => {
+  // No database means no members table, so there is nobody to authorise and
+  // nothing to protect. `requireMember` turns this into the setup screen.
+  if (!isDatabaseConfigured()) return null;
+
   const user = await getAuthUser();
   if (!user?.email) return null;
 
@@ -68,6 +73,8 @@ export const getCurrentMember = cache(async (): Promise<Member | null> => {
  * they get told what actually happened.
  */
 export async function requireMember(): Promise<Member> {
+  if (!isDatabaseConfigured()) redirect('/setup');
+
   const member = await getCurrentMember();
   if (member) return member;
 

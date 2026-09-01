@@ -83,9 +83,15 @@ gets everything the view's owner can see, regardless of their own policies.
 
 ## Authentication
 
-Email one-time link, no passwords. At this size a password adds a secret to
-store, rotate and leak for no security gain, and the email inbox is already the
-recovery channel a password would fall back to.
+Supabase password auth (`signInWithPassword`). The account and its password
+credential live in Supabase; Nextly never stores or sees a password.
+
+This replaced an email one-time link during the first day of use, because a
+magic link means waiting on an inbox every single sign-in, and for two owners
+using the tool daily that friction outweighed the saved credential.
+
+`/auth/callback` is retained: it exchanges a code for a session and is still
+the landing point for a Supabase password-recovery link.
 
 `getUser()` is used everywhere, never `getSession()`. `getSession` trusts a
 cookie the browser supplied; `getUser` revalidates the token with Supabase.
@@ -105,14 +111,12 @@ First sign-in claims the invitation by matching on email
 
 ### Signing in is not access
 
-`shouldCreateUser: true`, so a stranger who reaches `/login` can create an auth
-account. That account grants **nothing**: without a `members` row they land on
+An auth account grants **nothing** on its own. Access is the `members` row,
+which only an owner can create; anyone who authenticates without one lands on
 `/no-access` and every query is guarded.
 
-Gating account creation itself would mean sending mail server-side with the
-service key, and would leak which addresses are members to anyone probing the
-form. The chosen trade is: anyone can hold a useless credential; only an owner
-can grant access.
+With password auth, accounts are created in the Supabase dashboard rather than
+self-served, so the surface is smaller than it was under magic links.
 
 ---
 

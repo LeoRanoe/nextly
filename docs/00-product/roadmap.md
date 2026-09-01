@@ -13,42 +13,36 @@ Status as of 1 September 2026.
 | **Database** | Supabase project `Nextly`, 19 tables, 11 enums, 5 views, RLS on everything, zero security advisories |
 | **Migration** | Master Sheet imported, P001/P002 merged into variants, reconciliation report written |
 | **Design system** | Instrument language, both themes, `/design-system` living reference |
-| **Auth** | Email link sign-in, invite claiming, `/no-access`, role guards |
+| **Auth** | Supabase password sign-in, invite claiming by email, `/no-access`, role guards |
 | **Shell** | Sidebar, topbar, ⌘K command palette, theme toggle |
 | **Overview** | Position strip with server-rendered sparklines, cash flow chart, margin waterfall, inventory health, owner equity, and the alerts panel that independently rediscovered both spreadsheet discrepancies |
 | **List pages** | Products, Inventory, Purchase orders, Sales, Customers, Ledger, Expenses, Owners, Categories, Suppliers, Settings |
+| **Write layer** | Server Actions with an authorisation boundary that cannot be forgotten, transactional posting, gapless numbering |
+| **Entry flows** | Record a sale with live margin, raise and receive a purchase order with a landed-cost preview, create and edit products with variants, customers, expenses, cash movements, categories, suppliers, exchange rates, team invitations, stock adjustments |
+| **Row actions** | Confirm and void sales, mark shipped, cancel orders, reverse ledger entries, delete expenses, remove members — destructive ones gated behind a written reason |
 
 ## Next
 
-**1. Entry forms and Server Actions.** The five `/new` routes are honest
-placeholders today. Each needs a form and a transactional Server Action:
+**1. Detail pages.** `/purchase-orders/[id]`, `/sales/[id]`, `/customers/[id]`.
+The product page already exists and the other three follow its shape.
 
-- **Record a sale** — the highest-frequency action, and the one worth the most
-  care. Customer combobox with create-inline, line items priced from the price
-  list, USD/SRD toggle at the live rate, and a live margin readout as you type.
-  One submit writes the sale, its items, the inventory movements and the ledger
-  entry in a single transaction.
-- **Raise and receive a purchase order** — the core value-add. Receiving
-  allocates overhead, writes landed cost, creates stock receipts and posts the
-  cash entry, atomically.
-- **Add a product** with variants and the Blob image manager.
-- **Log an expense**, **record a cash movement**.
-
-**2. Detail pages.** `/products/[id]`, `/purchase-orders/[id]`,
-`/sales/[id]`, `/customers/[id]`.
-
-**3. Image upload.** Design is written in
+**2. Image upload.** Designed in
 [../04-engineering/media-pipeline.md](../04-engineering/media-pipeline.md);
-needs a Blob store provisioned.
+needs a Blob store provisioned. Two constraints are already established:
+`putImage()` needs OIDC rather than a read-write token, and
+`onUploadCompleted` never fires on localhost.
 
-**4. Reports.** Profit and loss over a period, margin ranked by product, FX
+**3. Reports.** Profit and loss over a period, margin ranked by product, FX
 exposure. Everything they need is already in the ledgers.
 
-**5. Filtering and date ranges.** `nuqs` is installed; the topbar date scope
-should propagate to every widget through the URL.
+**4. Filtering and date ranges.** `nuqs` is installed and the sheets already
+keep their state in the URL; the topbar date scope should propagate to every
+widget the same way.
 
-**6. Playwright smoke test.** Sign in → create a product → receive an order →
-record a sale → assert stock, COGS and the ledger all moved correctly.
+**5. Playwright smoke test.** Sign in, create a product, receive an order,
+record a sale, and assert stock, cost of goods and the ledger all moved. The
+logic is unit-tested and has been replayed against the live database by hand;
+this closes the loop through the interface.
 
 ## Then
 
