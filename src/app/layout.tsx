@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Instrument_Sans, JetBrains_Mono } from 'next/font/google';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { Toaster } from '@/components/providers/toaster';
@@ -36,10 +37,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
       <body className="min-h-dvh bg-base text-ink antialiased">
-        <ThemeProvider>
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <NuqsAdapter>
+          <ThemeProvider>
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </NuqsAdapter>
       </body>
     </html>
   );

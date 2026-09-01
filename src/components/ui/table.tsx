@@ -1,3 +1,6 @@
+import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
+import type { Route } from 'next';
+import Link from 'next/link';
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
 import { Skeleton } from './skeleton';
@@ -57,6 +60,44 @@ export function TH({
       )}
       {...props}
     />
+  );
+}
+
+/**
+ * A sortable column header — a plain link, so toggling sort needs no
+ * JavaScript and composes with `typedRoutes`. `href` is the link this
+ * column should point to when clicked (computed by the caller, which is the
+ * only place that knows the full query shape); `active`/`dir` control which
+ * chevron shows.
+ */
+export function THSort({
+  href,
+  active,
+  dir,
+  numeric,
+  children,
+}: {
+  href: Route;
+  active: boolean;
+  dir: 'asc' | 'desc';
+  numeric?: boolean;
+  children: React.ReactNode;
+}) {
+  const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown;
+  return (
+    <TH numeric={numeric} className="p-0">
+      <Link
+        href={href}
+        className={cn(
+          'flex h-8 items-center gap-1 px-3 transition-colors hover:text-ink',
+          'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+          numeric && 'flex-row-reverse',
+        )}
+      >
+        {children}
+        <Icon className={cn('size-3', active ? 'text-ink-3' : 'text-ink-4/60')} />
+      </Link>
+    </TH>
   );
 }
 

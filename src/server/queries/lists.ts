@@ -1,7 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
+import type { SaleQuery } from '@/lib/list-params';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
+import { clampPage, clampPerPage, type Page, toPage } from './paginate';
 import { bool, maybe, num, text } from './row';
 
 /**
@@ -186,8 +188,36 @@ export type SaleRow = {
   paymentMethod: string;
 };
 
-export async function listSales(limit = 200): Promise<SaleRow[]> {
-  if (!isDatabaseConfigured()) return [];
+/** `ORDER BY` from a whitelist, never interpolated user input — an unknown
+ *  or missing key falls back to the default so a hand-edited URL degrades
+ *  rather than errors. */
+const SALE_SORT: Record<SaleQuery['sort'], SQL> = {
+  date: sql`s.sold_at`,
+  customer: sql`c.name NULLS LAST`,
+  revenue: sql`s.total_usd_cents`,
+  margin: sql`CASE WHEN s.total_usd_cents = 0 THEN 0
+                    ELSE s.gross_profit_cents::numeric / s.total_usd_cents END`,
+};
+
+export async function listSales(query: SaleQuery = {} as SaleQuery): Promise<Page<SaleRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`(s.number ILIKE ${term} OR c.name ILIKE ${term})`);
+  }
+  if (query.status) conditions.push(sql`s.status = ${query.status}::sale_status`);
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  // Sequential scan over an ILIKE, not a trigram index: at a few hundred
+  // rows a scan is faster than the index would be and far easier to read.
+  // Reconsider only if a single list nears the tens of thousands of rows.
+  const orderBy = SALE_SORT[query.sort] ?? SALE_SORT.date;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -196,27 +226,36 @@ export async function listSales(limit = 200): Promise<SaleRow[]> {
       s.payment_method::text, c.name AS customer_name,
       (SELECT COUNT(*) FROM sale_items i WHERE i.sale_id = s.id)::text AS item_count,
       COALESCE((SELECT SUM(i.quantity) FROM sale_items i WHERE i.sale_id = s.id), 0)::text
-        AS unit_count
+        AS unit_count,
+      COUNT(*) OVER()::text AS total_count
     FROM sales s
     LEFT JOIN customers c ON c.id = s.customer_id
-    ORDER BY s.sold_at DESC, s.number DESC
-    LIMIT ${limit}
+    ${where}
+    ORDER BY ${orderBy} ${direction}, s.number DESC
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    number: text(row.number),
-    soldAt: text(row.sold_at),
-    customerName: maybe(row.customer_name),
-    status: text(row.status) as SaleRow['status'],
-    currency: text(row.currency),
-    itemCount: num(row.item_count),
-    unitCount: num(row.unit_count),
-    totalUsdCents: num(row.total_usd_cents),
-    cogsCents: num(row.cogs_cents),
-    grossCents: num(row.gross_profit_cents),
-    paymentMethod: text(row.payment_method),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      number: text(row.number),
+      soldAt: text(row.sold_at),
+      customerName: maybe(row.customer_name),
+      status: text(row.status) as SaleRow['status'],
+      currency: text(row.currency),
+      itemCount: num(row.item_count),
+      unitCount: num(row.unit_count),
+      totalUsdCents: num(row.total_usd_cents),
+      cogsCents: num(row.cogs_cents),
+      grossCents: num(row.gross_profit_cents),
+      paymentMethod: text(row.payment_method),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type PurchaseOrderRow = {

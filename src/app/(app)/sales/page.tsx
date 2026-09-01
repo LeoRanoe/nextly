@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { SaleActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money, Percent } from '@/components/ui/money';
+import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
 import {
   Table,
@@ -17,16 +19,27 @@ import {
   TD,
   TH,
   THead,
+  THSort,
   TR,
 } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
+import { parseListParams, type RawSearchParams, saleQuerySchema } from '@/lib/list-params';
 import { listSales } from '@/server/queries/lists';
 
 export const metadata: Metadata = { title: 'Sales' };
 
 const STATUS_TONE = { draft: 'neutral', confirmed: 'positive', void: 'negative' } as const;
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'void', label: 'Void' },
+];
 
-export default function SalesPage() {
+export default function SalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   return (
     <>
       <PageHeader
@@ -39,18 +52,25 @@ export default function SalesPage() {
         }
       />
       <Surface className="overflow-hidden">
+        <ListToolbar>
+          <ListSearch placeholder="Search by number or customer" />
+          <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
+        </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-14', 'w-36', 'w-20']} />}>
-          <SalesTable />
+          <SalesTable searchParams={searchParams} />
         </Suspense>
       </Surface>
     </>
   );
 }
 
-async function SalesTable() {
-  const rows = await listSales();
+async function SalesTable({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
+  const raw = await searchParams;
+  const query = parseListParams(saleQuerySchema, raw);
+  const hasFilters = Boolean(query.q || query.status);
+  const result = await listSales(query);
 
-  if (rows.length === 0) {
+  if (result.total === 0 && !hasFilters) {
     return (
       <EmptyState
         Icon={Receipt}
@@ -65,7 +85,22 @@ async function SalesTable() {
     );
   }
 
-  const totals = rows
+  if (result.rows.length === 0) {
+    return (
+      <EmptyState
+        Icon={Receipt}
+        title="No sales match these filters"
+        description="Try a different search or clear the status filter."
+        action={
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/sales">Clear filters</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  const pageTotals = result.rows
     .filter((row) => row.status === 'confirmed')
     .reduce(
       (sum, row) => ({
@@ -76,87 +111,154 @@ async function SalesTable() {
       { revenue: 0, cogs: 0, gross: 0 },
     );
 
+  const nextDir = (sort: typeof query.sort) =>
+    query.sort === sort && query.dir === 'asc' ? 'desc' : 'asc';
+
   return (
-    <TableWrap>
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH className="w-[70px]">Number</TH>
-            <TH className="w-[92px]">Date</TH>
-            <TH>Customer</TH>
-            <TH>Status</TH>
-            <TH numeric>Units</TH>
-            <TH numeric>Revenue</TH>
-            <TH numeric>Cost</TH>
-            <TH numeric>Gross</TH>
-            <TH numeric>Margin</TH>
-            <TH />
-          </TR>
-        </THead>
-        <TBody>
-          {rows.map((row) => (
-            <TR key={row.id}>
-              <TD className="tabular whitespace-nowrap text-ink">
-                <Link
-                  href={`/sales/${row.id}` as Route}
-                  className="hover:text-accent hover:underline"
-                >
-                  {row.number}
-                </Link>
-              </TD>
-              <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                {formatDate(row.soldAt)}
-              </TD>
-              <TD className="text-ink-2">{row.customerName ?? '—'}</TD>
-              <TD>
-                <Badge tone={STATUS_TONE[row.status]}>
-                  {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                </Badge>
-              </TD>
-              <TD numeric className="text-ink-3">
-                {row.unitCount}
-              </TD>
-              <TD numeric>
-                <Money cents={row.totalUsdCents} size="sm" />
-              </TD>
-              <TD numeric>
-                <Money cents={row.cogsCents} size="sm" tone="muted" />
-              </TD>
-              <TD numeric>
-                <Money cents={row.grossCents} size="sm" tone="flow" />
-              </TD>
-              <TD numeric>
-                <Percent
-                  value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
-                />
-              </TD>
-              <TD className="text-right">
-                <SaleActions id={row.id} number={row.number} status={row.status} />
-              </TD>
+    <>
+      <TableWrap>
+        <Table>
+          <THead>
+            <TR className="hover:bg-transparent">
+              <TH className="w-[70px]">Number</TH>
+              <THSort
+                href={buildHref({ ...query, sort: 'date', dir: nextDir('date'), page: 1 })}
+                active={query.sort === 'date'}
+                dir={query.dir}
+              >
+                Date
+              </THSort>
+              <THSort
+                href={buildHref({
+                  ...query,
+                  sort: 'customer',
+                  dir: nextDir('customer'),
+                  page: 1,
+                })}
+                active={query.sort === 'customer'}
+                dir={query.dir}
+              >
+                Customer
+              </THSort>
+              <TH>Status</TH>
+              <TH numeric>Units</TH>
+              <THSort
+                href={buildHref({
+                  ...query,
+                  sort: 'revenue',
+                  dir: nextDir('revenue'),
+                  page: 1,
+                })}
+                active={query.sort === 'revenue'}
+                dir={query.dir}
+                numeric
+              >
+                Revenue
+              </THSort>
+              <TH numeric>Cost</TH>
+              <TH numeric>Gross</TH>
+              <THSort
+                href={buildHref({ ...query, sort: 'margin', dir: nextDir('margin'), page: 1 })}
+                active={query.sort === 'margin'}
+                dir={query.dir}
+                numeric
+              >
+                Margin
+              </THSort>
+              <TH />
             </TR>
-          ))}
-        </TBody>
-        <tfoot className="border-line-subtle border-t bg-inset/60">
-          <tr>
-            <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={5}>
-              Confirmed sales
-            </td>
-            <td className="h-9 px-3 text-right">
-              <Money cents={totals.revenue} size="sm" />
-            </td>
-            <td className="h-9 px-3 text-right">
-              <Money cents={totals.cogs} size="sm" tone="muted" />
-            </td>
-            <td className="h-9 px-3 text-right">
-              <Money cents={totals.gross} size="sm" tone="flow" />
-            </td>
-            <td className="h-9 px-3 text-right">
-              <Percent value={totals.revenue === 0 ? 0 : totals.gross / totals.revenue} />
-            </td>
-            <td />
-          </tr>
-        </tfoot>
-      </Table>
-    </TableWrap>
+          </THead>
+          <TBody>
+            {result.rows.map((row) => (
+              <TR key={row.id}>
+                <TD className="tabular whitespace-nowrap text-ink">
+                  <Link
+                    href={`/sales/${row.id}` as Route}
+                    className="hover:text-accent hover:underline"
+                  >
+                    {row.number}
+                  </Link>
+                </TD>
+                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                  {formatDate(row.soldAt)}
+                </TD>
+                <TD className="text-ink-2">{row.customerName ?? '—'}</TD>
+                <TD>
+                  <Badge tone={STATUS_TONE[row.status]}>
+                    {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                  </Badge>
+                </TD>
+                <TD numeric className="text-ink-3">
+                  {row.unitCount}
+                </TD>
+                <TD numeric>
+                  <Money cents={row.totalUsdCents} size="sm" />
+                </TD>
+                <TD numeric>
+                  <Money cents={row.cogsCents} size="sm" tone="muted" />
+                </TD>
+                <TD numeric>
+                  <Money cents={row.grossCents} size="sm" tone="flow" />
+                </TD>
+                <TD numeric>
+                  <Percent
+                    value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
+                  />
+                </TD>
+                <TD className="text-right">
+                  <SaleActions id={row.id} number={row.number} status={row.status} />
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+          <tfoot className="border-line-subtle border-t bg-inset/60">
+            <tr>
+              <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={5}>
+                Confirmed, this page
+              </td>
+              <td className="h-9 px-3 text-right">
+                <Money cents={pageTotals.revenue} size="sm" />
+              </td>
+              <td className="h-9 px-3 text-right">
+                <Money cents={pageTotals.cogs} size="sm" tone="muted" />
+              </td>
+              <td className="h-9 px-3 text-right">
+                <Money cents={pageTotals.gross} size="sm" tone="flow" />
+              </td>
+              <td className="h-9 px-3 text-right">
+                <Percent
+                  value={pageTotals.revenue === 0 ? 0 : pageTotals.gross / pageTotals.revenue}
+                />
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </Table>
+      </TableWrap>
+      <Pagination
+        page={result.page}
+        pageCount={result.pageCount}
+        total={result.total}
+        perPage={result.perPage}
+        buildHref={(page) => buildHref({ ...query, page })}
+      />
+    </>
   );
+}
+
+function buildHref(query: {
+  q?: string;
+  status?: string;
+  sort?: string;
+  dir?: string;
+  page?: number;
+}): Route {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.status) params.set('status', query.status);
+  if (query.sort) params.set('sort', query.sort);
+  if (query.dir) params.set('dir', query.dir);
+  if (query.page && query.page > 1) params.set('page', String(query.page));
+  const search = params.toString();
+  return (search ? `/sales?${search}` : '/sales') as Route;
 }
