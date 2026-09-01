@@ -16,33 +16,15 @@ Status as of 1 September 2026.
 | **Auth** | Supabase password sign-in, invite claiming by email, `/no-access`, role guards |
 | **Shell** | Sidebar, topbar, ⌘K command palette, theme toggle |
 | **Overview** | Position strip with server-rendered sparklines, cash flow chart, margin waterfall, inventory health, owner equity, and the alerts panel that independently rediscovered both spreadsheet discrepancies |
-| **List pages** | Products, Inventory, Purchase orders, Sales, Customers, Ledger, Expenses, Owners, Categories, Suppliers, Settings |
+| **List pages** | Products, Inventory, Purchase orders, Sales, Customers, Ledger, Expenses, Owners, Categories, Suppliers, Settings — every one searchable, filterable, sortable and paginated, state kept in the URL ([ADR-0009](../adr/0009-list-state-in-the-url.md)), two distinct empty states (onboarding vs. no-matches) |
 | **Write layer** | Server Actions with an authorisation boundary that cannot be forgotten, transactional posting, gapless numbering |
 | **Entry flows** | Record a sale with live margin, raise and receive a purchase order with a landed-cost preview, create and edit products with variants, customers, expenses, cash movements, categories, suppliers, exchange rates, team invitations, stock adjustments |
-| **Row actions** | Confirm and void sales, mark shipped, cancel orders, reverse ledger entries, delete expenses, remove members — destructive ones gated behind a written reason |
-
-## Next
-
-**1. Detail pages.** `/purchase-orders/[id]`, `/sales/[id]`, `/customers/[id]`.
-The product page already exists and the other three follow its shape.
-
-**2. Image upload.** Designed in
-[../04-engineering/media-pipeline.md](../04-engineering/media-pipeline.md);
-needs a Blob store provisioned. Two constraints are already established:
-`putImage()` needs OIDC rather than a read-write token, and
-`onUploadCompleted` never fires on localhost.
-
-**3. Reports.** Profit and loss over a period, margin ranked by product, FX
-exposure. Everything they need is already in the ledgers.
-
-**4. Filtering and date ranges.** `nuqs` is installed and the sheets already
-keep their state in the URL; the topbar date scope should propagate to every
-widget the same way.
-
-**5. Playwright smoke test.** Sign in, create a product, receive an order,
-record a sale, and assert stock, cost of goods and the ledger all moved. The
-logic is unit-tested and has been replayed against the live database by hand;
-this closes the loop through the interface.
+| **Full CRUD** | Every entity — products, categories, suppliers, customers, expenses, sales and purchase order drafts — can be created, edited and deleted, not just created. Deletes are owner-only, matching the RLS policy behind them; a supplier with open purchase orders or a customer with non-void sales refuses deletion with a legible reason instead of silently orphaning references |
+| **Detail pages** | `/sales/[id]`, `/purchase-orders/[id]` (with the full overhead breakdown — subtotal, allocated shipping and tax, landed cost, landed cost per unit, footing to the total), `/customers/[id]`, `/suppliers/[id]`, alongside the existing `/products/[id]`. Each carries an activity trail and, for drafts, an in-place edit |
+| **Reports** | Profit and loss with a prior-period comparison, margin ranked by product (lifetime — `v_product_margins` has no date scope), FX exposure with unrealised gain/loss and an SRD share of revenue and cash |
+| **Product images** | Upload via a client token to `@vercel/blob`, 1600px AVIF display and 400px WebP thumbnail derivatives, reorder, set primary, owner-only delete. Designed to work locally too: the client `upload()` result calls a server action directly, since the `onUploadCompleted` webhook cannot reach a machine behind NAT |
+| **Row actions** | Three tiers of destructive friction: a written reason for anything that removes a posting (void, cancel, reverse), a confirm dialog for a delete that only orphans references, no prompt for a reversible flip (mark shipped, archive) |
+| **Testing** | A Playwright smoke test (`pnpm e2e`) walks the full workflow through the interface — create a product, receive a purchase order, sell it, and assert stock, landed cost and each document's own ledger entry all moved by the right amount |
 
 ## Then
 

@@ -133,13 +133,13 @@ equity split — currently Leonardo and Youri. A future accountant could be an
 `owner` without being a principal.
 
 Delete actions (`deleteProduct`, `deleteExpense`, `deleteCategory`,
-`deleteSupplier`, `deleteCustomer`) all run on `ownerAction`, matching the
-`DELETE` row above — this matters specifically because Drizzle bypasses RLS
-(see the two boundaries above), so this table describes the app layer's own
-enforcement, not just the database's. The one exception: the variant deletion
-inside `updateProduct` stays on `writeAction`. It only ever removes a variant
-with no movements, no sale lines and no PO lines — a variant with no history
-is a typo, not a record.
+`deleteSupplier`, `deleteCustomer`, `removeProductImage`) all run on
+`ownerAction`, matching the `DELETE` row above — this matters specifically
+because Drizzle bypasses RLS (see the two boundaries above), so this table
+describes the app layer's own enforcement, not just the database's. The one
+exception: the variant deletion inside `updateProduct` stays on `writeAction`.
+It only ever removes a variant with no movements, no sale lines and no PO
+lines — a variant with no history is a typo, not a record.
 
 ---
 

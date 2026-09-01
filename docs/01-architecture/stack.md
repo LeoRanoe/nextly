@@ -41,15 +41,16 @@ reports in `src/server/queries/` can just *be* SQL where that is clearer.
 
 | | Version | Why this |
 |---|---|---|
-| **Radix UI** | 1.x / 2.x | Behaviour and accessibility. Our own visual layer on top. |
+| **Radix UI** | 1.x / 2.x | Behaviour and accessibility. Our own visual layer on top. Six primitives in use: alert-dialog, dialog, dropdown-menu, popover, slot, visually-hidden. |
 | **shadcn/ui** | as source | Owned and re-skinned, never installed as a dependency. |
-| **motion** | 13.1 | Framer Motion's successor. Used sparingly. |
 | **Recharts** | 3.10 | One chart: the interactive cash flow. Everything stock about it is overridden. |
 | **d3-shape** | 3.2 | Sparklines, rendered as SVG **on the server**. No client JS at all. |
 | **cmdk** | 1.1 | Command palette. |
-| **nuqs** | 2.10 | URL as state for filters and ranges. Shareable, no client fetch waterfall. |
+| **nuqs** | 2.10 | URL as state for filters, sorting and pagination on every list. See [ADR-0009](../adr/0009-list-state-in-the-url.md). |
 | **next-safe-action** | 8.6 | Validated, middleware-powered Server Actions. |
 | **lucide-react** | 1.38 | Icons. |
+| **@vercel/blob** | 2.8 | Product image storage — `putImage()` derivatives, uploaded via a client token. See [media-pipeline.md](../04-engineering/media-pipeline.md). |
+| **@vercel/analytics**, **@vercel/speed-insights** | 2.0 | Mounted in the root layout. No-op outside a Vercel deployment. |
 
 ### Fonts, and what they are avoiding
 
@@ -89,17 +90,20 @@ src/
     login/  no-access/  auth/   public, partially prerendered
     design-system/    living style documentation, 404 in production
   components/
-    ui/               primitives: Button, Surface, Money, Table, Badge
-    patterns/         compositions: PageHeader, EmptyState, Upcoming
+    ui/               primitives: Button, Surface, Money, Table, Pagination, AlertDialog
+    patterns/         compositions: PageHeader, EmptyState, ListToolbar
+    forms/            create/edit sheets and pages, one per entity
+    reports/          P&L, margin-by-product, FX exposure
     shell/            Sidebar, Topbar, CommandPalette, Wordmark
     charts/           server-rendered SVG
     overview/         one file per dashboard widget
-  lib/                money, fx, format, navigation, cn, env
+  lib/                money, fx, format, navigation, cn, env, list-params
   server/
     db/schema/        Drizzle, split per domain
     db/migrations/    generated SQL + hand-written RLS
-    queries/          read models, cached and tagged
-    services/         domain logic (costing)
+    queries/          read models — dynamic, no cache tags (ADR-0006)
+    services/         domain logic (costing, posting, media)
+    actions/          Server Actions, one file per entity
     auth.ts           the authorisation boundary
   styles/tokens.css   the entire colour system
 ```

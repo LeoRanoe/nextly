@@ -81,9 +81,14 @@ per theme, and elevation works differently: light mode uses a soft shadow, dark
 mode uses a 1px inner top highlight, because a drop shadow against near-black is
 invisible and only adds mud.
 
-Every token is defined on bare `:root` first, then redefined under
-`@media (prefers-color-scheme: dark)` and `[data-theme="dark"]`, so the toggle
-wins in both directions and system preference works with no JS.
+Every token is defined on bare `:root` (light) first, then redefined under a
+single `.dark` class — not `@media (prefers-color-scheme: dark)` or
+`[data-theme="dark"]`; `tokens.css` has no media query and no data-attribute
+selector at all. `next-themes` (`attribute="class"`, `enableSystem`) is what
+adds `.dark` to `<html>`: it reads the OS preference and injects a small
+blocking inline script that sets the class before first paint, so there is no
+flash of the wrong theme — but it is JS, run synchronously pre-hydration, not
+CSS reading the media query itself.
 
 ---
 
