@@ -13,6 +13,13 @@ import { type NextRequest, NextResponse } from 'next/server';
  * convenience; the real boundary is Row Level Security in Postgres.
  */
 
+/** Routes that render without touching Postgres. */
+const DATABASE_FREE_PATHS = ['/setup', '/design-system'];
+
+function isDatabaseFree(pathname: string): boolean {
+  return DATABASE_FREE_PATHS.some((path) => pathname.startsWith(path));
+}
+
 const PUBLIC_PATHS = [
   '/login',
   '/auth/callback',
@@ -24,9 +31,11 @@ const PUBLIC_PATHS = [
 ];
 
 export default async function proxy(request: NextRequest) {
-  // Nothing can work without a database, and a sign-in form that could never
-  // succeed is worse than an explanation.
-  if (!process.env.DATABASE_URL && !request.nextUrl.pathname.startsWith('/setup')) {
+  // Nothing that reads data can work without a database, and a sign-in form
+  // that could never succeed is worse than an explanation. Routes that genuinely
+  // need no database are exempt: sending the design system to /setup was
+  // over-reach, and it hid the fact that anything had changed at all.
+  if (!process.env.DATABASE_URL && !isDatabaseFree(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = '/setup';
     url.search = '';
