@@ -1,9 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { cacheLife, cacheTag } from 'next/cache';
 import { isDatabaseConfigured } from '@/lib/env';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
-import { OVERVIEW_TAGS } from './cache';
+
+/**
+ * The `isDatabaseConfigured()` guard on each function below is a SETUP state,
+ * not an outage. Only an ABSENT connection string returns empty; a failing
+ * query still throws, because an empty dashboard must never be able to mean
+ * "the database is down". See src/app/setup/page.tsx.
+ */
 
 /**
  * Things that need a human.
@@ -23,13 +28,6 @@ export type Alert = {
 };
 
 export async function getAlerts(): Promise<Alert[]> {
-  'use cache';
-  cacheTag(...OVERVIEW_TAGS);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return [];
 
   const [row] = await db.execute<{

@@ -1,7 +1,6 @@
 'use server';
 
 import { eq, sql } from 'drizzle-orm';
-import { updateTag } from 'next/cache';
 import { z } from 'zod';
 import {
   categorySchema,
@@ -12,7 +11,6 @@ import {
 } from '@/lib/schemas';
 import { db } from '../db/client';
 import { categories, customers, members, suppliers } from '../db/schema';
-import { TAGS } from '../queries/cache';
 import { logActivity } from '../services/posting';
 import { ActionError, ownerAction, writeAction } from './client';
 
@@ -69,8 +67,6 @@ export const createCustomer = writeAction
 
       return { id: customer.id, code: customer.code, name: customer.name };
     });
-
-    updateTag(TAGS.customers);
     return result;
   });
 
@@ -107,8 +103,6 @@ export const updateCustomer = writeAction
         entityLabel: input.name,
       });
     });
-
-    updateTag(TAGS.customers);
     return { name: input.name };
   });
 
@@ -142,8 +136,6 @@ export const createCategory = writeAction
 
       return { id: category.id, name: category.name };
     });
-
-    updateTag(TAGS.products);
     return result;
   });
 
@@ -174,9 +166,6 @@ export const createSupplier = writeAction
 
       return { id: supplier.id, name: supplier.name };
     });
-
-    updateTag(TAGS.products);
-    updateTag(TAGS.purchaseOrders);
     return result;
   });
 
@@ -224,8 +213,6 @@ export const inviteMember = ownerAction
 
       return { id: member.id, email, fullName: input.fullName };
     });
-
-    updateTag(TAGS.members);
     return result;
   });
 
@@ -272,8 +259,6 @@ export const updateMember = ownerAction
         entityLabel: input.fullName,
       });
     });
-
-    updateTag(TAGS.members);
     return { fullName: input.fullName };
   });
 
@@ -305,7 +290,5 @@ export const removeMember = ownerAction
 
       return member.fullName;
     });
-
-    updateTag(TAGS.members);
     return { fullName };
   });

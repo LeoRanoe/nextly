@@ -1,13 +1,11 @@
 'use server';
 
 import { eq } from 'drizzle-orm';
-import { updateTag } from 'next/cache';
 import { z } from 'zod';
 import { normaliseToUsd } from '@/lib/fx';
 import { saleSchema, uuid } from '@/lib/schemas';
 import { db } from '../db/client';
 import { saleItems, sales } from '../db/schema';
-import { TAGS } from '../queries/cache';
 import {
   clearDocumentPostings,
   consumeStockFor,
@@ -144,12 +142,7 @@ export const createSale = writeAction
 
       return { id: sale.id, number, totalUsdCents, cogsCents, shortfallTotal };
     });
-
-    updateTag(TAGS.sales);
-    updateTag(TAGS.customers);
     if (input.confirm) {
-      updateTag(TAGS.inventory);
-      updateTag(TAGS.ledger);
     }
 
     return result;
@@ -224,11 +217,6 @@ export const confirmSale = writeAction
       return sale.number;
     });
 
-    updateTag(TAGS.sales);
-    updateTag(TAGS.inventory);
-    updateTag(TAGS.ledger);
-    updateTag(TAGS.customers);
-
     return { number };
   });
 
@@ -278,11 +266,6 @@ export const voidSale = writeAction
 
       return sale.number;
     });
-
-    updateTag(TAGS.sales);
-    updateTag(TAGS.inventory);
-    updateTag(TAGS.ledger);
-    updateTag(TAGS.customers);
 
     return { number };
   });

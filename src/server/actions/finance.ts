@@ -1,7 +1,6 @@
 'use server';
 
 import { eq, sql } from 'drizzle-orm';
-import { updateTag } from 'next/cache';
 import { z } from 'zod';
 import { normaliseToUsd } from '@/lib/fx';
 import {
@@ -13,7 +12,6 @@ import {
 } from '@/lib/schemas';
 import { db } from '../db/client';
 import { expenses, fxRates, ledgerEntries, settings } from '../db/schema';
-import { TAGS } from '../queries/cache';
 import { logActivity, postLedgerEntry } from '../services/posting';
 import { rateForRecord, rateOn } from '../services/rates';
 import { ActionError, ownerAction, writeAction } from './client';
@@ -78,9 +76,6 @@ export const createExpense = writeAction
 
       return { id: expense.id, description: input.description };
     });
-
-    updateTag(TAGS.expenses);
-    if (input.postToLedger) updateTag(TAGS.ledger);
     return result;
   });
 
@@ -114,9 +109,6 @@ export const deleteExpense = writeAction
 
       return expense.description;
     });
-
-    updateTag(TAGS.expenses);
-    updateTag(TAGS.ledger);
     return { description };
   });
 
@@ -160,9 +152,6 @@ export const createLedgerEntry = writeAction
         entityLabel: input.description,
       });
     });
-
-    updateTag(TAGS.ledger);
-    updateTag(TAGS.members);
     return { description: input.description };
   });
 
@@ -210,9 +199,6 @@ export const reverseLedgerEntry = writeAction
 
       return entry.description;
     });
-
-    updateTag(TAGS.ledger);
-    updateTag(TAGS.members);
     return { description };
   });
 
@@ -245,8 +231,6 @@ export const createFxRate = writeAction
         entityLabel: `${(input.rate / 1_000_000).toFixed(4)} SRD/USD`,
       });
     });
-
-    updateTag(TAGS.fxRates);
     return { rate: input.rate };
   });
 
@@ -281,8 +265,5 @@ export const updateSettings = ownerAction
         entityLabel: input.businessName,
       });
     });
-
-    updateTag(TAGS.settings);
-    updateTag(TAGS.inventory);
     return { businessName: input.businessName };
   });

@@ -61,6 +61,11 @@ export default function SetupPage() {
                 why="Migrations. DDL needs a real session."
               />
             </dl>
+            <p className="mt-2 rounded-control border border-warning/40 bg-warning-muted px-2.5 py-2 text-[11px] text-ink-2 leading-relaxed">
+              Both hosts must end in <span className="tabular">pooler.supabase.com</span>. The
+              direct connection (<span className="tabular">db.&lt;ref&gt;.supabase.co</span>) is
+              IPv6-only and Vercel is IPv4-only, so it does not fail — it hangs.
+            </p>
           </Step>
 
           <Step index={3} title="Restart the dev server">

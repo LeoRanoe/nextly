@@ -1,10 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { cacheLife, cacheTag } from 'next/cache';
 import { isDatabaseConfigured } from '@/lib/env';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
-import { TAGS } from './cache';
 import { bool, maybe, num, text } from './row';
+
+/**
+ * The `isDatabaseConfigured()` guard on each function below is a SETUP state,
+ * not an outage. Only an ABSENT connection string returns empty; a failing
+ * query still throws, because an empty dashboard must never be able to mean
+ * "the database is down". See src/app/setup/page.tsx.
+ */
 
 /** Reference data: the small, slow-moving lists everything else points at. */
 
@@ -16,13 +21,6 @@ export type CategoryRow = {
 };
 
 export async function listCategories(): Promise<CategoryRow[]> {
-  'use cache';
-  cacheTag(TAGS.products);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<Record<string, string>>(sql`
@@ -50,13 +48,6 @@ export type SupplierRow = {
 };
 
 export async function listSuppliers(): Promise<SupplierRow[]> {
-  'use cache';
-  cacheTag(TAGS.products, TAGS.purchaseOrders);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<Record<string, string>>(sql`
@@ -95,13 +86,6 @@ export type MemberRow = {
 };
 
 export async function listMembers(): Promise<MemberRow[]> {
-  'use cache';
-  cacheTag(TAGS.members);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<Record<string, string | null>>(sql`
@@ -131,13 +115,6 @@ export type RateRow = {
 };
 
 export async function listRates(limit = 24): Promise<RateRow[]> {
-  'use cache';
-  cacheTag(TAGS.fxRates);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return [];
 
   const rows = await db.execute<Record<string, string | null>>(sql`
@@ -165,13 +142,6 @@ export type SettingsRow = {
 };
 
 export async function getSettings(): Promise<SettingsRow | null> {
-  'use cache';
-  cacheTag(TAGS.settings);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return null;
 
   const [row] = await db.execute<Record<string, string>>(sql`
@@ -215,13 +185,6 @@ export type ProductDetail = {
 
 /** Everything the edit form needs, in one round trip. */
 export async function getProduct(id: string): Promise<ProductDetail | null> {
-  'use cache';
-  cacheTag(TAGS.products, TAGS.inventory);
-  cacheLife('max');
-
-  // Before Supabase credentials exist this is a setup state, not an outage.
-  // Only an ABSENT connection string degrades; a failing query still throws,
-  // because an empty dashboard must never be able to mean 'the database is down'.
   if (!isDatabaseConfigured()) return null;
 
   const [row] = await db.execute<Record<string, string | null>>(sql`

@@ -1,9 +1,12 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Opt-in caching: everything is dynamic unless explicitly marked `'use cache'`.
-  // Pairs with Partial Prerendering so the shell ships statically and each
-  // dashboard widget streams in on its own.
+  // Everything is dynamic unless explicitly marked `'use cache'`, and nothing
+  // is: this dashboard's figures are live, every write invalidates them, and
+  // caching them made `next build` reach for the database, which turned a
+  // transient connection problem into a failed deploy. Kept on for the
+  // Partial Prerendering it gives the public routes, and because dynamic by
+  // default is the correct posture for a set of books.
   cacheComponents: true,
 
   // Automatic memoization. Costs build time, buys us render time on the

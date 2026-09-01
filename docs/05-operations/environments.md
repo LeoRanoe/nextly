@@ -43,7 +43,20 @@ with the database password:
 | Variable | Which string | Port |
 |---|---|---|
 | `DATABASE_URL` | **Transaction pooler** | 6543 |
-| `DIRECT_URL` | **Session pooler** or direct | 5432 |
+| `DIRECT_URL` | **Session pooler** | 5432 |
+
+> ### Use a pooler string, never the direct connection
+>
+> Both pooler strings have a host ending in **`pooler.supabase.com`**. The
+> direct connection (`db.<ref>.supabase.co`) is **IPv6-only**, and Vercel's
+> network is IPv4-only.
+>
+> The failure mode is nasty: it does not error, it **hangs**. The first deploy
+> of this project died exactly this way, stalling for 54 seconds inside a build
+> step before timing out with a message that pointed at caching rather than at
+> the network.
+>
+> If a connection is silently hanging, check the host before anything else.
 
 If nobody knows the database password, reset it on that page. Resetting it
 breaks nothing else — this project has no other consumers.
@@ -51,7 +64,8 @@ breaks nothing else — this project has no other consumers.
 **Why two.** Runtime traffic uses the transaction pooler, which is built for
 short serverless connections but does not support prepared statements (hence
 `prepare: false` in `src/server/db/client.ts`). Migrations need a real session
-for DDL and advisory locks, so `drizzle-kit` uses the direct connection.
+for DDL and advisory locks, so `drizzle-kit` uses the **session** pooler. Both
+are Supavisor and both are IPv4.
 
 ### 3. Run
 
@@ -60,7 +74,9 @@ pnpm dev
 ```
 
 Sign in at http://localhost:3000/login with **agencynextx@gmail.com**, which is
-already seeded as an owner. The link arrives by email.
+already seeded as an owner. Sign-in is email and password; the account itself
+lives in Supabase Auth, so set or reset the password from
+[Authentication → Users](https://supabase.com/dashboard/project/jkaxfghplcwbxxhkjtwf/auth/users).
 
 Youri is seeded with the placeholder `youri@nextly.invalid`. Change it to his
 real address in the database before he tries to sign in, or the invitation
@@ -155,8 +171,18 @@ Environment variables to set in the Vercel project:
 | `DIRECT_URL` | all |
 | `BLOB_READ_WRITE_TOKEN` | injected by the Blob integration |
 
-`DATABASE_URL` must be present **at build time**: `'use cache'` read models are
-evaluated during prerendering and connect to the database.
+**The build does not need the database.** Nothing is cached at build time, so
+`next build` never opens a connection — a database problem can slow the app but
+cannot fail a deploy. See [ADR-0006](../adr/0006-cache-components-and-tags.md).
+
+To confirm that property still holds after a change:
+
+```bash
+DATABASE_URL="postgresql://u:p@203.0.113.9:6543/postgres" pnpm build
+```
+
+That address is reserved and unroutable. If the build completes, nothing in it
+reached for Postgres.
 
 Then add the deployed origin to Supabase's allowed redirect URLs
 (Authentication → URL Configuration), or sign-in links will bounce.

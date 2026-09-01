@@ -1,13 +1,11 @@
 'use server';
 
 import { asc, eq } from 'drizzle-orm';
-import { updateTag } from 'next/cache';
 import { z } from 'zod';
 import { allocateOverhead, totalOverhead } from '@/lib/costing';
 import { purchaseOrderSchema, receivePurchaseOrderSchema, uuid } from '@/lib/schemas';
 import { db } from '../db/client';
 import { purchaseOrderItems, purchaseOrders } from '../db/schema';
-import { TAGS } from '../queries/cache';
 import {
   clearDocumentPostings,
   logActivity,
@@ -75,9 +73,6 @@ export const createPurchaseOrder = writeAction
 
       return { id: order.id, number };
     });
-
-    updateTag(TAGS.purchaseOrders);
-    updateTag(TAGS.inventory);
     return result;
   });
 
@@ -206,11 +201,6 @@ export const receivePurchaseOrder = writeAction
       };
     });
 
-    updateTag(TAGS.purchaseOrders);
-    updateTag(TAGS.inventory);
-    updateTag(TAGS.ledger);
-    updateTag(TAGS.products);
-
     return result;
   });
 
@@ -246,8 +236,6 @@ export const setPurchaseOrderStatus = writeAction
 
       return order.number;
     });
-
-    updateTag(TAGS.purchaseOrders);
     return { number };
   });
 
@@ -297,10 +285,6 @@ export const cancelPurchaseOrder = writeAction
 
       return order.number;
     });
-
-    updateTag(TAGS.purchaseOrders);
-    updateTag(TAGS.inventory);
-    updateTag(TAGS.ledger);
 
     return { number };
   });

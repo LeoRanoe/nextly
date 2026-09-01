@@ -1,7 +1,6 @@
 'use server';
 
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
-import { updateTag } from 'next/cache';
 import { z } from 'zod';
 import { productSchema, uuid } from '@/lib/schemas';
 import { db } from '../db/client';
@@ -12,7 +11,6 @@ import {
   purchaseOrderItems,
   saleItems,
 } from '../db/schema';
-import { TAGS } from '../queries/cache';
 import { logActivity } from '../services/posting';
 import { ActionError, writeAction } from './client';
 
@@ -64,9 +62,6 @@ export const createProduct = writeAction
 
       return { id: product.id, name: product.name };
     });
-
-    updateTag(TAGS.products);
-    updateTag(TAGS.inventory);
     return result;
   });
 
@@ -187,9 +182,6 @@ export const updateProduct = writeAction
 
       return { id: input.id, name: input.name, deactivated: dropped.length };
     });
-
-    updateTag(TAGS.products);
-    updateTag(TAGS.inventory);
     return result;
   });
 
@@ -242,8 +234,6 @@ export const setProductStatus = writeAction
 
       return product.name;
     });
-
-    updateTag(TAGS.products);
     return { name };
   });
 
@@ -313,9 +303,6 @@ export const adjustStock = writeAction
 
       return { sku: variant.sku, onHand: onHand + input.quantity };
     });
-
-    updateTag(TAGS.inventory);
-    updateTag(TAGS.products);
     return result;
   });
 
@@ -378,8 +365,5 @@ export const deleteProduct = writeAction
 
       return product.name;
     });
-
-    updateTag(TAGS.products);
-    updateTag(TAGS.inventory);
     return { name };
   });

@@ -1,6 +1,8 @@
 # Rendering and caching
 
-Next.js 16 Cache Components. Nothing is cached unless it says so.
+Next.js 16 Cache Components. **Nothing is cached**, deliberately — see
+[ADR-0006](../adr/0006-cache-components-and-tags.md) for how that was learned
+the hard way.
 
 ---
 
@@ -10,17 +12,20 @@ Next.js 16 Cache Components. Nothing is cached unless it says so.
 and route handler executes at request time **unless** a function opts in with
 `'use cache'`.
 
-That is a better default for an operations tool, where a stale number is worse
-than a slow one, and it makes caching a decision someone made rather than a
-behaviour they inherited.
+Nothing opts in. Read models in `src/server/queries/` are plain async functions.
+
+That is the right posture for these books: every figure is live, every write
+touches most of them, and there are two or three users. The one thing caching
+reliably bought was a build that could not run without a database — which is
+exactly how the first Vercel deploy failed.
 
 ## Where each route lands
 
 | Route | Mode | Why |
 |---|---|---|
-| `/login`, `/auth/error`, `/no-access` | **Partial prerender** | The shell is static and paints instantly; only the part that reads `searchParams` or the session streams in. |
-| `/design-system` | Static | No data. |
-| `/auth/callback` | Dynamic | It is a route handler that exchanges a code. |
+| `/login`, `/setup`, `/design-system` | **Static** | No data at all. |
+| `/auth/error`, `/no-access`, `/products/[id]` | **Partial prerender** | Static shell paints instantly; only the part reading `searchParams` or the session streams in. |
+| `/auth/callback` | Dynamic | A route handler that exchanges a code. |
 | Everything under `(app)` | **Dynamic** (`instant = false`) | Explained below. |
 
 ### Why the dashboard is dynamic
@@ -30,8 +35,8 @@ renders. Cache Components correctly refuses to prerender that.
 
 Deferring the guard into a Suspense boundary would restore a static shell — and
 would also let a signed-in non-member begin rendering page content before the
-guard resolved. That trade is wrong: a login-gated dashboard gains little from a
-prerendered shell and loses a great deal from a guard that runs late.
+guard resolved. That trade is wrong: a login-gated dashboard gains little from
+a prerendered shell and loses a great deal from a guard that runs late.
 
 So the segment declares `export const instant = false` and blocks. The public
 routes, which are the ones a cold visitor actually waits on, keep partial
@@ -74,57 +79,24 @@ export default function Page({ searchParams }: { searchParams: Promise<Query> })
 Awaiting at the top makes the whole page dynamic. Awaiting inside keeps the
 shell prerenderable. This is the pattern for every dynamic value.
 
-## Caching read models
+## Freshness after a write
 
-Read models in `src/server/queries/` opt in:
+`router.refresh()` in the form, after the action resolves. The page re-renders
+on the server and re-queries. There is no cache to invalidate, so there is no
+second mechanism that can disagree with the first.
 
-```ts
-export async function getPosition(): Promise<Position> {
-  'use cache';
-  cacheTag(...OVERVIEW_TAGS);
-  cacheLife('max');
-  // ...
-}
-```
+## The setup state
 
-Cached functions **cannot read cookies**, which enforces a useful split: auth is
-dynamic and per-request, business data is cached and shared. A cached query that
-accidentally depended on the current user would be a data leak, and the
-framework makes it impossible.
-
-Tags are named once in
-[`src/server/queries/cache.ts`](../../src/server/queries/cache.ts). Reads declare
-what they depend on; writes declare what they invalidate. Naming them in one
-place is what stops the two halves drifting apart.
-
-## Invalidating
-
-Server Actions call **`updateTag`**, not `revalidateTag`:
-
-```ts
-'use server';
-export async function receivePurchaseOrder(id: string) {
-  await requireWrite();
-  // ...
-  updateTag(TAGS.purchaseOrders);
-  updateTag(TAGS.inventory);
-  updateTag(TAGS.ledger);
-}
-```
-
-`updateTag` gives **read-your-writes** inside the same request: a member who
-receives a purchase order sees the new stock level immediately.
-`revalidateTag` is stale-while-revalidate — correct for a blog, wrong for
-someone who just changed the books and needs to see it took.
-
-`revalidateTag`'s single-argument form is deprecated in Next 16; it now requires
-a `cacheLife` profile as the second argument.
+Read models return empty **only when `DATABASE_URL` is absent**, never when a
+query fails. That distinction is the whole point: an absent connection string
+is a setup state, a failing query is an incident, and an empty dashboard must
+never be able to mean the second one. A banner and `/setup` say which it is.
 
 ## Performance choices worth keeping
 
 - **Sparklines are server-rendered SVG.** `d3-shape` computes a path string; no
-  runtime reaches the browser. Four of them appear above the fold, and shipping
-  a charting library to draw sixty pixels of line would be absurd.
+  runtime reaches the browser. Four appear above the fold, and shipping a
+  charting library to draw sixty pixels of line would be absurd.
 - **Tables are plain server-rendered markup.** No headless table runtime for
   lists that are read rather than manipulated.
 - **Recharts appears once**, in the interactive cash flow chart, code-split by
@@ -138,10 +110,18 @@ a `cacheLife` profile as the second argument.
 **Do not run `pnpm build` while `next dev` is running.** Next 16 generates route
 types into `.next/types` and `.next/dev/types` separately, and `tsconfig.json`
 includes both. Two copies of the same global `Route` declarations conflict, and
-the failure surfaces as `"/products" is not assignable to type 'Route'` on routes
-that plainly exist. Stop the dev server, or `rm -rf .next`.
+the failure surfaces as `"/products" is not assignable to type 'Route'` on
+routes that plainly exist. Stop the dev server, or `rm -rf .next`.
 
-**A build needs `DATABASE_URL`.** `'use cache'` functions are evaluated at build
-time, so they connect. The database client is built lazily behind a Proxy
-(`src/server/db/client.ts`) so *importing* a route does not open a connection,
-but actually prerendering a cached query does.
+**Dynamic routes need `as Route`.** `typedRoutes` cannot verify a template
+literal, so `` href={`/products/${id}` as Route} `` is the escape hatch.
+
+**A build must never need the database.** It does not today, and that is worth
+protecting. To check after any change:
+
+```bash
+DATABASE_URL="postgresql://u:p@203.0.113.9:6543/postgres" pnpm build
+```
+
+`203.0.113.0/24` is reserved and unroutable, so if the build completes, nothing
+in it reached for Postgres.
