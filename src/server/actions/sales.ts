@@ -142,8 +142,6 @@ export const createSale = writeAction
 
       return { id: sale.id, number, totalUsdCents, cogsCents, shortfallTotal };
     });
-    if (input.confirm) {
-    }
 
     return result;
   });

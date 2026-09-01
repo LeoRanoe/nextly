@@ -61,7 +61,7 @@ export const purchaseOrders = pgTable(
  *
  * `overheadCents` and `landedCostCents` are written when the order is received
  * and are the authoritative cost basis. The allocation always foots exactly to
- * the order total: see allocateOverhead in src/server/services/costing.ts.
+ * the order total: see allocateOverhead in src/lib/costing.ts.
  */
 export const purchaseOrderItems = pgTable(
   'purchase_order_items',
