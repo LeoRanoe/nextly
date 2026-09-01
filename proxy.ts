@@ -24,6 +24,9 @@ const PUBLIC_PATHS = [
   '/login',
   '/auth/callback',
   '/auth/error',
+  // The storefront. It reads only published products and never a cost
+  // figure, so it renders for signed-out visitors on purpose.
+  '/catalog',
   // Living design documentation. The page itself 404s in production.
   '/design-system',
   // Reachable before any credentials exist; it redirects away once they do.

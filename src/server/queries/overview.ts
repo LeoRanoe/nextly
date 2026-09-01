@@ -124,24 +124,51 @@ export type Waterfall = {
   netCents: Cents;
 };
 
-/** Revenue to net, the way the business actually earns it. */
-export async function getWaterfall(): Promise<Waterfall> {
+/**
+ * Revenue to net, the way the business actually earns it.
+ *
+ * The window scoping — including the netting of returns against revenue and
+ * cost of goods — mirrors `pnlTotals` in queries/reports.ts exactly, so the
+ * waterfall for a period and the P&L for the same period cannot disagree.
+ */
+export async function getWaterfall({ from, to }: { from: Date; to: Date }): Promise<Waterfall> {
   if (!isDatabaseConfigured())
     return { revenueCents: 0, cogsCents: 0, grossCents: 0, expensesCents: 0, netCents: 0 };
 
-  const [row] = await db.execute<{ revenue: string; cogs: string; expenses: string }>(sql`
+  const [row] = await db.execute<{
+    revenue: string;
+    cogs: string;
+    expenses: string;
+    refunds: string;
+    restocked: string;
+  }>(sql`
     SELECT
       COALESCE((
-        SELECT SUM(total_usd_cents) FROM sales WHERE status = 'confirmed'
+        SELECT SUM(total_usd_cents) FROM sales
+         WHERE status = 'confirmed' AND sold_at >= ${from} AND sold_at < ${to}
       ), 0)::text AS revenue,
       COALESCE((
-        SELECT SUM(cogs_cents) FROM sales WHERE status = 'confirmed'
+        SELECT SUM(cogs_cents) FROM sales
+         WHERE status = 'confirmed' AND sold_at >= ${from} AND sold_at < ${to}
       ), 0)::text AS cogs,
-      COALESCE((SELECT SUM(amount_usd_cents) FROM expenses), 0)::text AS expenses
+      COALESCE((
+        SELECT SUM(amount_usd_cents) FROM expenses
+         WHERE occurred_at >= ${from} AND occurred_at < ${to}
+      ), 0)::text AS expenses,
+      COALESCE((
+        SELECT SUM(amount_usd_cents) FROM ledger_entries
+         WHERE category = 'refund' AND source_kind = 'sale'
+           AND occurred_at >= ${from} AND occurred_at < ${to}
+      ), 0)::text AS refunds,
+      COALESCE((
+        SELECT SUM(value_cents) FROM inventory_movements
+         WHERE kind = 'return' AND source_kind = 'sale'
+           AND occurred_at >= ${from} AND occurred_at < ${to}
+      ), 0)::text AS restocked
   `);
 
-  const revenueCents = Number(row?.revenue ?? 0);
-  const cogsCents = Number(row?.cogs ?? 0);
+  const revenueCents = Number(row?.revenue ?? 0) - Number(row?.refunds ?? 0);
+  const cogsCents = Number(row?.cogs ?? 0) - Number(row?.restocked ?? 0);
   const expensesCents = Number(row?.expenses ?? 0);
   const grossCents = revenueCents - cogsCents;
 

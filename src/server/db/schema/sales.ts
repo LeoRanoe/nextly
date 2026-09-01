@@ -79,6 +79,9 @@ export const saleItems = pgTable(
     cogsCents: bigint({ mode: 'number' }).notNull().default(0),
     /** Units sold beyond what was in stock, if any. Surfaced as a warning. */
     shortfall: integer().notNull().default(0),
+    /** Units of this line returned after the sale. Never exceeds quantity:
+     *  a return reverses the sale's postings rather than rewriting them. */
+    quantityReturned: integer().notNull().default(0),
 
     position: integer().notNull().default(0),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

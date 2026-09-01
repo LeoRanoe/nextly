@@ -39,6 +39,7 @@ export type SaleDetail = {
     variantName: string;
     sku: string;
     quantity: number;
+    quantityReturned: number;
     unitPriceCents: Cents;
     unitPriceUsdCents: Cents;
     lineTotalUsdCents: Cents;
@@ -85,7 +86,8 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       SELECT
         si.id, si.variant_id, v.product_id, p.name AS product_name,
         v.name AS variant_name, v.sku,
-        si.quantity, si.unit_price_cents::text, si.unit_price_usd_cents::text,
+        si.quantity, si.quantity_returned,
+        si.unit_price_cents::text, si.unit_price_usd_cents::text,
         si.line_total_usd_cents::text, si.cogs_cents::text, si.shortfall
       FROM sale_items si
       JOIN product_variants v ON v.id = si.variant_id
@@ -132,6 +134,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       variantName: text(item.variant_name),
       sku: text(item.sku),
       quantity: num(item.quantity),
+      quantityReturned: num(item.quantity_returned),
       unitPriceCents: num(item.unit_price_cents),
       unitPriceUsdCents: num(item.unit_price_usd_cents),
       lineTotalUsdCents: num(item.line_total_usd_cents),

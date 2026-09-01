@@ -31,8 +31,22 @@ export type ProfitAndLoss = ProfitAndLossTotals & {
   previous: ProfitAndLossTotals;
 };
 
+/**
+ * Revenue and cost of goods are reported NET of returns: a sale stays
+ * immutable in its own row, and the return's reversing postings — the refund
+ * entry and the restock movement, both sourced to the sale — are what take it
+ * back out of the period. Only postings sourced to a sale count here; a
+ * hand-entered refund or adjustment is someone's categorisation, not an
+ * unwinding of revenue.
+ */
 async function pnlTotals(from: Date, to: Date): Promise<ProfitAndLossTotals> {
-  const [row] = await db.execute<{ revenue: string; cogs: string; expenses: string }>(sql`
+  const [row] = await db.execute<{
+    revenue: string;
+    cogs: string;
+    expenses: string;
+    refunds: string;
+    restocked: string;
+  }>(sql`
     SELECT
       COALESCE((
         SELECT SUM(total_usd_cents) FROM sales
@@ -45,11 +59,21 @@ async function pnlTotals(from: Date, to: Date): Promise<ProfitAndLossTotals> {
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM expenses
          WHERE occurred_at >= ${from} AND occurred_at < ${to}
-      ), 0)::text AS expenses
+      ), 0)::text AS expenses,
+      COALESCE((
+        SELECT SUM(amount_usd_cents) FROM ledger_entries
+         WHERE category = 'refund' AND source_kind = 'sale'
+           AND occurred_at >= ${from} AND occurred_at < ${to}
+      ), 0)::text AS refunds,
+      COALESCE((
+        SELECT SUM(value_cents) FROM inventory_movements
+         WHERE kind = 'return' AND source_kind = 'sale'
+           AND occurred_at >= ${from} AND occurred_at < ${to}
+      ), 0)::text AS restocked
   `);
 
-  const revenueCents = num(row?.revenue);
-  const cogsCents = num(row?.cogs);
+  const revenueCents = num(row?.revenue) - num(row?.refunds);
+  const cogsCents = num(row?.cogs) - num(row?.restocked);
   const expensesCents = num(row?.expenses);
   const grossCents = revenueCents - cogsCents;
 

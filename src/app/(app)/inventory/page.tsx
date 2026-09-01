@@ -26,10 +26,9 @@ import { formatRelative } from '@/lib/format';
 import { parseListParams, type RawSearchParams, stockQuerySchema } from '@/lib/list-params';
 import { formatMoney } from '@/lib/money';
 import { listStock } from '@/server/queries/lists';
+import { getSettings } from '@/server/queries/reference';
 
 export const metadata: Metadata = { title: 'Inventory' };
-
-const LOW_STOCK_AT = 5;
 
 export default function InventoryPage({
   searchParams,
@@ -58,7 +57,10 @@ async function StockTable({ searchParams }: { searchParams: Promise<RawSearchPar
   const raw = await searchParams;
   const query = parseListParams(stockQuerySchema, raw);
   const hasFilters = Boolean(query.q);
-  const result = await listStock(query);
+  const [result, settings] = await Promise.all([listStock(query), getSettings()]);
+  // The same threshold the alerts panel reads, so the "Low" badge here and
+  // the "running low" alert on the Overview can never disagree.
+  const lowStockAt = settings?.lowStockThreshold ?? 5;
 
   if (result.total === 0 && !hasFilters) {
     return (
@@ -132,7 +134,7 @@ async function StockTable({ searchParams }: { searchParams: Promise<RawSearchPar
           </THead>
           <TBody>
             {result.rows.map((row) => {
-              const low = row.onHand > 0 && row.onHand <= LOW_STOCK_AT;
+              const low = row.onHand > 0 && row.onHand <= lowStockAt;
               const negative = row.onHand < 0;
               return (
                 <TR key={row.variantId}>

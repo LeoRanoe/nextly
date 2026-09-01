@@ -1,9 +1,10 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { returnedPortion } from '@/lib/costing';
 import { normaliseToUsd } from '@/lib/fx';
-import { saleSchema, uuid } from '@/lib/schemas';
+import { quantity, saleSchema, uuid } from '@/lib/schemas';
 import { db } from '../db/client';
 import { saleItems, sales } from '../db/schema';
 import {
@@ -12,6 +13,7 @@ import {
   logActivity,
   nextDocumentNumber,
   postLedgerEntry,
+  postStockMovement,
 } from '../services/posting';
 import { rateForRecord, rateOn } from '../services/rates';
 import { ActionError, writeAction } from './client';
@@ -399,4 +401,155 @@ export const voidSale = writeAction
     });
 
     return { number };
+  });
+
+/**
+ * Return items from a confirmed sale.
+ *
+ * The sale itself stays exactly as it was — it happened, and rewriting it
+ * would rewrite a margin someone has already relied on, the same reason
+ * `updateSale` refuses a confirmed sale. Instead the return posts the
+ * reverse of the sale's consequences:
+ *
+ *   stock  the goods come back in at the cost they went out at, so the
+ *          weighted average is restored rather than re-priced;
+ *   cash   the refund leaves in the currency it arrived in, at the rate the
+ *          sale fixed, so the reversal nets against the original receipt;
+ *   margin the line's returned portion is tracked on `quantity_returned`,
+ *          leaving the original figures intact beside it.
+ *
+ * The amounts are derived, never typed: each returned share is
+ * `returnedPortion` of the line, so partial returns across time always foot
+ * to the line exactly. A written reason is required — this reverses
+ * postings, the same tier of friction as void and reversal.
+ */
+export const returnSaleItems = writeAction
+  .metadata({ action: 'returned', entity: 'sale' })
+  .inputSchema(
+    z.object({
+      saleId: uuid,
+      reason: z.string().trim().min(3, 'Say why the goods came back').max(500),
+      items: z
+        .array(z.object({ saleItemId: uuid, quantity }))
+        .min(1, 'Return at least one unit'),
+    }),
+  )
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.saleId)).limit(1);
+      if (!sale) throw new ActionError('That sale no longer exists.');
+      if (sale.status !== 'confirmed') {
+        throw new ActionError(
+          sale.status === 'draft'
+            ? 'A draft has moved nothing — edit or void it instead of returning against it.'
+            : 'A void sale has already had its postings removed; there is nothing to reverse.',
+        );
+      }
+
+      const items = await tx
+        .select()
+        .from(saleItems)
+        .where(
+          and(
+            eq(saleItems.saleId, sale.id),
+            inArray(
+              saleItems.id,
+              input.items.map((item) => item.saleItemId),
+            ),
+          ),
+        );
+
+      const byId = new Map(items.map((item) => [item.id, item]));
+
+      let refundCents = 0;
+      let restockedCents = 0;
+      let units = 0;
+      const returnedAt = new Date();
+
+      for (const line of input.items) {
+        const item = byId.get(line.saleItemId);
+        if (!item) throw new ActionError('One of those lines is not on this sale.');
+
+        const returnable = item.quantity - item.quantityReturned;
+        if (line.quantity > returnable) {
+          throw new ActionError(
+            returnable === 0
+              ? 'That line has already been returned in full.'
+              : `Only ${returnable} unit${returnable === 1 ? '' : 's'} of that line can still be returned.`,
+          );
+        }
+
+        const refund = returnedPortion(
+          item.unitPriceCents * item.quantity,
+          item.quantity,
+          item.quantityReturned,
+          line.quantity,
+        );
+        const restock = returnedPortion(
+          item.cogsCents,
+          item.quantity,
+          item.quantityReturned,
+          line.quantity,
+        );
+
+        await postStockMovement(tx, {
+          variantId: item.variantId,
+          kind: 'return',
+          quantity: line.quantity,
+          valueCents: restock,
+          sourceKind: 'sale',
+          sourceId: sale.id,
+          occurredAt: returnedAt,
+          note: `Returned from ${sale.number}.`,
+          memberId: ctx.member.id,
+        });
+
+        await tx
+          .update(saleItems)
+          .set({ quantityReturned: item.quantityReturned + line.quantity })
+          .where(eq(saleItems.id, item.id));
+
+        refundCents += refund;
+        restockedCents += restock;
+        units += line.quantity;
+      }
+
+      // A line can be free (price zero) and still come back; only money that
+      // actually moves gets a ledger entry.
+      if (refundCents > 0) {
+        await postLedgerEntry(tx, {
+          direction: 'out',
+          category: 'refund',
+          description: `Refund ${sale.number}`,
+          currency: sale.currency,
+          rateMicros: sale.fxRateMicros,
+          amountCents: refundCents,
+          paymentMethod: sale.paymentMethod,
+          occurredAt: returnedAt,
+          memberId: ctx.member.id,
+          sourceKind: 'sale',
+          sourceId: sale.id,
+          notes: input.reason,
+        });
+      }
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'recorded return on sale',
+        entityType: 'sale',
+        entityId: sale.id,
+        entityLabel: sale.number,
+      });
+
+      return {
+        number: sale.number,
+        currency: sale.currency,
+        refundCents,
+        refundUsdCents: normaliseToUsd(refundCents, sale.currency, sale.fxRateMicros),
+        restockedCents,
+        units,
+      };
+    });
+
+    return result;
   });

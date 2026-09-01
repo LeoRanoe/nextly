@@ -2,6 +2,7 @@ import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { ReturnSheet } from '@/components/forms/return-sheet';
 import { SaleActions } from '@/components/forms/row-actions';
 import { SaleForm } from '@/components/forms/sale-form';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -125,6 +126,21 @@ async function Loader({
                   <Link href={`/sales/${sale.id}?editing=1` as Route}>Edit</Link>
                 </Button>
               ) : null}
+              {sale.status === 'confirmed' ? (
+                <ReturnSheet
+                  saleId={sale.id}
+                  number={sale.number}
+                  currency={sale.currency}
+                  items={sale.items.map((item) => ({
+                    id: item.id,
+                    label: `${item.productName} · ${item.variantName}`,
+                    sku: item.sku,
+                    quantity: item.quantity,
+                    quantityReturned: item.quantityReturned,
+                    unitPriceCents: item.unitPriceCents,
+                  }))}
+                />
+              ) : null}
               <SaleActions id={sale.id} number={sale.number} status={sale.status} />
             </span>
           }
@@ -166,6 +182,11 @@ async function Loader({
                       {item.shortfall > 0 ? (
                         <Badge tone="warning" className="ml-2">
                           {item.shortfall} oversold
+                        </Badge>
+                      ) : null}
+                      {item.quantityReturned > 0 ? (
+                        <Badge tone="info" className="ml-2">
+                          {item.quantityReturned} returned
                         </Badge>
                       ) : null}
                     </TD>

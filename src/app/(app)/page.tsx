@@ -5,30 +5,38 @@ import { Suspense } from 'react';
 import { AlertsPanel } from '@/components/overview/alerts-panel';
 import { CashFlowChart } from '@/components/overview/cash-flow-chart';
 import { InventoryHealth } from '@/components/overview/inventory-health';
+import { MarginLeaders } from '@/components/overview/margin-leaders';
 import { MarginWaterfall } from '@/components/overview/margin-waterfall';
 import { OwnerEquity } from '@/components/overview/owner-equity';
 import { PositionStrip, PositionStripSkeleton } from '@/components/overview/position-strip';
+import { RecentActivity } from '@/components/overview/recent-activity';
 import { PageHeader } from '@/components/patterns/page-header';
+import { PeriodSelector } from '@/components/patterns/period-selector';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { formatRate } from '@/lib/fx';
+import { isPeriodPreset, type PeriodPreset } from '@/lib/report-period';
 import { getCashFlow, getCurrentRate } from '@/server/queries/overview';
 
 /** Stable keys for placeholder rows. Skeletons never reorder, but an
  *  index key still teaches the wrong habit to whoever copies this next. */
-const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
+const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
 
 export const metadata: Metadata = { title: 'Overview' };
+
+type SearchParams = Promise<{ period?: string }>;
 
 /**
  * The Overview.
  *
  * Every panel streams behind its own Suspense boundary, so a slow aggregate
  * holds up one card rather than the page. The shell, the headings and the
- * skeleton geometry are all part of the static prerender.
+ * skeleton geometry are all part of the static prerender. Only the
+ * waterfall reads `?period=` — the rest of the page is a position, and a
+ * position is always "right now".
  */
-export default function OverviewPage() {
+export default function OverviewPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       <PageHeader
@@ -70,9 +78,17 @@ export default function OverviewPage() {
           </Surface>
 
           <Surface>
-            <SurfaceHeader title="Revenue to net" hint="Where the money actually goes" />
+            <SurfaceHeader
+              title="Revenue to net"
+              hint="Where the money actually goes"
+              action={
+                <Suspense fallback={null}>
+                  <PeriodSelector defaultValue="all" />
+                </Suspense>
+              }
+            />
             <Suspense fallback={<Skeleton className="m-4 h-[260px]" />}>
-              <MarginWaterfall />
+              <Waterfall searchParams={searchParams} />
             </Suspense>
           </Surface>
         </div>
@@ -104,7 +120,7 @@ export default function OverviewPage() {
           </Surface>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="grid gap-4 xl:grid-cols-3">
           <Surface>
             <SurfaceHeader
               title="Owner equity"
@@ -119,7 +135,29 @@ export default function OverviewPage() {
               <OwnerEquity />
             </Suspense>
           </Surface>
-          <div />
+          <Surface>
+            <SurfaceHeader
+              title="Margin leaders"
+              hint="Lifetime gross profit by product"
+              action={
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/reports">Reports</Link>
+                </Button>
+              }
+            />
+            <Suspense fallback={<PanelSkeleton rows={5} />}>
+              <MarginLeaders />
+            </Suspense>
+          </Surface>
+          <Surface>
+            <SurfaceHeader
+              title="Recent activity"
+              hint="Every change to the books, in the order it happened"
+            />
+            <Suspense fallback={<PanelSkeleton rows={8} />}>
+              <RecentActivity />
+            </Suspense>
+          </Surface>
         </div>
       </div>
     </>
@@ -129,6 +167,12 @@ export default function OverviewPage() {
 async function CashFlow() {
   const data = await getCashFlow(12);
   return <CashFlowChart data={data} />;
+}
+
+async function Waterfall({ searchParams }: { searchParams: SearchParams }) {
+  const { period } = await searchParams;
+  const preset: PeriodPreset = isPeriodPreset(period) ? period : 'all';
+  return <MarginWaterfall preset={preset} />;
 }
 
 async function RateNote() {

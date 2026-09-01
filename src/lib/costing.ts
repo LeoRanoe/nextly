@@ -199,6 +199,39 @@ export function unitCost(valuation: Valuation, decimals = 4): number | null {
   return Math.round(perUnit * factor) / factor;
 }
 
+/* ── Returns ─────────────────────────────────────────────────────────────── */
+
+/**
+ * The share of a line's total amount that belongs to the units being
+ * returned now.
+ *
+ * Computed cumulatively — the share of everything returned so far subtracted
+ * from the share including these units — so repeated partial returns always
+ * sum to exactly the line total. Returning the last remaining unit hands back
+ * the exact remainder, the same conservation `consumeStock` gives on the way
+ * out: cents are never orphaned.
+ */
+export function returnedPortion(
+  totalCents: Cents,
+  quantity: number,
+  alreadyReturned: number,
+  returning: number,
+): Cents {
+  if (quantity <= 0) throw new RangeError('returnedPortion requires a positive quantity');
+  if (returning <= 0) throw new RangeError('returnedPortion requires a positive return');
+  if (alreadyReturned < 0 || alreadyReturned + returning > quantity) {
+    throw new RangeError('Cannot return more units than the line holds');
+  }
+
+  const before = mulDivRound(totalCents, alreadyReturned, quantity);
+  const after =
+    alreadyReturned + returning === quantity
+      ? totalCents
+      : mulDivRound(totalCents, alreadyReturned + returning, quantity);
+
+  return after - before;
+}
+
 /* ── Margin ──────────────────────────────────────────────────────────────── */
 
 export type Margin = { revenueCents: Cents; cogsCents: Cents; grossCents: Cents; rate: number };

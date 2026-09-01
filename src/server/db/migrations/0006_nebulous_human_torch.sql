@@ -1,0 +1,1 @@
+ALTER TABLE "sale_items" ADD COLUMN "quantity_returned" integer DEFAULT 0 NOT NULL;

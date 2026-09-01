@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { PeriodSelector } from '@/components/patterns/period-selector';
 import { FxExposureReport } from '@/components/reports/fx-exposure';
 import { MarginByProduct } from '@/components/reports/margin-by-product';
-import { PeriodSelector } from '@/components/reports/period-selector';
 import { ProfitAndLossReport } from '@/components/reports/profit-and-loss';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isPeriodPreset, type PeriodPreset } from '@/lib/report-period';

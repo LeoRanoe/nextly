@@ -6,6 +6,7 @@ import {
   margin,
   purchaseOrderTotal,
   receiveStock,
+  returnedPortion,
   totalOverhead,
   unitCost,
 } from '@/lib/costing';
@@ -164,6 +165,40 @@ describe('consumeStock', () => {
   it('rejects non-positive quantities', () => {
     expect(() => consumeStock({ quantity: 5, valueCents: 100 }, 0)).toThrow(RangeError);
     expect(() => receiveStock(EMPTY_VALUATION, -1, 100)).toThrow(RangeError);
+  });
+});
+
+describe('returnedPortion', () => {
+  it('hands back the exact whole when the full line is returned', () => {
+    expect(returnedPortion(10_001, 3, 0, 3)).toBe(10_001);
+  });
+
+  it('conserves cents when a line is returned one unit at a time', () => {
+    // 100 dollars over 3 units is 33.333 recurring, the classic place a
+    // ledger springs a leak — this time on the way back in.
+    let returned = 0;
+    for (let i = 0; i < 3; i++) {
+      returned += returnedPortion(10_000, 3, i, 1);
+    }
+    expect(returned).toBe(10_000);
+  });
+
+  it('conserves cents across arbitrary partial returns', () => {
+    for (let total = 1; total <= 200; total++) {
+      const quantity = 7;
+      let refunded = 0;
+      let alreadyReturned = 0;
+      for (const returning of [2, 3, 1, 1]) {
+        refunded += returnedPortion(total, quantity, alreadyReturned, returning);
+        alreadyReturned += returning;
+      }
+      expect(refunded).toBe(total);
+    }
+  });
+
+  it('refuses to return more units than the line holds', () => {
+    expect(() => returnedPortion(1000, 2, 1, 2)).toThrow(RangeError);
+    expect(() => returnedPortion(1000, 2, 0, 0)).toThrow(RangeError);
   });
 });
 

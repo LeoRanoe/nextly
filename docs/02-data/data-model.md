@@ -138,7 +138,10 @@ change cannot re-value it. `cogs_cents` is the weighted-average cost consumed at
 that moment, so a later purchase at a different price cannot rewrite the margin.
 
 **`sale_items`** — carries `shortfall`, the number of units sold beyond what was
-in stock. Surfaced as a critical alert rather than silently allowed.
+in stock. Surfaced as a critical alert rather than silently allowed. Also
+`quantity_returned`, written by the returns flow: a return never rewrites the
+line, it tracks the reversal beside the original figures so the sale stays
+exactly as it was booked.
 
 ### Finance
 

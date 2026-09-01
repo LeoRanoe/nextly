@@ -51,7 +51,9 @@ Three things changed substantively in the move, all documented in
 
 ## What comes next
 
-A public catalog. The product schema was built for it from the first migration —
-`slug`, `summary`, `description`, `specs`, `seo_title`, `catalog_published` — so
-the storefront reads these same rows behind a published filter. There is no
-second migration waiting.
+The public catalog exists: `/catalog` and `/catalog/[slug]` read these same
+product rows — `slug`, `summary`, `description`, `specs`, `seo_title`,
+`catalog_published` — behind the published filter, with ledger-derived
+availability and no cost figure anywhere. Buying from the site, rather than
+browsing it, is the open question; see the
+[roadmap](roadmap.md).

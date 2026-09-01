@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn';
 import { formatCompact, formatMoney } from '@/lib/money';
+import { type PeriodPreset, periodRange } from '@/lib/report-period';
 import { getWaterfall } from '@/server/queries/overview';
 
 /**
@@ -22,8 +23,10 @@ type Step = {
   kind: 'positive' | 'negative' | 'subtotal' | 'total';
 };
 
-export async function MarginWaterfall() {
-  const { revenueCents, cogsCents, grossCents, expensesCents, netCents } = await getWaterfall();
+export async function MarginWaterfall({ preset = 'all' }: { preset?: PeriodPreset }) {
+  const { revenueCents, cogsCents, grossCents, expensesCents, netCents } = await getWaterfall(
+    periodRange(preset),
+  );
 
   const steps: Step[] = [
     { label: 'Revenue', delta: revenueCents, value: revenueCents, kind: 'positive' },

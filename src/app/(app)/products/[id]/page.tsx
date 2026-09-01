@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import { ExternalLink } from 'lucide-react';
+import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
@@ -44,6 +45,15 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <div className="space-y-4">
+      {product.catalogPublished ? (
+        <div className="flex justify-end">
+          <Button asChild variant="ghost" size="sm">
+            <Link href={`/catalog/${product.slug}` as Route} target="_blank">
+              <ExternalLink className="size-3.5" /> View in catalog
+            </Link>
+          </Button>
+        </div>
+      ) : null}
       <ProductImages productId={product.id} initial={product.images} />
       <ProductForm
         categories={categories}
