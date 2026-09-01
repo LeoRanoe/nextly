@@ -1,5 +1,5 @@
 import { ShoppingCart } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { ReceiveOrderSheet } from '@/components/forms/finance-sheets';
@@ -92,7 +92,14 @@ async function OrdersTable() {
         <TBody>
           {rows.map((row) => (
             <TR key={row.id}>
-              <TD className="tabular whitespace-nowrap text-ink">{row.number}</TD>
+              <TD className="tabular whitespace-nowrap text-ink">
+                <Link
+                  href={`/purchase-orders/${row.id}` as Route}
+                  className="hover:text-accent hover:underline"
+                >
+                  {row.number}
+                </Link>
+              </TD>
               <TD className="whitespace-nowrap text-ink-2">{row.supplierName ?? '—'}</TD>
               <TD>
                 <span className="inline-flex items-center gap-1.5">

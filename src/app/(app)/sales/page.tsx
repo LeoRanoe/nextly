@@ -1,5 +1,5 @@
 import { Receipt } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { SaleActions } from '@/components/forms/row-actions';
@@ -96,7 +96,14 @@ async function SalesTable() {
         <TBody>
           {rows.map((row) => (
             <TR key={row.id}>
-              <TD className="tabular whitespace-nowrap text-ink">{row.number}</TD>
+              <TD className="tabular whitespace-nowrap text-ink">
+                <Link
+                  href={`/sales/${row.id}` as Route}
+                  className="hover:text-accent hover:underline"
+                >
+                  {row.number}
+                </Link>
+              </TD>
               <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
                 {formatDate(row.soldAt)}
               </TD>
