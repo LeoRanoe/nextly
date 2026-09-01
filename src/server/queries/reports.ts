@@ -40,6 +40,9 @@ export type ProfitAndLoss = ProfitAndLossTotals & {
  * unwinding of revenue.
  */
 async function pnlTotals(from: Date, to: Date): Promise<ProfitAndLossTotals> {
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+
   const [row] = await db.execute<{
     revenue: string;
     cogs: string;
@@ -50,25 +53,25 @@ async function pnlTotals(from: Date, to: Date): Promise<ProfitAndLossTotals> {
     SELECT
       COALESCE((
         SELECT SUM(total_usd_cents) FROM sales
-         WHERE status = 'confirmed' AND sold_at >= ${from} AND sold_at < ${to}
+         WHERE status = 'confirmed' AND sold_at >= ${fromIso} AND sold_at < ${toIso}
       ), 0)::text AS revenue,
       COALESCE((
         SELECT SUM(cogs_cents) FROM sales
-         WHERE status = 'confirmed' AND sold_at >= ${from} AND sold_at < ${to}
+         WHERE status = 'confirmed' AND sold_at >= ${fromIso} AND sold_at < ${toIso}
       ), 0)::text AS cogs,
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM expenses
-         WHERE occurred_at >= ${from} AND occurred_at < ${to}
+         WHERE occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS expenses,
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM ledger_entries
          WHERE category = 'refund' AND source_kind = 'sale'
-           AND occurred_at >= ${from} AND occurred_at < ${to}
+           AND occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS refunds,
       COALESCE((
         SELECT SUM(value_cents) FROM inventory_movements
          WHERE kind = 'return' AND source_kind = 'sale'
-           AND occurred_at >= ${from} AND occurred_at < ${to}
+           AND occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS restocked
   `);
 
@@ -106,6 +109,8 @@ export async function getProfitAndLoss({
 
   const durationMs = to.getTime() - from.getTime();
   const previousFrom = new Date(from.getTime() - durationMs);
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
 
   const [current, previous, categoryRows] = await Promise.all([
     pnlTotals(from, to),
@@ -114,7 +119,7 @@ export async function getProfitAndLoss({
       SELECT COALESCE(c.name, 'Uncategorised') AS name, SUM(e.amount_usd_cents)::text AS amount
         FROM expenses e
         LEFT JOIN expense_categories c ON c.id = e.category_id
-       WHERE e.occurred_at >= ${from} AND e.occurred_at < ${to}
+       WHERE e.occurred_at >= ${fromIso} AND e.occurred_at < ${toIso}
        GROUP BY c.name
        ORDER BY amount DESC
     `),

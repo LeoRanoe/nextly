@@ -135,6 +135,12 @@ export async function getWaterfall({ from, to }: { from: Date; to: Date }): Prom
   if (!isDatabaseConfigured())
     return { revenueCents: 0, cogsCents: 0, grossCents: 0, expensesCents: 0, netCents: 0 };
 
+  // Bind ISO strings rather than Date objects. This keeps the parameter
+  // representation stable in Vercel's bundled postgres client while
+  // PostgreSQL still infers the timestamp type from the compared columns.
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+
   const [row] = await db.execute<{
     revenue: string;
     cogs: string;
@@ -145,25 +151,25 @@ export async function getWaterfall({ from, to }: { from: Date; to: Date }): Prom
     SELECT
       COALESCE((
         SELECT SUM(total_usd_cents) FROM sales
-         WHERE status = 'confirmed' AND sold_at >= ${from} AND sold_at < ${to}
+         WHERE status = 'confirmed' AND sold_at >= ${fromIso} AND sold_at < ${toIso}
       ), 0)::text AS revenue,
       COALESCE((
         SELECT SUM(cogs_cents) FROM sales
-         WHERE status = 'confirmed' AND sold_at >= ${from} AND sold_at < ${to}
+         WHERE status = 'confirmed' AND sold_at >= ${fromIso} AND sold_at < ${toIso}
       ), 0)::text AS cogs,
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM expenses
-         WHERE occurred_at >= ${from} AND occurred_at < ${to}
+         WHERE occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS expenses,
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM ledger_entries
          WHERE category = 'refund' AND source_kind = 'sale'
-           AND occurred_at >= ${from} AND occurred_at < ${to}
+           AND occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS refunds,
       COALESCE((
         SELECT SUM(value_cents) FROM inventory_movements
          WHERE kind = 'return' AND source_kind = 'sale'
-           AND occurred_at >= ${from} AND occurred_at < ${to}
+           AND occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS restocked
   `);
 
