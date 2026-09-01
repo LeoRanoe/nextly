@@ -52,7 +52,7 @@ export default function LoginPage() {
             Sign in
           </h1>
           <p className="mt-1 mb-6 text-[13px] text-ink-3">
-            Nextly is invite-only. Use the address your account was created with.
+            Use your Nextly email and password to continue.
           </p>
           <LoginForm />
         </div>
