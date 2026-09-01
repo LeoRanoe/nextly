@@ -1,13 +1,16 @@
 import { Wallet } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { LedgerSheet } from '@/components/forms/ledger-sheet';
 import { LedgerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money } from '@/components/ui/money';
+import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
 import {
   Table,
@@ -17,9 +20,11 @@ import {
   TD,
   TH,
   THead,
+  THSort,
   TR,
 } from '@/components/ui/table';
 import { formatDate, humanise } from '@/lib/format';
+import { ledgerQuerySchema, parseListParams, type RawSearchParams } from '@/lib/list-params';
 import { listLedger } from '@/server/queries/lists';
 import { listPrincipalOptions } from '@/server/queries/pickers';
 
@@ -35,8 +40,16 @@ const CATEGORY_TONE: Record<string, 'positive' | 'negative' | 'accent' | 'neutra
   refund: 'neutral',
   other: 'neutral',
 };
+const CATEGORY_OPTIONS = Object.keys(CATEGORY_TONE).map((value) => ({
+  value,
+  label: humanise(value),
+}));
 
-export default function LedgerPage() {
+export default function LedgerPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   return (
     <>
       <PageHeader
@@ -55,18 +68,25 @@ export default function LedgerPage() {
         }
       />
       <Surface className="overflow-hidden">
+        <ListToolbar>
+          <ListSearch placeholder="Search by description or owner" />
+          <ListFilter param="category" label="Category" options={CATEGORY_OPTIONS} />
+        </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={5} widths={['w-20', 'w-40', 'w-16']} />}>
-          <LedgerTable />
+          <LedgerTable searchParams={searchParams} />
         </Suspense>
       </Surface>
     </>
   );
 }
 
-async function LedgerTable() {
-  const rows = await listLedger();
+async function LedgerTable({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
+  const raw = await searchParams;
+  const query = parseListParams(ledgerQuerySchema, raw);
+  const hasFilters = Boolean(query.q || query.category);
+  const result = await listLedger(query);
 
-  if (rows.length === 0) {
+  if (result.total === 0 && !hasFilters) {
     return (
       <EmptyState
         Icon={Wallet}
@@ -76,52 +96,99 @@ async function LedgerTable() {
     );
   }
 
+  if (result.rows.length === 0) {
+    return (
+      <EmptyState
+        Icon={Wallet}
+        title="No entries match these filters"
+        description="Try a different search or clear the category filter."
+        action={
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/ledger">Clear filters</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  const nextDir = query.dir === 'asc' ? 'desc' : 'asc';
+
   return (
-    <TableWrap>
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH className="w-[92px]">Date</TH>
-            <TH>Description</TH>
-            <TH>Category</TH>
-            <TH>Owner</TH>
-            <TH>Method</TH>
-            <TH numeric>Amount</TH>
-            <TH numeric>Balance</TH>
-            <TH />
-          </TR>
-        </THead>
-        <TBody>
-          {rows.map((row) => (
-            <TR key={row.id}>
-              <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                {formatDate(row.occurredAt)}
-              </TD>
-              <TD className="text-ink">{row.description}</TD>
-              <TD>
-                <Badge tone={CATEGORY_TONE[row.category] ?? 'neutral'}>
-                  {humanise(row.category)}
-                </Badge>
-              </TD>
-              <TD className="whitespace-nowrap text-ink-3">{row.memberName ?? '—'}</TD>
-              <TD className="whitespace-nowrap text-[12px] text-ink-4">
-                {humanise(row.paymentMethod)}
-              </TD>
-              <TD numeric>
-                <Money cents={row.netCents} tone="flow" size="sm" signed />
-              </TD>
-              <TD numeric className="text-ink-2">
-                <Money cents={row.balanceCents} size="sm" tone="muted" />
-              </TD>
-              <TD className="text-right">
-                <LedgerActions id={row.id} description={row.description} />
-              </TD>
+    <>
+      <TableWrap>
+        <Table>
+          <THead>
+            <TR className="hover:bg-transparent">
+              <THSort
+                href={buildHref({ ...query, dir: nextDir, page: 1 })}
+                active
+                dir={query.dir}
+              >
+                Date
+              </THSort>
+              <TH>Description</TH>
+              <TH>Category</TH>
+              <TH>Owner</TH>
+              <TH>Method</TH>
+              <TH numeric>Amount</TH>
+              <TH numeric>Balance</TH>
+              <TH />
             </TR>
-          ))}
-        </TBody>
-      </Table>
-    </TableWrap>
+          </THead>
+          <TBody>
+            {result.rows.map((row) => (
+              <TR key={row.id}>
+                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                  {formatDate(row.occurredAt)}
+                </TD>
+                <TD className="text-ink">{row.description}</TD>
+                <TD>
+                  <Badge tone={CATEGORY_TONE[row.category] ?? 'neutral'}>
+                    {humanise(row.category)}
+                  </Badge>
+                </TD>
+                <TD className="whitespace-nowrap text-ink-3">{row.memberName ?? '—'}</TD>
+                <TD className="whitespace-nowrap text-[12px] text-ink-4">
+                  {humanise(row.paymentMethod)}
+                </TD>
+                <TD numeric>
+                  <Money cents={row.netCents} tone="flow" size="sm" signed />
+                </TD>
+                <TD numeric className="text-ink-2">
+                  <Money cents={row.balanceCents} size="sm" tone="muted" />
+                </TD>
+                <TD className="text-right">
+                  <LedgerActions id={row.id} description={row.description} />
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </TableWrap>
+      <Pagination
+        page={result.page}
+        pageCount={result.pageCount}
+        total={result.total}
+        perPage={result.perPage}
+        buildHref={(page) => buildHref({ ...query, page })}
+      />
+    </>
   );
+}
+
+function buildHref(query: {
+  q?: string;
+  category?: string;
+  dir?: string;
+  page?: number;
+}): Route {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.category) params.set('category', query.category);
+  if (query.dir) params.set('dir', query.dir);
+  if (query.page && query.page > 1) params.set('page', String(query.page));
+  const search = params.toString();
+  return (search ? `/ledger?${search}` : '/ledger') as Route;
 }
 
 async function LedgerTrigger() {

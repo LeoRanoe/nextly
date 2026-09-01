@@ -1,7 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
+import type { CategoryQuery, SupplierQuery } from '@/lib/list-params';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
+import { clampPage, clampPerPage, type Page, toPage } from './paginate';
 import { bool, maybe, num, text } from './row';
 
 /**
@@ -20,22 +22,52 @@ export type CategoryRow = {
   productCount: number;
 };
 
-export async function listCategories(): Promise<CategoryRow[]> {
-  if (!isDatabaseConfigured()) return [];
+const CATEGORY_SORT: Record<CategoryQuery['sort'], SQL> = {
+  name: sql`c.position, c.name`,
+  products: sql`(SELECT COUNT(*) FROM products p WHERE p.category_id = c.id)`,
+};
+
+export async function listCategories(
+  query: CategoryQuery = {} as CategoryQuery,
+): Promise<Page<CategoryRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`(c.name ILIKE ${term} OR c.slug ILIKE ${term})`);
+  }
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = CATEGORY_SORT[query.sort] ?? CATEGORY_SORT.name;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string>>(sql`
     SELECT c.id, c.name, c.slug,
-           (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id)::text AS product_count
+           (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id)::text AS product_count,
+           COUNT(*) OVER()::text AS total_count
       FROM categories c
-     ORDER BY c.position, c.name
+      ${where}
+     ORDER BY ${orderBy} ${direction}
+     LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    name: text(row.name),
-    slug: text(row.slug),
-    productCount: num(row.product_count),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      name: text(row.name),
+      slug: text(row.slug),
+      productCount: num(row.product_count),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type SupplierRow = {
@@ -49,8 +81,38 @@ export type SupplierRow = {
   spendCents: Cents;
 };
 
-export async function listSuppliers(): Promise<SupplierRow[]> {
-  if (!isDatabaseConfigured()) return [];
+// products/orders/spend recompute the same subqueries the SELECT list
+// builds, rather than referencing an output alias cast ::text for the JS
+// driver, which Postgres would then sort lexicographically.
+const SUPPLIER_SORT: Record<SupplierQuery['sort'], SQL> = {
+  name: sql`s.name`,
+  products: sql`(SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id)`,
+  orders: sql`(SELECT COUNT(*) FROM purchase_orders o WHERE o.supplier_id = s.id)`,
+  spend: sql`COALESCE((
+    SELECT SUM(i.landed_cost_cents)
+      FROM purchase_order_items i
+      JOIN purchase_orders o ON o.id = i.purchase_order_id
+     WHERE o.supplier_id = s.id AND o.status = 'received'
+  ), 0)`,
+};
+
+export async function listSuppliers(
+  query: SupplierQuery = {} as SupplierQuery,
+): Promise<Page<SupplierRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`s.name ILIKE ${term}`);
+  }
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = SUPPLIER_SORT[query.sort] ?? SUPPLIER_SORT.name;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -62,21 +124,31 @@ export async function listSuppliers(): Promise<SupplierRow[]> {
           FROM purchase_order_items i
           JOIN purchase_orders o ON o.id = i.purchase_order_id
          WHERE o.supplier_id = s.id AND o.status = 'received'
-      ), 0)::text AS spend_cents
+      ), 0)::text AS spend_cents,
+      COUNT(*) OVER()::text AS total_count
     FROM suppliers s
-    ORDER BY s.name
+    ${where}
+    ORDER BY ${orderBy} ${direction}, s.name
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    name: text(row.name),
-    kind: text(row.kind, 'other') as SupplierRow['kind'],
-    website: text(row.website),
-    notes: text(row.notes),
-    productCount: num(row.product_count),
-    orderCount: num(row.order_count),
-    spendCents: num(row.spend_cents),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      name: text(row.name),
+      kind: text(row.kind, 'other') as SupplierRow['kind'],
+      website: text(row.website),
+      notes: text(row.notes),
+      productCount: num(row.product_count),
+      orderCount: num(row.order_count),
+      spendCents: num(row.spend_cents),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type SupplierDetail = SupplierRow & {

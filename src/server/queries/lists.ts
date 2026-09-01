@@ -1,6 +1,9 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
 import type {
+  CustomerQuery,
+  ExpenseQuery,
+  LedgerQuery,
   ProductQuery,
   PurchaseOrderQuery,
   SaleQuery,
@@ -221,32 +224,60 @@ export type LedgerRow = {
   balanceCents: Cents;
 };
 
-export async function listLedger(limit = 200): Promise<LedgerRow[]> {
-  if (!isDatabaseConfigured()) return [];
+export async function listLedger(
+  query: LedgerQuery = {} as LedgerQuery,
+): Promise<Page<LedgerRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  // The running balance is a window function baked into v_cash_ledger's own
+  // definition, computed over every entry before this query's WHERE ever
+  // runs — so a filtered or paginated row still shows its true balance as
+  // of that moment, never one relative to just the filtered set.
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`(l.description ILIKE ${term} OR m.full_name ILIKE ${term})`);
+  }
+  if (query.category) conditions.push(sql`l.category = ${query.category}::ledger_category`);
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
       l.id, l.seq::text, l.occurred_at::text, l.direction::text, l.category::text,
       l.description, l.payment_method::text, l.net_usd_cents::text,
-      l.balance_usd_cents::text, m.full_name AS member_name
+      l.balance_usd_cents::text, m.full_name AS member_name,
+      COUNT(*) OVER()::text AS total_count
     FROM v_cash_ledger l
     LEFT JOIN members m ON m.id = l.member_id
-    ORDER BY l.occurred_at DESC, l.seq DESC
-    LIMIT ${limit}
+    ${where}
+    ORDER BY l.occurred_at ${direction}, l.seq ${direction}
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    seq: num(row.seq),
-    occurredAt: text(row.occurred_at),
-    direction: text(row.direction) as 'in' | 'out',
-    category: text(row.category),
-    description: text(row.description),
-    memberName: maybe(row.member_name),
-    paymentMethod: text(row.payment_method),
-    netCents: num(row.net_usd_cents),
-    balanceCents: num(row.balance_usd_cents),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      seq: num(row.seq),
+      occurredAt: text(row.occurred_at),
+      direction: text(row.direction) as 'in' | 'out',
+      category: text(row.category),
+      description: text(row.description),
+      memberName: maybe(row.member_name),
+      paymentMethod: text(row.payment_method),
+      netCents: num(row.net_usd_cents),
+      balanceCents: num(row.balance_usd_cents),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type SaleRow = {
@@ -450,33 +481,66 @@ export type CustomerRow = {
   lastOrderAt: string | null;
 };
 
-export async function listCustomers(): Promise<CustomerRow[]> {
-  if (!isDatabaseConfigured()) return [];
+const CUSTOMER_SORT: Record<CustomerQuery['sort'], SQL> = {
+  name: sql`c.name`,
+  orders: sql`t.order_count`,
+  spent: sql`t.spent_usd_cents`,
+};
+
+export async function listCustomers(
+  query: CustomerQuery = {} as CustomerQuery,
+): Promise<Page<CustomerRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(
+      sql`(c.name ILIKE ${term} OR c.code ILIKE ${term} OR c.phone ILIKE ${term} OR c.email ILIKE ${term})`,
+    );
+  }
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = CUSTOMER_SORT[query.sort] ?? CUSTOMER_SORT.spent;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
       c.id, c.code, c.name, c.phone, c.email, c.address_line, c.city, c.notes,
       t.order_count::text, t.spent_usd_cents::text,
-      t.gross_profit_cents::text, t.last_order_at::text
+      t.gross_profit_cents::text, t.last_order_at::text,
+      COUNT(*) OVER()::text AS total_count
     FROM customers c
     JOIN v_customer_totals t ON t.customer_id = c.id
-    ORDER BY t.spent_usd_cents DESC, c.name
+    ${where}
+    ORDER BY ${orderBy} ${direction}, c.name
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    code: text(row.code),
-    name: text(row.name),
-    phone: maybe(row.phone),
-    email: maybe(row.email),
-    addressLine: maybe(row.address_line),
-    city: maybe(row.city),
-    notes: maybe(row.notes),
-    orderCount: num(row.order_count),
-    spentCents: num(row.spent_usd_cents),
-    grossCents: num(row.gross_profit_cents),
-    lastOrderAt: maybe(row.last_order_at),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      code: text(row.code),
+      name: text(row.name),
+      phone: maybe(row.phone),
+      email: maybe(row.email),
+      addressLine: maybe(row.address_line),
+      city: maybe(row.city),
+      notes: maybe(row.notes),
+      orderCount: num(row.order_count),
+      spentCents: num(row.spent_usd_cents),
+      grossCents: num(row.gross_profit_cents),
+      lastOrderAt: maybe(row.last_order_at),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type ExpenseRow = {
@@ -497,8 +561,28 @@ export type ExpenseRow = {
   hasLedgerEntry: boolean;
 };
 
-export async function listExpenses(limit = 200): Promise<ExpenseRow[]> {
-  if (!isDatabaseConfigured()) return [];
+const EXPENSE_SORT: Record<ExpenseQuery['sort'], SQL> = {
+  date: sql`e.occurred_at`,
+  amount: sql`e.amount_usd_cents`,
+};
+
+export async function listExpenses(
+  query: ExpenseQuery = {} as ExpenseQuery,
+): Promise<Page<ExpenseRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`(e.description ILIKE ${term} OR c.name ILIKE ${term})`);
+  }
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = EXPENSE_SORT[query.sort] ?? EXPENSE_SORT.date;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -509,25 +593,34 @@ export async function listExpenses(limit = 200): Promise<ExpenseRow[]> {
       EXISTS(
         SELECT 1 FROM ledger_entries l
          WHERE l.source_kind = 'expense' AND l.source_id = e.id
-      )::text AS has_ledger_entry
+      )::text AS has_ledger_entry,
+      COUNT(*) OVER()::text AS total_count
     FROM expenses e
     LEFT JOIN expense_categories c ON c.id = e.category_id
-    ORDER BY e.occurred_at DESC
-    LIMIT ${limit}
+    ${where}
+    ORDER BY ${orderBy} ${direction}
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    occurredAt: text(row.occurred_at),
-    occurredDate: text(row.occurred_date),
-    description: text(row.description),
-    categoryId: maybe(row.category_id),
-    categoryName: maybe(row.category_name),
-    notes: maybe(row.notes),
-    currency: text(row.currency),
-    amountCents: num(row.amount_cents),
-    amountUsdCents: num(row.amount_usd_cents),
-    paymentMethod: text(row.payment_method),
-    hasLedgerEntry: bool(row.has_ledger_entry),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      occurredAt: text(row.occurred_at),
+      occurredDate: text(row.occurred_date),
+      description: text(row.description),
+      categoryId: maybe(row.category_id),
+      categoryName: maybe(row.category_name),
+      notes: maybe(row.notes),
+      currency: text(row.currency),
+      amountCents: num(row.amount_cents),
+      amountUsdCents: num(row.amount_usd_cents),
+      paymentMethod: text(row.payment_method),
+      hasLedgerEntry: bool(row.has_ledger_entry),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }

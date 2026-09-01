@@ -5,18 +5,26 @@ import { Suspense } from 'react';
 import { SupplierSheet } from '@/components/forms/reference-sheets';
 import { SupplierActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Money } from '@/components/ui/money';
+import { Pagination } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
-import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { Table, TableWrap, TBody, TD, TH, THead, THSort, TR } from '@/components/ui/table';
 import { humanise } from '@/lib/format';
+import { parseListParams, type RawSearchParams, supplierQuerySchema } from '@/lib/list-params';
 import { listSuppliers } from '@/server/queries/reference';
 
 export const metadata: Metadata = { title: 'Suppliers' };
 
-export default function SuppliersPage() {
+export default function SuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   return (
     <>
       <PageHeader
@@ -29,18 +37,24 @@ export default function SuppliersPage() {
         }
       />
       <Surface className="overflow-hidden">
+        <ListToolbar>
+          <ListSearch placeholder="Search by name" />
+        </ListToolbar>
         <Suspense fallback={<Skeleton className="m-4 h-24" />}>
-          <SuppliersTable />
+          <SuppliersTable searchParams={searchParams} />
         </Suspense>
       </Surface>
     </>
   );
 }
 
-async function SuppliersTable() {
-  const rows = await listSuppliers();
+async function SuppliersTable({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
+  const raw = await searchParams;
+  const query = parseListParams(supplierQuerySchema, raw);
+  const hasFilters = Boolean(query.q);
+  const result = await listSuppliers(query);
 
-  if (rows.length === 0) {
+  if (result.total === 0 && !hasFilters) {
     return (
       <EmptyState
         Icon={Truck}
@@ -55,57 +69,126 @@ async function SuppliersTable() {
     );
   }
 
+  if (result.rows.length === 0) {
+    return (
+      <EmptyState
+        Icon={Truck}
+        title="No suppliers match this search"
+        description="Try a different name."
+        action={
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/suppliers">Clear search</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  const nextDir = (sort: typeof query.sort) =>
+    query.sort === sort && query.dir === 'asc' ? 'desc' : 'asc';
+
   return (
-    <TableWrap>
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH>Supplier</TH>
-            <TH>Kind</TH>
-            <TH numeric>Products</TH>
-            <TH numeric>Orders</TH>
-            <TH numeric>Landed spend</TH>
-            <TH />
-          </TR>
-        </THead>
-        <TBody>
-          {rows.map((row) => (
-            <TR key={row.id}>
-              <TD className="text-ink">
-                <Link
-                  href={`/suppliers/${row.id}` as Route}
-                  className="hover:text-accent hover:underline"
-                >
-                  {row.name}
-                </Link>
-              </TD>
-              <TD>
-                <Badge>{humanise(row.kind)}</Badge>
-              </TD>
-              <TD numeric className="text-ink-3">
-                {row.productCount}
-              </TD>
-              <TD numeric className="text-ink-3">
-                {row.orderCount}
-              </TD>
-              <TD numeric>
-                <Money cents={row.spendCents} size="sm" />
-              </TD>
-              <TD className="text-right">
-                <SupplierActions
-                  id={row.id}
-                  name={row.name}
-                  kind={row.kind}
-                  website={row.website}
-                  notes={row.notes}
-                  productCount={row.productCount}
-                  orderCount={row.orderCount}
-                />
-              </TD>
+    <>
+      <TableWrap>
+        <Table>
+          <THead>
+            <TR className="hover:bg-transparent">
+              <THSort
+                href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
+                active={query.sort === 'name'}
+                dir={query.dir}
+              >
+                Supplier
+              </THSort>
+              <TH>Kind</TH>
+              <THSort
+                href={buildHref({
+                  ...query,
+                  sort: 'products',
+                  dir: nextDir('products'),
+                  page: 1,
+                })}
+                active={query.sort === 'products'}
+                dir={query.dir}
+                numeric
+              >
+                Products
+              </THSort>
+              <THSort
+                href={buildHref({ ...query, sort: 'orders', dir: nextDir('orders'), page: 1 })}
+                active={query.sort === 'orders'}
+                dir={query.dir}
+                numeric
+              >
+                Orders
+              </THSort>
+              <THSort
+                href={buildHref({ ...query, sort: 'spend', dir: nextDir('spend'), page: 1 })}
+                active={query.sort === 'spend'}
+                dir={query.dir}
+                numeric
+              >
+                Landed spend
+              </THSort>
+              <TH />
             </TR>
-          ))}
-        </TBody>
-      </Table>
-    </TableWrap>
+          </THead>
+          <TBody>
+            {result.rows.map((row) => (
+              <TR key={row.id}>
+                <TD className="text-ink">
+                  <Link
+                    href={`/suppliers/${row.id}` as Route}
+                    className="hover:text-accent hover:underline"
+                  >
+                    {row.name}
+                  </Link>
+                </TD>
+                <TD>
+                  <Badge>{humanise(row.kind)}</Badge>
+                </TD>
+                <TD numeric className="text-ink-3">
+                  {row.productCount}
+                </TD>
+                <TD numeric className="text-ink-3">
+                  {row.orderCount}
+                </TD>
+                <TD numeric>
+                  <Money cents={row.spendCents} size="sm" />
+                </TD>
+                <TD className="text-right">
+                  <SupplierActions
+                    id={row.id}
+                    name={row.name}
+                    kind={row.kind}
+                    website={row.website}
+                    notes={row.notes}
+                    productCount={row.productCount}
+                    orderCount={row.orderCount}
+                  />
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </TableWrap>
+      <Pagination
+        page={result.page}
+        pageCount={result.pageCount}
+        total={result.total}
+        perPage={result.perPage}
+        buildHref={(page) => buildHref({ ...query, page })}
+      />
+    </>
   );
+}
+
+function buildHref(query: { q?: string; sort?: string; dir?: string; page?: number }): Route {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.sort) params.set('sort', query.sort);
+  if (query.dir) params.set('dir', query.dir);
+  if (query.page && query.page > 1) params.set('page', String(query.page));
+  const search = params.toString();
+  return (search ? `/suppliers?${search}` : '/suppliers') as Route;
 }
