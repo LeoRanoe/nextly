@@ -7,16 +7,20 @@ import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Money } from '@/components/ui/money';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
-import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import {
+  Table,
+  TableSkeleton,
+  TableWrap,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@/components/ui/table';
 import { formatRelative } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { listStock } from '@/server/queries/lists';
-
-/** Stable keys for placeholder rows. Skeletons never reorder, but an
- *  index key still teaches the wrong habit to whoever copies this next. */
-const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
 
 export const metadata: Metadata = { title: 'Inventory' };
 
@@ -32,7 +36,7 @@ export default async function InventoryPage() {
         description="Stock on hand is the sum of the movement ledger, never a number anyone edits. Value is weighted-average landed cost, so it includes the freight and fees paid to get each unit here."
       />
       <Surface className="overflow-hidden">
-        <Suspense fallback={<TableSkeleton />}>
+        <Suspense fallback={<TableSkeleton rows={4} widths={['w-48', 'w-28', 'w-16']} />}>
           <StockTable />
         </Suspense>
       </Surface>
@@ -141,20 +145,5 @@ async function StockTable() {
         </tfoot>
       </Table>
     </TableWrap>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="divide-y divide-line-subtle">
-      <div className="h-8 bg-inset/60" />
-      {SKELETON_ROWS.slice(0, 4).map((key) => (
-        <div key={key} className="flex h-8 items-center gap-3 px-3">
-          <Skeleton className="h-3 w-48" />
-          <Skeleton className="h-3 w-28" />
-          <Skeleton className="ml-auto h-3 w-16" />
-        </div>
-      ))}
-    </div>
   );
 }

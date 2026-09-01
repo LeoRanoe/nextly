@@ -9,15 +9,19 @@ import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money } from '@/components/ui/money';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
-import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import {
+  Table,
+  TableSkeleton,
+  TableWrap,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { listPurchaseOrders } from '@/server/queries/lists';
-
-/** Stable keys for placeholder rows. Skeletons never reorder, but an
- *  index key still teaches the wrong habit to whoever copies this next. */
-const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
 
 export const metadata: Metadata = { title: 'Purchase orders' };
 
@@ -42,7 +46,7 @@ export default function PurchaseOrdersPage() {
         }
       />
       <Surface className="overflow-hidden">
-        <Suspense fallback={<TableSkeleton />}>
+        <Suspense fallback={<TableSkeleton rows={3} widths={['w-16', 'w-32', 'w-20']} />}>
           <OrdersTable />
         </Suspense>
       </Surface>
@@ -142,20 +146,5 @@ async function OrdersTable() {
         </TBody>
       </Table>
     </TableWrap>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="divide-y divide-line-subtle">
-      <div className="h-8 bg-inset/60" />
-      {SKELETON_ROWS.slice(0, 3).map((key) => (
-        <div key={key} className="flex h-8 items-center gap-3 px-3">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-3 w-32" />
-          <Skeleton className="ml-auto h-3 w-20" />
-        </div>
-      ))}
-    </div>
   );
 }

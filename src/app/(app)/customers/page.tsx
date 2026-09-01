@@ -6,15 +6,19 @@ import { CustomerSheet } from '@/components/forms/reference-sheets';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Money } from '@/components/ui/money';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
-import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import {
+  Table,
+  TableSkeleton,
+  TableWrap,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@/components/ui/table';
 import { formatRelative } from '@/lib/format';
 import { listCustomers } from '@/server/queries/lists';
-
-/** Stable keys for placeholder rows. Skeletons never reorder, but an
- *  index key still teaches the wrong habit to whoever copies this next. */
-const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
 
 export const metadata: Metadata = { title: 'Customers' };
 
@@ -33,7 +37,7 @@ export default async function CustomersPage() {
         }
       />
       <Surface className="overflow-hidden">
-        <Suspense fallback={<TableSkeleton />}>
+        <Suspense fallback={<TableSkeleton rows={3} widths={['w-16', 'w-40', 'w-16']} />}>
           <CustomersTable />
         </Suspense>
       </Surface>
@@ -95,20 +99,5 @@ async function CustomersTable() {
         </TBody>
       </Table>
     </TableWrap>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="divide-y divide-line-subtle">
-      <div className="h-8 bg-inset/60" />
-      {SKELETON_ROWS.slice(0, 3).map((key) => (
-        <div key={key} className="flex h-8 items-center gap-3 px-3">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-3 w-40" />
-          <Skeleton className="ml-auto h-3 w-16" />
-        </div>
-      ))}
-    </div>
   );
 }

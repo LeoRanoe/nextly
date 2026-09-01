@@ -8,16 +8,20 @@ import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Money } from '@/components/ui/money';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
-import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import {
+  Table,
+  TableSkeleton,
+  TableWrap,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@/components/ui/table';
 import { formatDate, humanise } from '@/lib/format';
 import { listExpenses } from '@/server/queries/lists';
 import { listExpenseCategoryOptions } from '@/server/queries/pickers';
-
-/** Stable keys for placeholder rows. Skeletons never reorder, but an
- *  index key still teaches the wrong habit to whoever copies this next. */
-const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
 
 export const metadata: Metadata = { title: 'Expenses' };
 
@@ -40,7 +44,7 @@ export default function ExpensesPage() {
         }
       />
       <Surface className="overflow-hidden">
-        <Suspense fallback={<TableSkeleton />}>
+        <Suspense fallback={<TableSkeleton rows={3} widths={['w-20', 'w-44', 'w-16']} />}>
           <ExpensesTable />
         </Suspense>
       </Surface>
@@ -98,7 +102,11 @@ async function ExpensesTable() {
                 <Money cents={row.amountUsdCents} size="sm" />
               </TD>
               <TD className="text-right">
-                <ExpenseActions id={row.id} description={row.description} />
+                <ExpenseActions
+                  id={row.id}
+                  description={row.description}
+                  amountUsdCents={row.amountUsdCents}
+                />
               </TD>
             </TR>
           ))}
@@ -116,21 +124,6 @@ async function ExpensesTable() {
         </tfoot>
       </Table>
     </TableWrap>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="divide-y divide-line-subtle">
-      <div className="h-8 bg-inset/60" />
-      {SKELETON_ROWS.slice(0, 3).map((key) => (
-        <div key={key} className="flex h-8 items-center gap-3 px-3">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-3 w-44" />
-          <Skeleton className="ml-auto h-3 w-16" />
-        </div>
-      ))}
-    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
+import { Skeleton } from './skeleton';
 
 /**
  * Tables.
@@ -65,5 +66,40 @@ export function TD({ className, numeric, ...props }: CellProps) {
       className={cn('h-8 px-3 text-ink-2', numeric && 'tabular text-right text-ink', className)}
       {...props}
     />
+  );
+}
+
+/** Stable keys for placeholder rows. Skeletons never reorder, but an index
+ *  key still teaches the wrong habit to whoever copies this next. */
+const SKELETON_ROW_KEYS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
+
+/**
+ * Loading placeholder for a list table, matching its final geometry so the
+ * page does not shift when data arrives.
+ *
+ * Every list page had its own copy of this — same wrapper, same header bar,
+ * same three-column row shape, differing only in row count and column
+ * widths. `widths` takes the first column's, the second's, and the
+ * right-aligned last column's Tailwind width class, in that order.
+ */
+export function TableSkeleton({
+  rows = 3,
+  widths = ['w-32', 'w-40', 'w-16'],
+}: {
+  rows?: number;
+  widths?: readonly [string, string, string];
+}) {
+  const [first, second, last] = widths;
+  return (
+    <div className="divide-y divide-line-subtle">
+      <div className="h-8 bg-inset/60" />
+      {SKELETON_ROW_KEYS.slice(0, rows).map((key) => (
+        <div key={key} className="flex h-8 items-center gap-3 px-3">
+          <Skeleton className={cn('h-3', first)} />
+          <Skeleton className={cn('h-3', second)} />
+          <Skeleton className={cn('ml-auto h-3', last)} />
+        </div>
+      ))}
+    </div>
   );
 }

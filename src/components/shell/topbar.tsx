@@ -1,12 +1,12 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { ChevronDown, LogOut, Menu, Settings } from 'lucide-react';
+import { ChevronDown, LogOut, Menu as MenuIcon, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Item, Label, Menu, Separator } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
 import { createClient } from '@/lib/supabase/client';
 import { CommandPalette } from './command-palette';
@@ -37,7 +37,7 @@ export function Topbar({ member }: { member: TopbarMember }) {
           className="grid size-8 shrink-0 place-items-center rounded-control text-ink-3 hover:bg-hover hover:text-ink lg:hidden"
           aria-label="Open navigation"
         >
-          <Menu className="size-4" />
+          <MenuIcon className="size-4" />
         </Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 lg:hidden" />
@@ -56,57 +56,44 @@ export function Topbar({ member }: { member: TopbarMember }) {
 
       <ThemeToggle />
 
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger
-          className={cn(
-            'flex h-8 items-center gap-2 rounded-control pr-1.5 pl-1 text-[13px] text-ink-2',
-            'transition-colors hover:bg-hover hover:text-ink',
-            'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
-          )}
-        >
-          <Avatar name={member.fullName} />
-          <span className="hidden sm:inline">{member.fullName}</span>
-          <ChevronDown className="size-3.5 text-ink-4" />
-        </DropdownMenu.Trigger>
-
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            align="end"
-            sideOffset={6}
+      <Menu
+        contentClassName="w-56"
+        trigger={
+          <button
+            type="button"
             className={cn(
-              'z-50 w-56 overflow-hidden rounded-card border border-line bg-overlay p-1 shadow-overlay',
-              'data-[state=open]:animate-in data-[state=closed]:animate-out',
-              'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-              'data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 duration-150',
+              'flex h-8 items-center gap-2 rounded-control pr-1.5 pl-1 text-[13px] text-ink-2',
+              'transition-colors hover:bg-hover hover:text-ink',
+              'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
             )}
           >
-            <div className="px-2.5 py-2">
-              <p className="truncate font-medium text-[13px] text-ink">{member.fullName}</p>
-              <p className="truncate text-[11px] text-ink-4">{member.email}</p>
-              <p className="mt-1 text-[11px] text-ink-3">{ROLE_LABEL[member.role]}</p>
-            </div>
-            <DropdownMenu.Separator className="my-1 h-px bg-line-subtle" />
-            <DropdownMenu.Item asChild>
-              <Link
-                href="/settings"
-                className="flex h-8 cursor-pointer items-center gap-2.5 rounded-control px-2.5 text-[13px] text-ink-2 outline-none data-[highlighted]:bg-hover data-[highlighted]:text-ink"
-              >
-                <Settings className="size-4 text-ink-4" /> Settings
-              </Link>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              onSelect={async () => {
-                await createClient().auth.signOut();
-                router.replace('/login');
-                router.refresh();
-              }}
-              className="flex h-8 cursor-pointer items-center gap-2.5 rounded-control px-2.5 text-[13px] text-ink-2 outline-none data-[highlighted]:bg-hover data-[highlighted]:text-ink"
-            >
-              <LogOut className="size-4 text-ink-4" /> Sign out
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu.Root>
+            <Avatar name={member.fullName} />
+            <span className="hidden sm:inline">{member.fullName}</span>
+            <ChevronDown className="size-3.5 text-ink-4" />
+          </button>
+        }
+      >
+        <Label>
+          <p className="truncate font-medium text-[13px] text-ink">{member.fullName}</p>
+          <p className="truncate text-[11px] text-ink-4">{member.email}</p>
+          <p className="mt-1 text-[11px] text-ink-3">{ROLE_LABEL[member.role]}</p>
+        </Label>
+        <Separator />
+        <Item asChild>
+          <Link href="/settings">
+            <Settings className="size-4 text-ink-4" /> Settings
+          </Link>
+        </Item>
+        <Item
+          onSelect={async () => {
+            await createClient().auth.signOut();
+            router.replace('/login');
+            router.refresh();
+          }}
+        >
+          <LogOut className="size-4 text-ink-4" /> Sign out
+        </Item>
+      </Menu>
     </header>
   );
 }

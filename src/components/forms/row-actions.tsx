@@ -1,17 +1,17 @@
 'use client';
 
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
-import { type ReactNode, useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { useMember } from '@/components/providers/member-provider';
+import { ConfirmDialog } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Item, Menu } from '@/components/ui/dropdown-menu';
 import { Field, Textarea } from '@/components/ui/field';
 import { Sheet, SheetSection } from '@/components/ui/sheet';
 import { SubmitButton } from '@/components/ui/submit-button';
-import { cn } from '@/lib/cn';
+import { formatMoney } from '@/lib/money';
 import { deleteExpense, reverseLedgerEntry } from '@/server/actions/finance';
 import { cancelPurchaseOrder, setPurchaseOrderStatus } from '@/server/actions/purchase-orders';
 import { removeMember } from '@/server/actions/reference';
@@ -20,61 +20,18 @@ import { confirmSale, voidSale } from '@/server/actions/sales';
 /**
  * Per-row actions.
  *
- * Anything destructive that touches the books asks for a reason rather than a
- * yes/no confirmation. "Are you sure?" is a speed bump nobody reads; a required
- * sentence is a speed bump that also leaves a record of why, which is the part
- * anyone reading the ledger next quarter will actually want.
+ * Three tiers of friction, in increasing order:
+ *
+ * 1. No prompt — a reversible status flip (mark shipped, archive a product).
+ * 2. A confirm dialog (`ConfirmDialog`, `@/components/ui/alert-dialog`) — a
+ *    delete that orphans references but posts nothing: category, supplier,
+ *    customer, product with no history, expense, member.
+ * 3. A written reason (`ReasonSheet`, below) — anything that removes or
+ *    reverses a posting: void a sale, cancel an order, reverse a ledger
+ *    entry. "Are you sure?" is a speed bump nobody reads; a required
+ *    sentence is a speed bump that also leaves a record of why, which is the
+ *    part anyone reading the ledger next quarter will actually want.
  */
-
-function Menu({ children }: { children: ReactNode }) {
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger
-        aria-label="Actions"
-        className="grid size-7 place-items-center rounded-control text-ink-4 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-      >
-        <MoreHorizontal className="size-4" />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align="end"
-          sideOffset={4}
-          className={cn(
-            'z-50 min-w-[176px] overflow-hidden rounded-card border border-line bg-overlay p-1 shadow-overlay',
-            'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-150',
-          )}
-        >
-          {children}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-function Item({
-  onSelect,
-  danger,
-  children,
-}: {
-  onSelect: () => void;
-  danger?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <DropdownMenu.Item
-      onSelect={onSelect}
-      className={cn(
-        'flex h-8 cursor-pointer items-center gap-2 rounded-control px-2.5 text-[13px] outline-none',
-        danger
-          ? 'text-negative data-[highlighted]:bg-negative-muted'
-          : 'text-ink-2 data-[highlighted]:bg-hover data-[highlighted]:text-ink',
-      )}
-    >
-      {children}
-    </DropdownMenu.Item>
-  );
-}
 
 /** A destructive action gated behind a written reason. */
 function ReasonSheet({
@@ -101,6 +58,12 @@ function ReasonSheet({
   onSubmit: (reason: string) => void;
 }) {
   const [reason, setReason] = useState('');
+  // Radix only mounts an open Dialog.Content, so a fixed id never collided in
+  // practice — but the moment a row's edit sheet and a confirm can coexist,
+  // two forms named "reason-form" would fight over which one a detached
+  // <button form="..."> submits. useId() makes every instance unique.
+  const formId = useId();
+  const fieldId = useId();
 
   return (
     <Sheet
@@ -113,23 +76,23 @@ function ReasonSheet({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <SubmitButton form="reason-form" variant="danger" pending={pending}>
+          <SubmitButton form={formId} variant="danger" pending={pending}>
             {submitLabel}
           </SubmitButton>
         </>
       }
     >
       <form
-        id="reason-form"
+        id={formId}
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit(reason);
         }}
       >
         <SheetSection title="Reason">
-          <Field label={label} htmlFor="reason" required={minimum > 0}>
+          <Field label={label} htmlFor={fieldId} required={minimum > 0}>
             <Textarea
-              id="reason"
+              id={fieldId}
               value={reason}
               required={minimum > 0}
               minLength={minimum}
@@ -317,13 +280,23 @@ export function LedgerActions({ id, description }: { id: string; description: st
 
 /* ── Expenses ────────────────────────────────────────────────────────────── */
 
-export function ExpenseActions({ id, description }: { id: string; description: string }) {
+export function ExpenseActions({
+  id,
+  description,
+  amountUsdCents,
+}: {
+  id: string;
+  description: string;
+  amountUsdCents: number;
+}) {
   const router = useRouter();
   const { role } = useMember();
+  const [confirming, setConfirming] = useState(false);
 
   const deleteAction = useAction(deleteExpense, {
     onSuccess({ data }) {
       toast.success(`Removed ${data?.description}`);
+      setConfirming(false);
       router.refresh();
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove'),
@@ -334,19 +307,23 @@ export function ExpenseActions({ id, description }: { id: string; description: s
   if (role !== 'owner') return null;
 
   return (
-    <Menu>
-      <Item
-        danger
-        onSelect={() => {
-          // Expenses are the one record that can be plainly deleted: unlike a
-          // sale or an order it carries no number, no stock and no history that
-          // anything else refers to.
-          deleteAction.execute({ id });
-        }}
-      >
-        Delete {description.length > 18 ? 'expense' : ''}
-      </Item>
-    </Menu>
+    <>
+      <Menu>
+        <Item danger onSelect={() => setConfirming(true)}>
+          Delete {description.length > 18 ? 'expense' : ''}
+        </Item>
+      </Menu>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete "${description}"?`}
+        description={`Its ledger entry goes with it, so cash will go back up by ${formatMoney(amountUsdCents)}. Expenses are the one record that can be plainly deleted: unlike a sale or an order it carries no number and nothing else refers to it.`}
+        confirmLabel="Delete expense"
+        pending={deleteAction.isPending}
+        onConfirm={() => deleteAction.execute({ id })}
+      />
+    </>
   );
 }
 
@@ -355,10 +332,12 @@ export function ExpenseActions({ id, description }: { id: string; description: s
 export function MemberActions({ id, fullName }: { id: string; fullName: string }) {
   const router = useRouter();
   const { role } = useMember();
+  const [confirming, setConfirming] = useState(false);
 
   const removeAction = useAction(removeMember, {
     onSuccess({ data }) {
       toast.success(`${data?.fullName} removed`);
+      setConfirming(false);
       router.refresh();
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove'),
@@ -368,10 +347,22 @@ export function MemberActions({ id, fullName }: { id: string; fullName: string }
   if (role !== 'owner') return null;
 
   return (
-    <Menu>
-      <Item danger onSelect={() => removeAction.execute({ id })}>
-        Remove {fullName.split(' ')[0]}
-      </Item>
-    </Menu>
+    <>
+      <Menu>
+        <Item danger onSelect={() => setConfirming(true)}>
+          Remove {fullName.split(' ')[0]}
+        </Item>
+      </Menu>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Remove ${fullName}?`}
+        description="They lose access immediately. Nothing they've recorded — sales, orders, ledger entries — is affected; this only removes their sign-in."
+        confirmLabel="Remove"
+        pending={removeAction.isPending}
+        onConfirm={() => removeAction.execute({ id })}
+      />
+    </>
   );
 }
