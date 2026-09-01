@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,9 @@ import { getSettings, listMembers, listRates } from '@/server/queries/reference'
 
 export const metadata: Metadata = { title: 'Settings' };
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  await connection();
+
   return (
     <>
       <PageHeader

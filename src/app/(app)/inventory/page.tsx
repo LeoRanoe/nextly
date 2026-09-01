@@ -1,5 +1,6 @@
 import { Boxes } from 'lucide-react';
 import type { Metadata } from 'next';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -20,7 +21,9 @@ export const metadata: Metadata = { title: 'Inventory' };
 
 const LOW_STOCK_AT = 5;
 
-export default function InventoryPage() {
+export default async function InventoryPage() {
+  await connection();
+
   return (
     <>
       <PageHeader

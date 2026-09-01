@@ -1,5 +1,6 @@
 import { Users } from 'lucide-react';
 import type { Metadata } from 'next';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -16,7 +17,9 @@ const SKELETON_ROWS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
 
 export const metadata: Metadata = { title: 'Customers' };
 
-export default function CustomersPage() {
+export default async function CustomersPage() {
+  await connection();
+
   return (
     <>
       <PageHeader
