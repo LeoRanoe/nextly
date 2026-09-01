@@ -2,6 +2,7 @@ import { ImageOff, Package } from 'lucide-react';
 import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { ProductActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -77,6 +78,7 @@ async function ProductsTable() {
             <TH numeric>On hand</TH>
             <TH numeric>From</TH>
             <TH numeric>Stock value</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -113,6 +115,14 @@ async function ProductsTable() {
               </TD>
               <TD numeric>
                 <Money cents={row.stockValueCents} size="sm" />
+              </TD>
+              <TD className="text-right">
+                <ProductActions
+                  id={row.id}
+                  name={row.name}
+                  status={row.status}
+                  catalogPublished={row.catalogPublished}
+                />
               </TD>
             </TR>
           ))}

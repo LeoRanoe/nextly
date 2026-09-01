@@ -19,6 +19,7 @@ import { Sheet, SheetSection } from '@/components/ui/sheet';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { formatMoney } from '@/lib/money';
 import { deleteExpense, reverseLedgerEntry } from '@/server/actions/finance';
+import { deleteProduct, setProductStatus } from '@/server/actions/products';
 import { cancelPurchaseOrder, setPurchaseOrderStatus } from '@/server/actions/purchase-orders';
 import {
   deleteCategory,
@@ -594,6 +595,80 @@ export function CustomerActions({
         title={`Delete ${name}?`}
         description="Refused if this customer has any sale on the books, confirmed or draft — that history stays. Otherwise this only removes their contact details."
         confirmLabel="Delete customer"
+        pending={deleteAction.isPending}
+        onConfirm={() => deleteAction.execute({ id })}
+      />
+    </>
+  );
+}
+
+/* ── Products ────────────────────────────────────────────────────────────── */
+
+export function ProductActions({
+  id,
+  name,
+  status,
+  catalogPublished,
+}: {
+  id: string;
+  name: string;
+  status: 'draft' | 'active' | 'archived';
+  catalogPublished: boolean;
+}) {
+  const router = useRouter();
+  const { role } = useMember();
+  const [confirming, setConfirming] = useState(false);
+
+  const statusAction = useAction(setProductStatus, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} updated`);
+      router.refresh();
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Could not update'),
+  });
+
+  const deleteAction = useAction(deleteProduct, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} deleted`);
+      setConfirming(false);
+      router.refresh();
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Could not delete'),
+  });
+
+  return (
+    <>
+      <Menu>
+        {status === 'draft' ? (
+          <Item onSelect={() => statusAction.execute({ id, status: 'active' })}>Activate</Item>
+        ) : null}
+        {status === 'active' ? (
+          <Item onSelect={() => statusAction.execute({ id, status: 'archived' })}>Archive</Item>
+        ) : null}
+        {status === 'archived' ? (
+          <Item onSelect={() => statusAction.execute({ id, status: 'active' })}>
+            Reactivate
+          </Item>
+        ) : null}
+        <Item
+          onSelect={() => statusAction.execute({ id, catalogPublished: !catalogPublished })}
+        >
+          {catalogPublished ? 'Unpublish from catalog' : 'Publish to catalog'}
+        </Item>
+        {/* deleteProduct is an ownerAction: staff would only see this refused. */}
+        {role === 'owner' ? (
+          <Item danger onSelect={() => setConfirming(true)}>
+            Delete
+          </Item>
+        ) : null}
+      </Menu>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete ${name}?`}
+        description="Refused if this product has stock, sale or purchase-order history — archive it instead, which keeps that history intact. Otherwise this removes the product and its variants completely."
+        confirmLabel="Delete product"
         pending={deleteAction.isPending}
         onConfirm={() => deleteAction.execute({ id })}
       />
