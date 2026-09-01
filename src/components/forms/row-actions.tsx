@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import { ExpenseSheet } from '@/components/forms/expense-sheet';
 import {
   CategorySheet,
   CustomerSheet,
@@ -17,7 +18,7 @@ import { Item, Menu } from '@/components/ui/dropdown-menu';
 import { Field, Textarea } from '@/components/ui/field';
 import { Sheet, SheetSection } from '@/components/ui/sheet';
 import { SubmitButton } from '@/components/ui/submit-button';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, toDecimalString } from '@/lib/money';
 import { deleteExpense, reverseLedgerEntry } from '@/server/actions/finance';
 import { deleteProduct, setProductStatus } from '@/server/actions/products';
 import { cancelPurchaseOrder, setPurchaseOrderStatus } from '@/server/actions/purchase-orders';
@@ -28,6 +29,7 @@ import {
   removeMember,
 } from '@/server/actions/reference';
 import { confirmSale, voidSale } from '@/server/actions/sales';
+import type { Option } from '@/server/queries/pickers';
 
 /**
  * Per-row actions.
@@ -295,14 +297,31 @@ export function LedgerActions({ id, description }: { id: string; description: st
 export function ExpenseActions({
   id,
   description,
+  categoryId,
+  occurredDate,
+  currency,
+  amountCents,
   amountUsdCents,
+  paymentMethod,
+  notes,
+  hasLedgerEntry,
+  categories,
 }: {
   id: string;
   description: string;
+  categoryId: string | null;
+  occurredDate: string;
+  currency: 'USD' | 'SRD';
+  amountCents: number;
   amountUsdCents: number;
+  paymentMethod: string;
+  notes: string | null;
+  hasLedgerEntry: boolean;
+  categories: Option[];
 }) {
   const router = useRouter();
   const { role } = useMember();
+  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const deleteAction = useAction(deleteExpense, {
@@ -314,17 +333,37 @@ export function ExpenseActions({
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove'),
   });
 
-  // deleteExpense is an ownerAction: staff would only see this refused, so
-  // don't offer a menu with nothing they can do.
-  if (role !== 'owner') return null;
+  // updateExpense is writeAction, deleteExpense is ownerAction: a viewer gets
+  // no menu at all, staff gets Edit only.
+  if (role === 'viewer') return null;
 
   return (
     <>
       <Menu>
-        <Item danger onSelect={() => setConfirming(true)}>
-          Delete {description.length > 18 ? 'expense' : ''}
-        </Item>
+        <Item onSelect={() => setEditing(true)}>Edit</Item>
+        {role === 'owner' ? (
+          <Item danger onSelect={() => setConfirming(true)}>
+            Delete {description.length > 18 ? 'expense' : ''}
+          </Item>
+        ) : null}
       </Menu>
+
+      <ExpenseSheet
+        categories={categories}
+        initial={{
+          id,
+          description,
+          categoryId,
+          occurredAt: occurredDate,
+          currency,
+          amount: toDecimalString(amountCents, currency),
+          paymentMethod,
+          postToLedger: hasLedgerEntry,
+          notes: notes ?? '',
+        }}
+        open={editing}
+        onOpenChange={setEditing}
+      />
 
       <ConfirmDialog
         open={confirming}

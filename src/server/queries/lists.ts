@@ -330,12 +330,19 @@ export async function listCustomers(): Promise<CustomerRow[]> {
 export type ExpenseRow = {
   id: string;
   occurredAt: string;
+  /** `YYYY-MM-DD`, for seeding an `<input type="date">` when editing. */
+  occurredDate: string;
   description: string;
+  categoryId: string | null;
   categoryName: string | null;
+  notes: string | null;
   currency: string;
   amountCents: Cents;
   amountUsdCents: Cents;
   paymentMethod: string;
+  /** Whether this expense currently has a matching ledger posting — what the
+   *  edit form's "post to the cash ledger" checkbox should start checked as. */
+  hasLedgerEntry: boolean;
 };
 
 export async function listExpenses(limit = 200): Promise<ExpenseRow[]> {
@@ -343,9 +350,14 @@ export async function listExpenses(limit = 200): Promise<ExpenseRow[]> {
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      e.id, e.occurred_at::text, e.description, e.currency::text,
+      e.id, e.occurred_at::text, to_char(e.occurred_at, 'YYYY-MM-DD') AS occurred_date,
+      e.description, e.category_id, e.currency::text, e.notes,
       e.amount_cents::text, e.amount_usd_cents::text, e.payment_method::text,
-      c.name AS category_name
+      c.name AS category_name,
+      EXISTS(
+        SELECT 1 FROM ledger_entries l
+         WHERE l.source_kind = 'expense' AND l.source_id = e.id
+      )::text AS has_ledger_entry
     FROM expenses e
     LEFT JOIN expense_categories c ON c.id = e.category_id
     ORDER BY e.occurred_at DESC
@@ -355,11 +367,15 @@ export async function listExpenses(limit = 200): Promise<ExpenseRow[]> {
   return rows.map((row) => ({
     id: text(row.id),
     occurredAt: text(row.occurred_at),
+    occurredDate: text(row.occurred_date),
     description: text(row.description),
+    categoryId: maybe(row.category_id),
     categoryName: maybe(row.category_name),
+    notes: maybe(row.notes),
     currency: text(row.currency),
     amountCents: num(row.amount_cents),
     amountUsdCents: num(row.amount_usd_cents),
     paymentMethod: text(row.payment_method),
+    hasLedgerEntry: bool(row.has_ledger_entry),
   }));
 }

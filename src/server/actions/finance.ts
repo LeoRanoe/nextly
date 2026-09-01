@@ -79,6 +79,75 @@ export const createExpense = writeAction
     return result;
   });
 
+export const updateExpense = writeAction
+  .metadata({ action: 'updated', entity: 'expense' })
+  .inputSchema(expenseSchema.extend({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(expenses)
+        .where(eq(expenses.id, input.id))
+        .limit(1);
+
+      if (!existing) throw new ActionError('That expense no longer exists.');
+
+      // Re-resolved from the (possibly changed) date, not read off the
+      // existing row: moving an expense to a different day must not leave it
+      // valued at the rate that was in force on the old one.
+      const rateMicros =
+        input.currency === 'SRD'
+          ? await rateOn(input.occurredAt, tx)
+          : await rateForRecord(input.occurredAt, tx);
+
+      await tx
+        .update(expenses)
+        .set({
+          description: input.description,
+          categoryId: input.categoryId,
+          currency: input.currency,
+          fxRateMicros: rateMicros,
+          amountCents: input.amountCents,
+          amountUsdCents: normaliseToUsd(input.amountCents, input.currency, rateMicros),
+          paymentMethod: input.paymentMethod,
+          occurredAt: input.occurredAt,
+          notes: input.notes ?? null,
+        })
+        .where(eq(expenses.id, input.id));
+
+      // Clear whatever it posted before and re-post at the new numbers —
+      // the simplest way to keep the ledger from disagreeing with an edited
+      // expense is to never let the old posting and the new one coexist.
+      await clearDocumentPostings(tx, 'expense', input.id);
+      if (input.postToLedger) {
+        await postLedgerEntry(tx, {
+          direction: 'out',
+          category: 'operating',
+          description: input.description,
+          currency: input.currency,
+          rateMicros,
+          amountCents: input.amountCents,
+          paymentMethod: input.paymentMethod,
+          occurredAt: input.occurredAt,
+          memberId: ctx.member.id,
+          sourceKind: 'expense',
+          sourceId: input.id,
+        });
+      }
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated expense',
+        entityType: 'expense',
+        entityId: input.id,
+        entityLabel: input.description,
+      });
+
+      return { id: input.id, description: input.description };
+    });
+    return result;
+  });
+
 /** `ownerAction`, matching the RLS policy: DELETE is granted to
  *  `private.is_owner()` only, and Drizzle bypasses RLS, so the app layer is
  *  what actually enforces this. */

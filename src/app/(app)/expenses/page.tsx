@@ -53,7 +53,7 @@ export default function ExpensesPage() {
 }
 
 async function ExpensesTable() {
-  const rows = await listExpenses();
+  const [rows, categories] = await Promise.all([listExpenses(), listExpenseCategoryOptions()]);
 
   if (rows.length === 0) {
     return (
@@ -105,7 +105,15 @@ async function ExpensesTable() {
                 <ExpenseActions
                   id={row.id}
                   description={row.description}
+                  categoryId={row.categoryId}
+                  occurredDate={row.occurredDate}
+                  currency={row.currency as 'USD' | 'SRD'}
+                  amountCents={row.amountCents}
                   amountUsdCents={row.amountUsdCents}
+                  paymentMethod={row.paymentMethod}
+                  notes={row.notes}
+                  hasLedgerEntry={row.hasLedgerEntry}
+                  categories={categories}
                 />
               </TD>
             </TR>
