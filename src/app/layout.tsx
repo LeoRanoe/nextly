@@ -1,3 +1,5 @@
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import type { Metadata, Viewport } from 'next';
 import { Instrument_Sans, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -43,6 +45,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Toaster />
           </ThemeProvider>
         </NuqsAdapter>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
