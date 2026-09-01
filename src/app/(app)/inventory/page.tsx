@@ -2,6 +2,7 @@ import { Boxes } from 'lucide-react';
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
+import { StockAdjustSheet } from '@/components/forms/finance-sheets';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +71,7 @@ async function StockTable() {
             <TH numeric>Unit cost</TH>
             <TH numeric>Value</TH>
             <TH>Last movement</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -112,6 +114,13 @@ async function StockTable() {
                 <TD className="whitespace-nowrap text-[12px] text-ink-4">
                   {formatRelative(row.lastMovementAt)}
                 </TD>
+                <TD className="text-right">
+                  <StockAdjustSheet
+                    variantId={row.variantId}
+                    label={`${row.productName} · ${row.variantName}`}
+                    onHand={row.onHand}
+                  />
+                </TD>
               </TR>
             );
           })}
@@ -126,6 +135,7 @@ async function StockTable() {
             <td className="h-9 px-3 text-right">
               <Money cents={totalValue} size="sm" />
             </td>
+            <td />
             <td />
           </tr>
         </tfoot>

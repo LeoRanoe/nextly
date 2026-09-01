@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { SupplierSheet } from '@/components/forms/reference-sheets';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Money } from '@/components/ui/money';
@@ -17,6 +18,11 @@ export default function SuppliersPage() {
       <PageHeader
         title="Suppliers"
         description="Where stock is bought. Spend is the landed total of every received order, so it includes the freight and fees paid to that supplier."
+        action={
+          <Suspense fallback={null}>
+            <SupplierSheet />
+          </Suspense>
+        }
       />
       <Surface className="overflow-hidden">
         <Suspense fallback={<Skeleton className="m-4 h-24" />}>

@@ -2,6 +2,7 @@ import { Users } from 'lucide-react';
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
+import { CustomerSheet } from '@/components/forms/reference-sheets';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Money } from '@/components/ui/money';
@@ -25,6 +26,11 @@ export default async function CustomersPage() {
       <PageHeader
         title="Customers"
         description="Order counts and lifetime spend are derived from confirmed sales, so they cannot drift out of step with the sales themselves."
+        action={
+          <Suspense fallback={null}>
+            <CustomerSheet />
+          </Suspense>
+        }
       />
       <Surface className="overflow-hidden">
         <Suspense fallback={<TableSkeleton />}>

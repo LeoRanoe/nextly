@@ -1,6 +1,11 @@
 /**
  * Cost accounting.
  *
+ * Pure functions, deliberately in `lib` rather than `server`: the purchase
+ * order form previews landed cost as you type, and it must use exactly the
+ * allocator the server will run. Two implementations of this arithmetic would
+ * be two chances to disagree about what a unit cost.
+ *
  * Two ideas carry the whole system:
  *
  * 1. LANDED COST. A purchase order's shipping, tax, delivery and card fees are

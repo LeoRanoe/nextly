@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SetupBanner } from '@/components/shell/setup-banner';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
 import { requireMember } from '@/server/auth';
@@ -45,6 +46,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             role: member.role,
           }}
         />
+        <SetupBanner />
         <main className="flex-1 px-4 py-6 lg:px-6">{children}</main>
       </div>
     </div>

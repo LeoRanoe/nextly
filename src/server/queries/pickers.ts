@@ -1,0 +1,201 @@
+import { sql } from 'drizzle-orm';
+import { cacheLife, cacheTag } from 'next/cache';
+import { isDatabaseConfigured } from '@/lib/env';
+import type { Cents } from '@/lib/money';
+import { db } from '../db/client';
+import { TAGS } from './cache';
+import { bool, maybe, num, text } from './row';
+
+/**
+ * Option lists for form pickers.
+ *
+ * Each one carries the *decision-relevant* detail alongside the label, because
+ * a picker that shows only names forces the person filling in the form to go
+ * and look up the price or the stock level somewhere else. That round trip is
+ * what makes people give up and reach for the spreadsheet instead.
+ */
+
+export type VariantOption = {
+  id: string;
+  sku: string;
+  productName: string;
+  variantName: string;
+  listPriceCents: Cents;
+  referenceCostCents: Cents;
+  onHand: number;
+  /** Total cost of the units on hand. Carried so the form can compute the
+   *  cost of goods with exactly the arithmetic the server will use, rather
+   *  than showing a margin that shifts by a cent on submit. */
+  valueCents: Cents;
+  /** Weighted-average cost per unit, in cents. Null when nothing is on hand. */
+  unitCostCents: number | null;
+  isActive: boolean;
+};
+
+export async function listVariantOptions(): Promise<VariantOption[]> {
+  'use cache';
+  cacheTag(TAGS.products, TAGS.inventory);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT
+      v.id, v.sku, v.name AS variant_name, v.is_active::text AS is_active,
+      v.list_price_cents::text, v.reference_cost_cents::text,
+      p.name AS product_name,
+      COALESCE(s.on_hand, 0)::text     AS on_hand,
+      COALESCE(s.value_cents, 0)::text AS value_cents
+    FROM product_variants v
+    JOIN products p ON p.id = v.product_id
+    LEFT JOIN v_stock_levels s ON s.variant_id = v.id
+    WHERE p.status <> 'archived'
+    ORDER BY p.name, v.position
+  `);
+
+  return rows.map((row) => {
+    const onHand = num(row.on_hand);
+    const valueCents = num(row.value_cents);
+    return {
+      id: text(row.id),
+      sku: text(row.sku),
+      productName: text(row.product_name),
+      variantName: text(row.variant_name),
+      listPriceCents: num(row.list_price_cents),
+      referenceCostCents: num(row.reference_cost_cents),
+      onHand,
+      valueCents,
+      unitCostCents: onHand > 0 ? valueCents / onHand : null,
+      isActive: bool(row.is_active),
+    };
+  });
+}
+
+export type Option = { id: string; label: string; hint?: string | null };
+
+export async function listCustomerOptions(): Promise<Option[]> {
+  'use cache';
+  cacheTag(TAGS.customers);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, name, code, phone FROM customers ORDER BY name
+  `);
+
+  return rows.map((row) => ({
+    id: text(row.id),
+    label: text(row.name),
+    hint: maybe(row.phone) ?? text(row.code),
+  }));
+}
+
+export async function listCategoryOptions(): Promise<Option[]> {
+  'use cache';
+  cacheTag(TAGS.products);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, name FROM categories ORDER BY position, name
+  `);
+  return rows.map((row) => ({ id: text(row.id), label: text(row.name) }));
+}
+
+export async function listSupplierOptions(): Promise<Option[]> {
+  'use cache';
+  cacheTag(TAGS.products, TAGS.purchaseOrders);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, name, kind::text AS kind FROM suppliers ORDER BY name
+  `);
+  return rows.map((row) => ({
+    id: text(row.id),
+    label: text(row.name),
+    hint: maybe(row.kind),
+  }));
+}
+
+export async function listExpenseCategoryOptions(): Promise<Option[]> {
+  'use cache';
+  cacheTag(TAGS.expenses);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, name FROM expense_categories ORDER BY position, name
+  `);
+  return rows.map((row) => ({ id: text(row.id), label: text(row.name) }));
+}
+
+/** Principals only: the people an owner contribution or draw can belong to. */
+export async function listPrincipalOptions(): Promise<Option[]> {
+  'use cache';
+  cacheTag(TAGS.members);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, full_name FROM members WHERE is_principal ORDER BY full_name
+  `);
+  return rows.map((row) => ({ id: text(row.id), label: text(row.full_name) }));
+}
+
+/** Orders that can still be received, for the receive dialog. */
+export async function listOpenPurchaseOrders(): Promise<
+  { id: string; number: string; supplierName: string | null; totalCents: Cents }[]
+> {
+  'use cache';
+  cacheTag(TAGS.purchaseOrders);
+  cacheLife('max');
+
+  // Before Supabase credentials exist this is a setup state, not an outage.
+  // Only an ABSENT connection string degrades; a failing query still throws,
+  // because an empty dashboard must never be able to mean 'the database is down'.
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT
+      p.id, p.number, s.name AS supplier_name,
+      (COALESCE((SELECT SUM(i.subtotal_cents) FROM purchase_order_items i
+                  WHERE i.purchase_order_id = p.id), 0)
+       + p.tax_cents + p.card_fee_cents + p.delivery_cents
+       + p.shipping_cents + p.shipping_tax_cents)::text AS total_cents
+    FROM purchase_orders p
+    LEFT JOIN suppliers s ON s.id = p.supplier_id
+    WHERE p.status IN ('draft', 'ordered', 'shipped')
+    ORDER BY p.ordered_at DESC NULLS LAST, p.number DESC
+  `);
+
+  return rows.map((row) => ({
+    id: text(row.id),
+    number: text(row.number),
+    supplierName: maybe(row.supplier_name),
+    totalCents: num(row.total_cents),
+  }));
+}

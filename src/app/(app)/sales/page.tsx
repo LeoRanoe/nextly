@@ -2,6 +2,7 @@ import { Receipt } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { SaleActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +86,7 @@ async function SalesTable() {
             <TH numeric>Cost</TH>
             <TH numeric>Gross</TH>
             <TH numeric>Margin</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -117,6 +119,9 @@ async function SalesTable() {
                   value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
                 />
               </TD>
+              <TD className="text-right">
+                <SaleActions id={row.id} number={row.number} status={row.status} />
+              </TD>
             </TR>
           ))}
         </TBody>
@@ -137,6 +142,7 @@ async function SalesTable() {
             <td className="h-9 px-3 text-right">
               <Percent value={totals.revenue === 0 ? 0 : totals.gross / totals.revenue} />
             </td>
+            <td />
           </tr>
         </tfoot>
       </Table>

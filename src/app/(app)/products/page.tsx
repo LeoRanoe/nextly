@@ -1,5 +1,5 @@
 import { ImageOff, Package } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -79,12 +79,15 @@ async function ProductsTable() {
           {rows.map((row) => (
             <TR key={row.id}>
               <TD className="text-ink">
-                <span className="inline-flex items-center gap-2">
+                <Link
+                  href={`/products/${row.id}` as Route}
+                  className="inline-flex items-center gap-2 rounded-row hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                >
                   {row.imageCount === 0 ? (
                     <ImageOff className="size-3.5 shrink-0 text-ink-4" aria-label="No image" />
                   ) : null}
                   {row.name}
-                </span>
+                </Link>
               </TD>
               <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">{row.code}</TD>
               <TD className="whitespace-nowrap text-ink-3">{row.categoryName ?? '—'}</TD>

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
+import { RateSheet, SettingsSheet } from '@/components/forms/finance-sheets';
+import { MemberSheet } from '@/components/forms/reference-sheets';
+import { MemberActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +29,11 @@ export default async function SettingsPage() {
           <SurfaceHeader
             title="Exchange rate"
             hint="Versioned. A new rate is a new row, never an edit."
+            action={
+              <Suspense fallback={null}>
+                <RateAction />
+              </Suspense>
+            }
           />
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <RatesTable />
@@ -33,14 +41,30 @@ export default async function SettingsPage() {
         </Surface>
 
         <Surface className="overflow-hidden">
-          <SurfaceHeader title="Team" hint="Access is a member row, not a sign-up" />
+          <SurfaceHeader
+            title="Team"
+            hint="Access is a member row, not a sign-up"
+            action={
+              <Suspense fallback={null}>
+                <MemberSheet />
+              </Suspense>
+            }
+          />
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <MembersTable />
           </Suspense>
         </Surface>
 
         <Surface className="overflow-hidden">
-          <SurfaceHeader title="Business" hint="Currency and thresholds" />
+          <SurfaceHeader
+            title="Business"
+            hint="Currency and thresholds"
+            action={
+              <Suspense fallback={null}>
+                <SettingsAction />
+              </Suspense>
+            }
+          />
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <BusinessSettings />
           </Suspense>
@@ -105,6 +129,7 @@ async function MembersTable() {
             <TH>Email</TH>
             <TH>Role</TH>
             <TH>Status</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -128,6 +153,9 @@ async function MembersTable() {
                 ) : (
                   <Badge tone="warning">Invited</Badge>
                 )}
+              </TD>
+              <TD className="text-right">
+                {row.isPrincipal ? null : <MemberActions id={row.id} fullName={row.fullName} />}
               </TD>
             </TR>
           ))}
@@ -158,5 +186,23 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-[13px] text-ink-3">{label}</dt>
       <dd className="text-[13px] text-ink">{value}</dd>
     </div>
+  );
+}
+
+async function RateAction() {
+  const rates = await listRates(1);
+  return <RateSheet currentRate={rates[0]?.rateMicros ?? null} />;
+}
+
+async function SettingsAction() {
+  const settings = await getSettings();
+  return (
+    <SettingsSheet
+      initial={{
+        businessName: settings?.businessName ?? 'Nextly',
+        displayCurrency: settings?.displayCurrency ?? 'SRD',
+        lowStockThreshold: settings?.lowStockThreshold ?? 5,
+      }}
+    />
   );
 }

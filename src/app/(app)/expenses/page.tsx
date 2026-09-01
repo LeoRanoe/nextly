@@ -1,7 +1,8 @@
 import { Coins } from 'lucide-react';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Suspense } from 'react';
+import { ExpenseSheet } from '@/components/forms/expense-sheet';
+import { ExpenseActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import { Surface } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatDate, humanise } from '@/lib/format';
 import { listExpenses } from '@/server/queries/lists';
+import { listExpenseCategoryOptions } from '@/server/queries/pickers';
 
 /** Stable keys for placeholder rows. Skeletons never reorder, but an
  *  index key still teaches the wrong habit to whoever copies this next. */
@@ -26,9 +28,15 @@ export default function ExpensesPage() {
         title="Expenses"
         description="Running costs only. Anything paid to get goods into stock belongs on the purchase order instead, where it becomes part of the cost of those goods."
         action={
-          <Button asChild variant="primary">
-            <Link href="/expenses/new">Log expense</Link>
-          </Button>
+          <Suspense
+            fallback={
+              <Button variant="primary" disabled>
+                Log expense
+              </Button>
+            }
+          >
+            <ExpenseTrigger />
+          </Suspense>
         }
       />
       <Surface className="overflow-hidden">
@@ -50,9 +58,9 @@ async function ExpensesTable() {
         title="No expenses logged"
         description="Marketing, software, transport and packaging go here. They reduce the net result on the Overview but never touch the cost of a product."
         action={
-          <Button asChild variant="primary" size="sm">
-            <Link href="/expenses/new">Log expense</Link>
-          </Button>
+          <Suspense fallback={null}>
+            <ExpenseTrigger />
+          </Suspense>
         }
       />
     );
@@ -70,6 +78,7 @@ async function ExpensesTable() {
             <TH>Category</TH>
             <TH>Method</TH>
             <TH numeric>Amount</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -88,6 +97,9 @@ async function ExpensesTable() {
               <TD numeric>
                 <Money cents={row.amountUsdCents} size="sm" />
               </TD>
+              <TD className="text-right">
+                <ExpenseActions id={row.id} description={row.description} />
+              </TD>
             </TR>
           ))}
         </TBody>
@@ -99,6 +111,7 @@ async function ExpensesTable() {
             <td className="h-9 px-3 text-right">
               <Money cents={total} size="sm" />
             </td>
+            <td />
           </tr>
         </tfoot>
       </Table>
@@ -119,4 +132,10 @@ function TableSkeleton() {
       ))}
     </div>
   );
+}
+
+/** The sheet reads the URL, so it renders behind its own boundary. */
+async function ExpenseTrigger() {
+  const categories = await listExpenseCategoryOptions();
+  return <ExpenseSheet categories={categories} />;
 }

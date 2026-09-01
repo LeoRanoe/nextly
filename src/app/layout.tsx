@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Instrument_Sans, JetBrains_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@/components/providers/theme-provider';
+import { Toaster } from '@/components/providers/toaster';
 import './globals.css';
 
 // Instrument Sans over Inter/Geist: those two are the visual signature of
@@ -35,7 +36,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
       <body className="min-h-dvh bg-base text-ink antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

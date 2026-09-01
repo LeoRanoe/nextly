@@ -2,6 +2,8 @@ import { ShoppingCart } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { ReceiveOrderSheet } from '@/components/forms/finance-sheets';
+import { PurchaseOrderActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -80,6 +82,7 @@ async function OrdersTable() {
             <TH numeric>Goods</TH>
             <TH numeric>Freight &amp; fees</TH>
             <TH numeric>Landed total</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -119,6 +122,20 @@ async function OrdersTable() {
               </TD>
               <TD numeric>
                 <Money cents={row.totalCents} size="sm" />
+              </TD>
+              <TD className="text-right">
+                <span className="inline-flex items-center gap-1">
+                  {row.status === 'ordered' || row.status === 'shipped' ? (
+                    <ReceiveOrderSheet
+                      orderId={row.id}
+                      orderNumber={row.number}
+                      goodsCents={row.goodsCents}
+                      overheadCents={row.overheadCents}
+                      unitCount={row.unitCount}
+                    />
+                  ) : null}
+                  <PurchaseOrderActions id={row.id} number={row.number} status={row.status} />
+                </span>
               </TD>
             </TR>
           ))}

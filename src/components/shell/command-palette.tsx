@@ -26,11 +26,21 @@ const ACTIONS = [
     keywords: 'buy po amazon aliexpress restock',
   },
   { href: '/products/new', label: 'Add a product', keywords: 'sku variant catalog item' },
-  { href: '/expenses/new', label: 'Log an expense', keywords: 'cost marketing tools spend' },
+  { href: '/expenses?new=1', label: 'Log an expense', keywords: 'cost marketing tools spend' },
   {
-    href: '/ledger/new',
+    href: '/ledger?new=1',
     label: 'Record a cash movement',
     keywords: 'ledger capital contribution draw balance',
+  },
+  {
+    href: '/customers?new-customer=1',
+    label: 'Add a customer',
+    keywords: 'client buyer contact',
+  },
+  {
+    href: '/settings?invite=1',
+    label: 'Invite someone',
+    keywords: 'team member access staff owner',
   },
 ] as const;
 

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { CategorySheet } from '@/components/forms/reference-sheets';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
@@ -14,6 +15,11 @@ export default function CategoriesPage() {
       <PageHeader
         title="Categories"
         description="How products are grouped, in the dashboard today and on the public catalog later."
+        action={
+          <Suspense fallback={null}>
+            <CategorySheet />
+          </Suspense>
+        }
       />
       <Surface className="overflow-hidden">
         <Suspense fallback={<Skeleton className="m-4 h-24" />}>

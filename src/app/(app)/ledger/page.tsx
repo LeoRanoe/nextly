@@ -1,15 +1,19 @@
 import { Wallet } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { LedgerSheet } from '@/components/forms/ledger-sheet';
+import { LedgerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Money } from '@/components/ui/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatDate, humanise } from '@/lib/format';
 import { listLedger } from '@/server/queries/lists';
+import { listPrincipalOptions } from '@/server/queries/pickers';
 
 /** Stable keys for placeholder rows. Skeletons never reorder, but an
  *  index key still teaches the wrong habit to whoever copies this next. */
@@ -34,6 +38,17 @@ export default function LedgerPage() {
       <PageHeader
         title="Cash ledger"
         description="Append-only. Corrections are made with a reversing entry, never by editing history, and the running balance is computed rather than stored so it cannot go stale."
+        action={
+          <Suspense
+            fallback={
+              <Button variant="primary" disabled>
+                Record movement
+              </Button>
+            }
+          >
+            <LedgerTrigger />
+          </Suspense>
+        }
       />
       <Surface className="overflow-hidden">
         <Suspense fallback={<TableSkeleton />}>
@@ -69,6 +84,7 @@ async function LedgerTable() {
             <TH>Method</TH>
             <TH numeric>Amount</TH>
             <TH numeric>Balance</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -93,6 +109,9 @@ async function LedgerTable() {
               <TD numeric className="text-ink-2">
                 <Money cents={row.balanceCents} size="sm" tone="muted" />
               </TD>
+              <TD className="text-right">
+                <LedgerActions id={row.id} description={row.description} />
+              </TD>
             </TR>
           ))}
         </TBody>
@@ -114,4 +133,9 @@ function TableSkeleton() {
       ))}
     </div>
   );
+}
+
+async function LedgerTrigger() {
+  const principals = await listPrincipalOptions();
+  return <LedgerSheet principals={principals} />;
 }

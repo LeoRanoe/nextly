@@ -1,0 +1,288 @@
+'use server';
+
+import { eq, sql } from 'drizzle-orm';
+import { updateTag } from 'next/cache';
+import { z } from 'zod';
+import { normaliseToUsd } from '@/lib/fx';
+import {
+  expenseSchema,
+  fxRateSchema,
+  ledgerEntrySchema,
+  settingsSchema,
+  uuid,
+} from '@/lib/schemas';
+import { db } from '../db/client';
+import { expenses, fxRates, ledgerEntries, settings } from '../db/schema';
+import { TAGS } from '../queries/cache';
+import { logActivity, postLedgerEntry } from '../services/posting';
+import { rateForRecord, rateOn } from '../services/rates';
+import { ActionError, ownerAction, writeAction } from './client';
+
+/**
+ * An expense is money leaving the business, so by default it posts to the cash
+ * ledger as well. The toggle exists for the case where the payment was already
+ * entered by hand — without it, importing historical expenses would
+ * double-count every one of them.
+ */
+export const createExpense = writeAction
+  .metadata({ action: 'created', entity: 'expense' })
+  .inputSchema(expenseSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const rateMicros =
+        input.currency === 'SRD'
+          ? await rateOn(input.occurredAt, tx)
+          : await rateForRecord(input.occurredAt, tx);
+
+      const [expense] = await tx
+        .insert(expenses)
+        .values({
+          description: input.description,
+          categoryId: input.categoryId,
+          currency: input.currency,
+          fxRateMicros: rateMicros,
+          amountCents: input.amountCents,
+          amountUsdCents: normaliseToUsd(input.amountCents, input.currency, rateMicros),
+          paymentMethod: input.paymentMethod,
+          occurredAt: input.occurredAt,
+          notes: input.notes ?? null,
+          createdById: ctx.member.id,
+        })
+        .returning();
+
+      if (!expense) throw new ActionError('Could not record the expense.');
+
+      if (input.postToLedger) {
+        await postLedgerEntry(tx, {
+          direction: 'out',
+          category: 'operating',
+          description: input.description,
+          currency: input.currency,
+          rateMicros,
+          amountCents: input.amountCents,
+          paymentMethod: input.paymentMethod,
+          occurredAt: input.occurredAt,
+          memberId: ctx.member.id,
+          sourceKind: 'expense',
+          sourceId: expense.id,
+        });
+      }
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'logged expense',
+        entityType: 'expense',
+        entityId: expense.id,
+        entityLabel: input.description,
+      });
+
+      return { id: expense.id, description: input.description };
+    });
+
+    updateTag(TAGS.expenses);
+    if (input.postToLedger) updateTag(TAGS.ledger);
+    return result;
+  });
+
+export const deleteExpense = writeAction
+  .metadata({ action: 'deleted', entity: 'expense' })
+  .inputSchema(z.object({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const description = await db.transaction(async (tx) => {
+      const [expense] = await tx
+        .select()
+        .from(expenses)
+        .where(eq(expenses.id, input.id))
+        .limit(1);
+
+      if (!expense) throw new ActionError('That expense no longer exists.');
+
+      // Its ledger entry described a payment that is being retracted, so it
+      // goes too. Anything else would leave cash reduced by a cost that no
+      // longer exists.
+      await tx.execute(
+        sql`DELETE FROM ledger_entries WHERE source_kind = 'expense' AND source_id = ${expense.id}`,
+      );
+      await tx.delete(expenses).where(eq(expenses.id, expense.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'deleted expense',
+        entityType: 'expense',
+        entityLabel: expense.description,
+      });
+
+      return expense.description;
+    });
+
+    updateTag(TAGS.expenses);
+    updateTag(TAGS.ledger);
+    return { description };
+  });
+
+/**
+ * A manual cash movement: capital in, an owner draw, anything not already
+ * posted by a document.
+ *
+ * Entries created here are `source_kind = 'manual'` on purpose. That is what
+ * lets the Overview compare document-posted cash against the documents
+ * themselves and flag drift, which is how it found the spreadsheet's $147.01
+ * and $130 discrepancies.
+ */
+export const createLedgerEntry = writeAction
+  .metadata({ action: 'created', entity: 'ledger entry' })
+  .inputSchema(ledgerEntrySchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    await db.transaction(async (tx) => {
+      const rateMicros =
+        input.currency === 'SRD'
+          ? await rateOn(input.occurredAt, tx)
+          : await rateForRecord(input.occurredAt, tx);
+
+      await postLedgerEntry(tx, {
+        direction: input.direction,
+        category: input.category,
+        description: input.description,
+        currency: input.currency,
+        rateMicros,
+        amountCents: input.amountCents,
+        paymentMethod: input.paymentMethod,
+        occurredAt: input.occurredAt,
+        memberId: ctx.member.id,
+        principalId: input.memberId,
+        notes: input.notes ?? null,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: `recorded cash ${input.direction}`,
+        entityType: 'ledger_entry',
+        entityLabel: input.description,
+      });
+    });
+
+    updateTag(TAGS.ledger);
+    updateTag(TAGS.members);
+    return { description: input.description };
+  });
+
+/**
+ * Reverse a ledger entry.
+ *
+ * The original is never deleted — `ledger_entries` is append-only, and that is
+ * the property that makes the cash history worth trusting. A correction is a
+ * new, opposite entry that points back at what it reverses.
+ */
+export const reverseLedgerEntry = writeAction
+  .metadata({ action: 'reversed', entity: 'ledger entry' })
+  .inputSchema(z.object({ id: uuid, reason: z.string().trim().min(3).max(500) }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const description = await db.transaction(async (tx) => {
+      const [entry] = await tx
+        .select()
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.id, input.id))
+        .limit(1);
+
+      if (!entry) throw new ActionError('That entry no longer exists.');
+
+      await postLedgerEntry(tx, {
+        direction: entry.direction === 'in' ? 'out' : 'in',
+        category: entry.category,
+        description: `Reversal of ${entry.description}`,
+        currency: entry.currency,
+        rateMicros: entry.fxRateMicros,
+        amountCents: entry.amountCents,
+        paymentMethod: entry.paymentMethod,
+        occurredAt: new Date(),
+        memberId: ctx.member.id,
+        principalId: entry.memberId,
+        notes: input.reason,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'reversed ledger entry',
+        entityType: 'ledger_entry',
+        entityId: entry.id,
+        entityLabel: entry.description,
+      });
+
+      return entry.description;
+    });
+
+    updateTag(TAGS.ledger);
+    updateTag(TAGS.members);
+    return { description };
+  });
+
+/**
+ * Record a new exchange rate.
+ *
+ * Always an insert, never an update. Past transactions keep the rate they were
+ * recorded with, which is the whole reason this is a dated series rather than a
+ * setting — see ADR-0001 and `docs/02-data/money-and-fx.md`.
+ */
+export const createFxRate = writeAction
+  .metadata({ action: 'created', entity: 'exchange rate' })
+  .inputSchema(fxRateSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    await db.transaction(async (tx) => {
+      await tx.insert(fxRates).values({
+        base: 'USD',
+        quote: 'SRD',
+        rateMicros: input.rate,
+        effectiveFrom: input.effectiveFrom,
+        source: 'manual',
+        note: input.note ?? null,
+        createdById: ctx.member.id,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'set exchange rate',
+        entityType: 'fx_rate',
+        entityLabel: `${(input.rate / 1_000_000).toFixed(4)} SRD/USD`,
+      });
+    });
+
+    updateTag(TAGS.fxRates);
+    return { rate: input.rate };
+  });
+
+export const updateSettings = ownerAction
+  .metadata({ action: 'updated', entity: 'settings' })
+  .inputSchema(settingsSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(settings).limit(1);
+
+      if (existing) {
+        await tx
+          .update(settings)
+          .set({
+            businessName: input.businessName,
+            displayCurrency: input.displayCurrency,
+            lowStockThreshold: input.lowStockThreshold,
+          })
+          .where(eq(settings.id, existing.id));
+      } else {
+        await tx.insert(settings).values({
+          businessName: input.businessName,
+          displayCurrency: input.displayCurrency,
+          lowStockThreshold: input.lowStockThreshold,
+        });
+      }
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated settings',
+        entityType: 'settings',
+        entityLabel: input.businessName,
+      });
+    });
+
+    updateTag(TAGS.settings);
+    updateTag(TAGS.inventory);
+    return { businessName: input.businessName };
+  });

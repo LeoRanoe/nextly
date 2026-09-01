@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { parseMoney, sum } from '@/lib/money';
 import {
   allocateOverhead,
   consumeStock,
@@ -9,7 +8,8 @@ import {
   receiveStock,
   totalOverhead,
   unitCost,
-} from '@/server/services/costing';
+} from '@/lib/costing';
+import { parseMoney, sum } from '@/lib/money';
 
 /* The real numbers from Nextly Master Sheet.xlsx. If these ever change, the
    books changed, which is exactly when someone should be looking. */
