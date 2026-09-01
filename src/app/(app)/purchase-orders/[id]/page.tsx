@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ReceiveOrderSheet } from '@/components/forms/finance-sheets';
+import { PurchaseOrderForm } from '@/components/forms/purchase-order-form';
 import { PurchaseOrderActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +14,10 @@ import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatDate, formatRelative, humanise } from '@/lib/format';
 import { formatRate } from '@/lib/fx';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, toDecimalString } from '@/lib/money';
 import { listActivity } from '@/server/queries/activity';
 import { getPurchaseOrder } from '@/server/queries/documents';
+import { listSupplierOptions, listVariantOptions } from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Purchase order' };
 
@@ -27,10 +29,14 @@ const STATUS_TONE = {
   cancelled: 'negative',
 } as const;
 
+type SearchParams = Promise<{ editing?: string }>;
+
 export default function PurchaseOrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: SearchParams;
 }) {
   return (
     <>
@@ -44,20 +50,61 @@ export default function PurchaseOrderDetailPage({
         }
       />
       <Suspense fallback={<Skeleton className="h-[480px] rounded-card" />}>
-        <Loader params={params} />
+        <Loader params={params} searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function Loader({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+async function Loader({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: SearchParams;
+}) {
+  const [{ id }, { editing }] = await Promise.all([params, searchParams]);
   const [order, activity] = await Promise.all([
     getPurchaseOrder(id),
     listActivity({ entityType: 'purchase_order', entityId: id }),
   ]);
 
   if (!order) notFound();
+
+  const editable =
+    order.status === 'draft' || order.status === 'ordered' || order.status === 'shipped';
+
+  if (editing === '1' && editable) {
+    const [variants, suppliers] = await Promise.all([
+      listVariantOptions(),
+      listSupplierOptions(),
+    ]);
+
+    return (
+      <PurchaseOrderForm
+        variants={variants}
+        suppliers={suppliers}
+        initial={{
+          id: order.id,
+          supplierId: order.supplierId,
+          orderedAt: (order.orderedAt ?? '').slice(0, 10),
+          expectedAt: (order.expectedAt ?? '').slice(0, 10),
+          reference: order.reference ?? '',
+          notes: order.notes ?? '',
+          taxCents: toDecimalString(order.taxCents),
+          cardFeeCents: toDecimalString(order.cardFeeCents),
+          deliveryCents: toDecimalString(order.deliveryCents),
+          shippingCents: toDecimalString(order.shippingCents),
+          shippingTaxCents: toDecimalString(order.shippingTaxCents),
+          items: order.items.map((item) => ({
+            variantId: item.variantId,
+            quantity: String(item.quantity),
+            subtotal: toDecimalString(item.subtotalCents),
+          })),
+        }}
+      />
+    );
+  }
 
   const goodsCents = order.items.reduce((sum, item) => sum + item.subtotalCents, 0);
   const overheadTotal =
@@ -94,6 +141,11 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
           }
           action={
             <span className="inline-flex items-center gap-1">
+              {editable ? (
+                <Button asChild variant="secondary" size="sm">
+                  <Link href={`/purchase-orders/${order.id}?editing=1` as Route}>Edit</Link>
+                </Button>
+              ) : null}
               {canReceive ? (
                 <ReceiveOrderSheet
                   orderId={order.id}

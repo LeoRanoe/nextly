@@ -147,6 +147,139 @@ export const createSale = writeAction
   });
 
 /**
+ * Edit a draft.
+ *
+ * Refused for anything else: a confirmed sale has already moved stock and
+ * cash at a specific cost and rate, and rewriting its lines would rewrite a
+ * margin someone has already relied on. The correction for a confirmed sale
+ * is `voidSale`, the same principle `reverseLedgerEntry` uses — a mistake
+ * gets undone, not erased.
+ *
+ * Otherwise this runs exactly `createSale`'s logic — recompute totals, and if
+ * `confirm` is set, consume stock and post the receipt — starting from the
+ * existing row's id instead of creating a new one. A draft has posted nothing
+ * yet, so replacing its line items outright is safe.
+ */
+export const updateSale = writeAction
+  .metadata({ action: 'updated', entity: 'sale' })
+  .inputSchema(saleSchema.extend({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.id)).limit(1);
+      if (!sale) throw new ActionError('That sale no longer exists.');
+      if (sale.status !== 'draft') {
+        throw new ActionError(
+          'A confirmed sale cannot be edited. Void it and record the correction — the same reason a reversing entry exists for the ledger.',
+        );
+      }
+
+      const rateMicros =
+        input.currency === 'SRD'
+          ? await rateOn(input.soldAt, tx)
+          : await rateForRecord(input.soldAt, tx);
+
+      // A draft has posted no stock and no cash, so there is nothing to
+      // unwind — this only guards the case of a leftover posting.
+      await clearDocumentPostings(tx, 'sale', input.id);
+      await tx.delete(saleItems).where(eq(saleItems.saleId, input.id));
+
+      let totalCents = 0;
+      let totalUsdCents = 0;
+      let cogsCents = 0;
+      let shortfallTotal = 0;
+
+      for (const [index, item] of input.items.entries()) {
+        const lineTotalCents = item.unitPriceCents * item.quantity;
+        const lineTotalUsdCents = normaliseToUsd(lineTotalCents, input.currency, rateMicros);
+        const unitPriceUsdCents = normaliseToUsd(
+          item.unitPriceCents,
+          input.currency,
+          rateMicros,
+        );
+
+        let lineCogs = 0;
+        let shortfall = 0;
+
+        if (input.confirm) {
+          const consumed = await consumeStockFor(tx, {
+            variantId: item.variantId,
+            quantity: item.quantity,
+            sourceKind: 'sale',
+            sourceId: input.id,
+            occurredAt: input.soldAt,
+            memberId: ctx.member.id,
+            note: `${sale.number} at weighted-average landed cost.`,
+          });
+          lineCogs = consumed.cogsCents;
+          shortfall = consumed.shortfall;
+        }
+
+        await tx.insert(saleItems).values({
+          saleId: input.id,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          unitPriceUsdCents,
+          lineTotalUsdCents,
+          cogsCents: lineCogs,
+          shortfall,
+          position: index + 1,
+        });
+
+        totalCents += lineTotalCents;
+        totalUsdCents += lineTotalUsdCents;
+        cogsCents += lineCogs;
+        shortfallTotal += shortfall;
+      }
+
+      await tx
+        .update(sales)
+        .set({
+          customerId: input.customerId,
+          status: input.confirm ? 'confirmed' : 'draft',
+          currency: input.currency,
+          fxRateMicros: rateMicros,
+          totalCents,
+          totalUsdCents,
+          cogsCents,
+          grossProfitCents: totalUsdCents - cogsCents,
+          paymentMethod: input.paymentMethod,
+          soldAt: input.soldAt,
+          notes: input.notes ?? null,
+        })
+        .where(eq(sales.id, input.id));
+
+      if (input.confirm) {
+        await postLedgerEntry(tx, {
+          direction: 'in',
+          category: 'sales_receipt',
+          description: `${sale.number}${input.customerId ? '' : ' (walk-in)'}`,
+          currency: input.currency,
+          rateMicros,
+          amountCents: totalCents,
+          paymentMethod: input.paymentMethod,
+          occurredAt: input.soldAt,
+          memberId: ctx.member.id,
+          sourceKind: 'sale',
+          sourceId: input.id,
+        });
+      }
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: input.confirm ? 'confirmed sale' : 'updated draft sale',
+        entityType: 'sale',
+        entityId: input.id,
+        entityLabel: sale.number,
+      });
+
+      return { id: input.id, number: sale.number, totalUsdCents, cogsCents, shortfallTotal };
+    });
+
+    return result;
+  });
+
+/**
  * Confirm a draft sale: this is when it actually happens.
  */
 export const confirmSale = writeAction

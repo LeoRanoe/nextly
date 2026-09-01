@@ -14,7 +14,7 @@ import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { cn } from '@/lib/cn';
 import { allocateOverhead } from '@/lib/costing';
 import { formatMoney, parseMoney } from '@/lib/money';
-import { createPurchaseOrder } from '@/server/actions/purchase-orders';
+import { createPurchaseOrder, updatePurchaseOrder } from '@/server/actions/purchase-orders';
 import { createSupplier } from '@/server/actions/reference';
 import type { Option, VariantOption } from '@/server/queries/pickers';
 
@@ -47,28 +47,56 @@ const money = (value: string): number => {
   }
 };
 
+export type PurchaseOrderFormValues = {
+  id: string;
+  supplierId: string | null;
+  orderedAt: string;
+  expectedAt: string;
+  reference: string;
+  notes: string;
+  taxCents: string;
+  cardFeeCents: string;
+  deliveryCents: string;
+  shippingCents: string;
+  shippingTaxCents: string;
+  items: { variantId: string; quantity: string; subtotal: string }[];
+};
+
 export function PurchaseOrderForm({
   variants,
   suppliers,
+  initial,
 }: {
   variants: VariantOption[];
   suppliers: Option[];
+  /** Omit for a blank form. Editing is only offered for draft/ordered/shipped
+   *  orders — see updatePurchaseOrder, which refuses anything else. */
+  initial?: PurchaseOrderFormValues;
 }) {
   const router = useRouter();
+  const isEdit = Boolean(initial);
 
-  const [supplierId, setSupplierId] = useState<string | null>(null);
+  const [supplierId, setSupplierId] = useState<string | null>(initial?.supplierId ?? null);
   const [supplierList, setSupplierList] = useState(suppliers);
-  const [orderedAt, setOrderedAt] = useState(today());
-  const [expectedAt, setExpectedAt] = useState('');
-  const [reference, setReference] = useState('');
-  const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<Line[]>([newLine()]);
+  const [orderedAt, setOrderedAt] = useState(initial?.orderedAt ?? today());
+  const [expectedAt, setExpectedAt] = useState(initial?.expectedAt ?? '');
+  const [reference, setReference] = useState(initial?.reference ?? '');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [lines, setLines] = useState<Line[]>(
+    () =>
+      initial?.items.map((item) => ({
+        key: crypto.randomUUID(),
+        variantId: item.variantId,
+        quantity: item.quantity,
+        subtotal: item.subtotal,
+      })) ?? [newLine()],
+  );
 
-  const [tax, setTax] = useState('');
-  const [cardFee, setCardFee] = useState('');
-  const [delivery, setDelivery] = useState('');
-  const [shipping, setShipping] = useState('');
-  const [shippingTax, setShippingTax] = useState('');
+  const [tax, setTax] = useState(initial?.taxCents ?? '');
+  const [cardFee, setCardFee] = useState(initial?.cardFeeCents ?? '');
+  const [delivery, setDelivery] = useState(initial?.deliveryCents ?? '');
+  const [shipping, setShipping] = useState(initial?.shippingCents ?? '');
+  const [shippingTax, setShippingTax] = useState(initial?.shippingTaxCents ?? '');
 
   const byId = useMemo(
     () => new Map(variants.map((variant) => [variant.id, variant])),
@@ -120,7 +148,12 @@ export function PurchaseOrderForm({
     return { overhead, goods, total: goods + overhead, rows };
   }, [lines, byId, tax, cardFee, delivery, shipping, shippingTax]);
 
-  const { execute, isPending } = useAction(createPurchaseOrder, {
+  // Two hook calls, always both — createPurchaseOrder and
+  // updatePurchaseOrder have different input schemas (update adds `id`), and
+  // TypeScript cannot always assign that union to useAction's single
+  // expected function type. See the matching comment in
+  // forms/reference-sheets.tsx for the full reasoning.
+  const createHook = useAction(createPurchaseOrder, {
     onSuccess({ data }) {
       toast.success(`Purchase order ${data?.number} raised`, {
         description: 'Mark it received when the goods arrive to allocate freight and fees.',
@@ -132,6 +165,17 @@ export function PurchaseOrderForm({
       toast.error(error.serverError ?? 'Could not raise the order');
     },
   });
+  const updateHook = useAction(updatePurchaseOrder, {
+    onSuccess({ data }) {
+      toast.success(`Purchase order ${data?.number} updated`);
+      router.push(`/purchase-orders/${data?.id}` as Parameters<typeof router.push>[0]);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not update the order');
+    },
+  });
+  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   const createInlineSupplier = useAction(createSupplier, {
     onSuccess({ data }) {
@@ -159,7 +203,11 @@ export function PurchaseOrderForm({
       return;
     }
 
+    // `execute` is a union of the create and update action's own function
+    // types — the branch above already guarantees the right shape reaches
+    // the right action.
     execute({
+      ...(isEdit ? { id: initial?.id as string } : {}),
       supplierId,
       orderedAt,
       expectedAt: expectedAt || undefined,
@@ -171,7 +219,7 @@ export function PurchaseOrderForm({
       shippingCents: shipping || '0',
       shippingTaxCents: shippingTax || '0',
       items,
-    });
+    } as never);
   }
 
   return (
@@ -445,11 +493,12 @@ export function PurchaseOrderForm({
 
         <div className="flex flex-col gap-2 border-line-subtle border-t p-4">
           <SubmitButton pending={isPending} size="lg" className="w-full">
-            Raise order
+            {isEdit ? 'Save changes' : 'Raise order'}
           </SubmitButton>
           <p className="text-[11px] text-ink-4 leading-relaxed">
-            Raising the order does not move stock or cash. Both happen when you mark it
-            received.
+            {isEdit
+              ? 'Still safe to edit: nothing has moved stock or cash yet. That happens when the order is marked received, after which it can no longer be edited.'
+              : 'Raising the order does not move stock or cash. Both happen when you mark it received.'}
           </p>
         </div>
       </Surface>

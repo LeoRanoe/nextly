@@ -77,6 +77,83 @@ export const createPurchaseOrder = writeAction
   });
 
 /**
+ * Edit an order before it has been received.
+ *
+ * Refused for `received` or `cancelled`: a received order's landed cost is
+ * the cost basis of stock that may already have been sold against it, and
+ * rewriting the order would retroactively change those margins. Permitted
+ * for `draft`, `ordered` and `shipped` — none of which have posted stock or
+ * cash yet, so replacing the line items outright is safe.
+ */
+export const updatePurchaseOrder = writeAction
+  .metadata({ action: 'updated', entity: 'purchase order' })
+  .inputSchema(purchaseOrderSchema.extend({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const [order] = await tx
+        .select()
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.id, input.id))
+        .limit(1);
+
+      if (!order) throw new ActionError('That purchase order no longer exists.');
+
+      if (order.status === 'received') {
+        throw new ActionError(
+          'This order has already been received. Its landed cost is the basis of stock that may already be sold — cancel it instead if it was wrong.',
+        );
+      }
+      if (order.status === 'cancelled') {
+        throw new ActionError('A cancelled order cannot be edited.');
+      }
+
+      await tx
+        .update(purchaseOrders)
+        .set({
+          supplierId: input.supplierId,
+          taxCents: input.taxCents,
+          cardFeeCents: input.cardFeeCents,
+          deliveryCents: input.deliveryCents,
+          shippingCents: input.shippingCents,
+          shippingTaxCents: input.shippingTaxCents,
+          orderedAt: input.orderedAt,
+          expectedAt: input.expectedAt ?? null,
+          reference: input.reference ?? null,
+          notes: input.notes ?? null,
+        })
+        .where(eq(purchaseOrders.id, input.id));
+
+      await tx
+        .delete(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.purchaseOrderId, input.id));
+
+      await tx.insert(purchaseOrderItems).values(
+        input.items.map((item, index) => ({
+          purchaseOrderId: input.id,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          quantityReceived: 0,
+          subtotalCents: item.subtotalCents,
+          overheadCents: 0,
+          landedCostCents: item.subtotalCents,
+          position: index + 1,
+        })),
+      );
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated purchase order',
+        entityType: 'purchase_order',
+        entityId: input.id,
+        entityLabel: order.number,
+      });
+
+      return { id: input.id, number: order.number };
+    });
+    return result;
+  });
+
+/**
  * Receiving is where a purchase order becomes stock, and it is the single most
  * valuable thing this system does that the spreadsheet did not.
  *

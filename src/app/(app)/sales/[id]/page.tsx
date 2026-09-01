@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { SaleActions } from '@/components/forms/row-actions';
+import { SaleForm } from '@/components/forms/sale-form';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,15 +12,26 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatDate, formatRelative, humanise } from '@/lib/format';
-import { formatRate } from '@/lib/fx';
+import { formatRate, RATE_SCALE } from '@/lib/fx';
+import { toDecimalString } from '@/lib/money';
 import { listActivity } from '@/server/queries/activity';
 import { getSale } from '@/server/queries/documents';
+import { getCurrentRate } from '@/server/queries/overview';
+import { listCustomerOptions, listVariantOptions } from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Sale' };
 
 const STATUS_TONE = { draft: 'neutral', confirmed: 'positive', void: 'negative' } as const;
 
-export default function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type SearchParams = Promise<{ editing?: string }>;
+
+export default function SaleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: SearchParams;
+}) {
   return (
     <>
       <PageHeader
@@ -32,20 +44,55 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
         }
       />
       <Suspense fallback={<Skeleton className="h-[420px] rounded-card" />}>
-        <Loader params={params} />
+        <Loader params={params} searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function Loader({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+async function Loader({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: SearchParams;
+}) {
+  const [{ id }, { editing }] = await Promise.all([params, searchParams]);
   const [sale, activity] = await Promise.all([
     getSale(id),
     listActivity({ entityType: 'sale', entityId: id }),
   ]);
 
   if (!sale) notFound();
+
+  if (editing === '1' && sale.status === 'draft') {
+    const [variants, customers, rate] = await Promise.all([
+      listVariantOptions(),
+      listCustomerOptions(),
+      getCurrentRate(),
+    ]);
+
+    return (
+      <SaleForm
+        variants={variants}
+        customers={customers}
+        rateMicros={rate?.rateMicros ?? RATE_SCALE}
+        initial={{
+          id: sale.id,
+          customerId: sale.customerId,
+          soldAt: sale.soldAt.slice(0, 10),
+          currency: sale.currency,
+          paymentMethod: sale.paymentMethod,
+          notes: sale.notes ?? '',
+          items: sale.items.map((item) => ({
+            variantId: item.variantId,
+            quantity: String(item.quantity),
+            unitPrice: toDecimalString(item.unitPriceCents, sale.currency),
+          })),
+        }}
+      />
+    );
+  }
 
   const marginRate = sale.totalUsdCents === 0 ? 0 : sale.grossProfitCents / sale.totalUsdCents;
 
@@ -71,7 +118,16 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
               (sale.customerName ?? 'Walk-in customer')
             )
           }
-          action={<SaleActions id={sale.id} number={sale.number} status={sale.status} />}
+          action={
+            <span className="inline-flex items-center gap-1">
+              {sale.status === 'draft' ? (
+                <Button asChild variant="secondary" size="sm">
+                  <Link href={`/sales/${sale.id}?editing=1` as Route}>Edit</Link>
+                </Button>
+              ) : null}
+              <SaleActions id={sale.id} number={sale.number} status={sale.status} />
+            </span>
+          }
         />
         <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
           <Field label="Sold" value={formatDate(sale.soldAt)} />

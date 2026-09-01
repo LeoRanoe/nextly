@@ -15,7 +15,7 @@ import { cn } from '@/lib/cn';
 import { fromBase, type RateMicros, toBase } from '@/lib/fx';
 import { formatMoney, mulDivRound, parseMoney, toDecimalString } from '@/lib/money';
 import { createCustomer } from '@/server/actions/reference';
-import { createSale } from '@/server/actions/sales';
+import { createSale, updateSale } from '@/server/actions/sales';
 import type { Option, VariantOption } from '@/server/queries/pickers';
 
 /**
@@ -39,24 +39,47 @@ const newLine = (): Line => ({
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+export type SaleFormValues = {
+  id: string;
+  customerId: string | null;
+  soldAt: string;
+  currency: 'USD' | 'SRD';
+  paymentMethod: string;
+  notes: string;
+  items: { variantId: string; quantity: string; unitPrice: string }[];
+};
+
 export function SaleForm({
   variants,
   customers,
   rateMicros,
+  initial,
 }: {
   variants: VariantOption[];
   customers: Option[];
   rateMicros: RateMicros;
+  /** Omit for a blank form. Editing is only ever offered for a draft — see
+   *  updateSale, which refuses anything else. */
+  initial?: SaleFormValues;
 }) {
   const router = useRouter();
+  const isEdit = Boolean(initial);
 
-  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState<string | null>(initial?.customerId ?? null);
   const [customerList, setCustomerList] = useState(customers);
-  const [soldAt, setSoldAt] = useState(today());
-  const [currency, setCurrency] = useState<'USD' | 'SRD'>('USD');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<Line[]>([newLine()]);
+  const [soldAt, setSoldAt] = useState(initial?.soldAt ?? today());
+  const [currency, setCurrency] = useState<'USD' | 'SRD'>(initial?.currency ?? 'USD');
+  const [paymentMethod, setPaymentMethod] = useState(initial?.paymentMethod ?? 'cash');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [lines, setLines] = useState<Line[]>(
+    () =>
+      initial?.items.map((item) => ({
+        key: crypto.randomUUID(),
+        variantId: item.variantId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })) ?? [newLine()],
+  );
 
   const byId = useMemo(
     () => new Map(variants.map((variant) => [variant.id, variant])),
@@ -138,7 +161,11 @@ export function SaleForm({
     return { revenue, cogs, gross: revenue - cogs, units, shortfalls };
   }, [lines, byId, currency, rateMicros]);
 
-  const { execute, isPending } = useAction(createSale, {
+  // Two hook calls, always both — createSale and updateSale have different
+  // input schemas (update adds `id`), and TypeScript cannot always assign
+  // that union to useAction's single expected function type. See the
+  // matching comment in forms/reference-sheets.tsx for the full reasoning.
+  const createHook = useAction(createSale, {
     onSuccess({ data }) {
       toast.success(`Sale ${data?.number} recorded`, {
         description: data
@@ -156,6 +183,19 @@ export function SaleForm({
       });
     },
   });
+  const updateHook = useAction(updateSale, {
+    onSuccess({ data }) {
+      toast.success(`Sale ${data?.number} updated`);
+      router.push(`/sales/${data?.id}` as Parameters<typeof router.push>[0]);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not update the sale', {
+        description: error.validationErrors ? 'Check the highlighted fields.' : undefined,
+      });
+    },
+  });
+  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   const createInlineCustomer = useAction(createCustomer, {
     onSuccess({ data }) {
@@ -186,7 +226,11 @@ export function SaleForm({
       return;
     }
 
+    // `execute` is a union of the create and update action's own function
+    // types — the branch above already guarantees the right shape reaches
+    // the right action.
     execute({
+      ...(isEdit ? { id: initial?.id as string } : {}),
       customerId,
       soldAt,
       currency,
@@ -194,7 +238,7 @@ export function SaleForm({
       notes: notes || undefined,
       confirm,
       items,
-    });
+    } as never);
   }
 
   return (
@@ -467,7 +511,7 @@ export function SaleForm({
 
         <div className="flex flex-col gap-2 border-line-subtle border-t p-4">
           <SubmitButton pending={isPending} size="lg" className="w-full">
-            Record sale
+            {isEdit ? 'Save and confirm' : 'Record sale'}
           </SubmitButton>
           <Button
             type="button"
@@ -478,8 +522,9 @@ export function SaleForm({
             Save as draft
           </Button>
           <p className="text-[11px] text-ink-4 leading-relaxed">
-            Recording moves stock, books the cost of goods and posts the receipt to the cash
-            ledger. A draft does none of that until it is confirmed.
+            {isEdit
+              ? 'Confirming moves stock, books the cost of goods and posts the receipt. Saving as a draft keeps none of that until it is confirmed.'
+              : 'Recording moves stock, books the cost of goods and posts the receipt to the cash ledger. A draft does none of that until it is confirmed.'}
           </p>
         </div>
       </Surface>
