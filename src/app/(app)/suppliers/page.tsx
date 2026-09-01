@@ -1,6 +1,9 @@
+import { Truck } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { SupplierSheet } from '@/components/forms/reference-sheets';
+import { SupplierActions } from '@/components/forms/row-actions';
+import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Money } from '@/components/ui/money';
@@ -35,6 +38,22 @@ export default function SuppliersPage() {
 
 async function SuppliersTable() {
   const rows = await listSuppliers();
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        Icon={Truck}
+        title="No suppliers yet"
+        description="Add Amazon, AliExpress or a local supplier before raising a purchase order against them."
+        action={
+          <Suspense fallback={null}>
+            <SupplierSheet />
+          </Suspense>
+        }
+      />
+    );
+  }
+
   return (
     <TableWrap>
       <Table>
@@ -45,6 +64,7 @@ async function SuppliersTable() {
             <TH numeric>Products</TH>
             <TH numeric>Orders</TH>
             <TH numeric>Landed spend</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -62,6 +82,17 @@ async function SuppliersTable() {
               </TD>
               <TD numeric>
                 <Money cents={row.spendCents} size="sm" />
+              </TD>
+              <TD className="text-right">
+                <SupplierActions
+                  id={row.id}
+                  name={row.name}
+                  kind={row.kind}
+                  website={row.website}
+                  notes={row.notes}
+                  productCount={row.productCount}
+                  orderCount={row.orderCount}
+                />
               </TD>
             </TR>
           ))}

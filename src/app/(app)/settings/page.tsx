@@ -155,7 +155,13 @@ async function MembersTable() {
                 )}
               </TD>
               <TD className="text-right">
-                {row.isPrincipal ? null : <MemberActions id={row.id} fullName={row.fullName} />}
+                <MemberActions
+                  id={row.id}
+                  fullName={row.fullName}
+                  email={row.email}
+                  role={row.role}
+                  isPrincipal={row.isPrincipal}
+                />
               </TD>
             </TR>
           ))}

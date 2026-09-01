@@ -4,6 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import {
+  CategorySheet,
+  CustomerSheet,
+  MemberSheet,
+  SupplierSheet,
+} from '@/components/forms/reference-sheets';
 import { useMember } from '@/components/providers/member-provider';
 import { ConfirmDialog } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -14,7 +20,12 @@ import { SubmitButton } from '@/components/ui/submit-button';
 import { formatMoney } from '@/lib/money';
 import { deleteExpense, reverseLedgerEntry } from '@/server/actions/finance';
 import { cancelPurchaseOrder, setPurchaseOrderStatus } from '@/server/actions/purchase-orders';
-import { removeMember } from '@/server/actions/reference';
+import {
+  deleteCategory,
+  deleteCustomer,
+  deleteSupplier,
+  removeMember,
+} from '@/server/actions/reference';
 import { confirmSale, voidSale } from '@/server/actions/sales';
 
 /**
@@ -329,9 +340,22 @@ export function ExpenseActions({
 
 /* ── Team ────────────────────────────────────────────────────────────────── */
 
-export function MemberActions({ id, fullName }: { id: string; fullName: string }) {
+export function MemberActions({
+  id,
+  fullName,
+  email,
+  role: memberRole,
+  isPrincipal,
+}: {
+  id: string;
+  fullName: string;
+  email: string;
+  role: 'owner' | 'staff' | 'viewer';
+  isPrincipal: boolean;
+}) {
   const router = useRouter();
-  const { role } = useMember();
+  const { role, email: ownEmail } = useMember();
+  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const removeAction = useAction(removeMember, {
@@ -343,16 +367,30 @@ export function MemberActions({ id, fullName }: { id: string; fullName: string }
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove'),
   });
 
-  // removeMember is an ownerAction; same reasoning as ExpenseActions above.
+  // updateMember and removeMember are both ownerAction; same reasoning as
+  // ExpenseActions above.
   if (role !== 'owner') return null;
+
+  const isSelf = email.toLowerCase() === ownEmail.toLowerCase();
 
   return (
     <>
       <Menu>
-        <Item danger onSelect={() => setConfirming(true)}>
-          Remove {fullName.split(' ')[0]}
-        </Item>
+        <Item onSelect={() => setEditing(true)}>Edit</Item>
+        {/* removeMember itself refuses a principal or your own row — hiding
+         *  the item rather than offering a refusal is just less friction. */}
+        {isPrincipal || isSelf ? null : (
+          <Item danger onSelect={() => setConfirming(true)}>
+            Remove {fullName.split(' ')[0]}
+          </Item>
+        )}
       </Menu>
+
+      <MemberSheet
+        initial={{ id, fullName, email, role: memberRole, isPrincipal }}
+        open={editing}
+        onOpenChange={setEditing}
+      />
 
       <ConfirmDialog
         open={confirming}
@@ -362,6 +400,202 @@ export function MemberActions({ id, fullName }: { id: string; fullName: string }
         confirmLabel="Remove"
         pending={removeAction.isPending}
         onConfirm={() => removeAction.execute({ id })}
+      />
+    </>
+  );
+}
+
+/* ── Categories ──────────────────────────────────────────────────────────── */
+
+export function CategoryActions({
+  id,
+  name,
+  slug,
+  productCount,
+}: {
+  id: string;
+  name: string;
+  slug: string;
+  productCount: number;
+}) {
+  const router = useRouter();
+  const { role } = useMember();
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const deleteAction = useAction(deleteCategory, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} deleted`);
+      setConfirming(false);
+      router.refresh();
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Could not delete'),
+  });
+
+  return (
+    <>
+      <Menu>
+        <Item onSelect={() => setEditing(true)}>Edit</Item>
+        {/* deleteCategory is an ownerAction; staff would only see a refusal. */}
+        {role === 'owner' ? (
+          <Item danger onSelect={() => setConfirming(true)}>
+            Delete
+          </Item>
+        ) : null}
+      </Menu>
+
+      <CategorySheet initial={{ id, name, slug }} open={editing} onOpenChange={setEditing} />
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete "${name}"?`}
+        description={
+          productCount > 0
+            ? `${productCount} product${productCount === 1 ? '' : 's'} ${productCount === 1 ? 'is' : 'are'} in this category. Deleting it leaves ${productCount === 1 ? 'that product' : 'them'} uncategorised, not deleted.`
+            : 'Nothing is using this category.'
+        }
+        confirmLabel="Delete category"
+        pending={deleteAction.isPending}
+        onConfirm={() => deleteAction.execute({ id })}
+      />
+    </>
+  );
+}
+
+/* ── Suppliers ───────────────────────────────────────────────────────────── */
+
+export function SupplierActions({
+  id,
+  name,
+  kind,
+  website,
+  notes,
+  productCount,
+  orderCount,
+}: {
+  id: string;
+  name: string;
+  kind: 'amazon' | 'aliexpress' | 'other';
+  website: string;
+  notes: string;
+  productCount: number;
+  orderCount: number;
+}) {
+  const router = useRouter();
+  const { role } = useMember();
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const deleteAction = useAction(deleteSupplier, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} deleted`);
+      setConfirming(false);
+      router.refresh();
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Could not delete'),
+  });
+
+  return (
+    <>
+      <Menu>
+        <Item onSelect={() => setEditing(true)}>Edit</Item>
+        {/* orderCount here counts every purchase order regardless of status —
+         *  exactly what deleteSupplier itself refuses on, so a visible Delete
+         *  item never leads to a refusal it didn't warn about. */}
+        {role === 'owner' && orderCount === 0 ? (
+          <Item danger onSelect={() => setConfirming(true)}>
+            Delete
+          </Item>
+        ) : null}
+      </Menu>
+
+      <SupplierSheet
+        initial={{ id, name, kind, website, notes }}
+        open={editing}
+        onOpenChange={setEditing}
+      />
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete ${name}?`}
+        description={
+          productCount > 0
+            ? `${productCount} product${productCount === 1 ? '' : 's'} ${productCount === 1 ? 'is' : 'are'} sourced from here. Deleting it leaves ${productCount === 1 ? 'that product' : 'them'} without a supplier, not deleted.`
+            : 'Nothing is using this supplier.'
+        }
+        confirmLabel="Delete supplier"
+        pending={deleteAction.isPending}
+        onConfirm={() => deleteAction.execute({ id })}
+      />
+    </>
+  );
+}
+
+/* ── Customers ───────────────────────────────────────────────────────────── */
+
+export function CustomerActions({
+  id,
+  name,
+  phone,
+  email,
+  addressLine,
+  city,
+  notes,
+}: {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  addressLine: string;
+  city: string;
+  notes: string;
+}) {
+  const router = useRouter();
+  const { role } = useMember();
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const deleteAction = useAction(deleteCustomer, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} deleted`);
+      setConfirming(false);
+      router.refresh();
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Could not delete'),
+  });
+
+  return (
+    <>
+      <Menu>
+        <Item onSelect={() => setEditing(true)}>Edit</Item>
+        {/* Always offered, not gated on a visible order count: the list's
+         *  order count only reflects confirmed sales, but deleteCustomer also
+         *  refuses on a draft one, so a client-side gate here could promise
+         *  something the server won't do. The refusal, when it happens, says
+         *  why. */}
+        {role === 'owner' ? (
+          <Item danger onSelect={() => setConfirming(true)}>
+            Delete
+          </Item>
+        ) : null}
+      </Menu>
+
+      <CustomerSheet
+        initial={{ id, name, phone, email, addressLine, city, notes }}
+        open={editing}
+        onOpenChange={setEditing}
+      />
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete ${name}?`}
+        description="Refused if this customer has any sale on the books, confirmed or draft — that history stays. Otherwise this only removes their contact details."
+        confirmLabel="Delete customer"
+        pending={deleteAction.isPending}
+        onConfirm={() => deleteAction.execute({ id })}
       />
     </>
   );

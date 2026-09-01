@@ -41,7 +41,9 @@ export async function listCategories(): Promise<CategoryRow[]> {
 export type SupplierRow = {
   id: string;
   name: string;
-  kind: string;
+  kind: 'amazon' | 'aliexpress' | 'other';
+  website: string;
+  notes: string;
   productCount: number;
   orderCount: number;
   spendCents: Cents;
@@ -50,9 +52,9 @@ export type SupplierRow = {
 export async function listSuppliers(): Promise<SupplierRow[]> {
   if (!isDatabaseConfigured()) return [];
 
-  const rows = await db.execute<Record<string, string>>(sql`
+  const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      s.id, s.name, s.kind::text AS kind,
+      s.id, s.name, s.kind::text AS kind, s.website, s.notes,
       (SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id)::text AS product_count,
       (SELECT COUNT(*) FROM purchase_orders o WHERE o.supplier_id = s.id)::text AS order_count,
       COALESCE((
@@ -68,7 +70,9 @@ export async function listSuppliers(): Promise<SupplierRow[]> {
   return rows.map((row) => ({
     id: text(row.id),
     name: text(row.name),
-    kind: text(row.kind, 'other'),
+    kind: text(row.kind, 'other') as SupplierRow['kind'],
+    website: text(row.website),
+    notes: text(row.notes),
     productCount: num(row.product_count),
     orderCount: num(row.order_count),
     spendCents: num(row.spend_cents),

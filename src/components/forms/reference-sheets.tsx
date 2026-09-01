@@ -3,7 +3,7 @@
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldRow, Input, Select, Textarea } from '@/components/ui/field';
@@ -15,6 +15,10 @@ import {
   createCustomer,
   createSupplier,
   inviteMember,
+  updateCategory,
+  updateCustomer,
+  updateMember,
+  updateSupplier,
 } from '@/server/actions/reference';
 
 /**
@@ -23,6 +27,14 @@ import {
  * Grouped in one file because they share a shape — open a sheet, fill three or
  * four fields, close it — and splitting four near-identical twenty-line forms
  * across four files makes them harder to keep consistent, not easier.
+ *
+ * Each sheet does double duty as create AND edit: pass `initial` to seed it
+ * from a row (edit mode) or omit it for a blank form with its own trigger
+ * (create mode). `open`/`onOpenChange` are for a caller driving the sheet
+ * itself — a row action — rather than the sheet's own URL-backed trigger.
+ * `useUrlSheet` still runs unconditionally either way, since hooks cannot be
+ * called conditionally; its return value is simply unused when the sheet is
+ * externally controlled.
  */
 
 function slugify(value: string): string {
@@ -85,57 +97,116 @@ function FormSheet({
 
 /* ── Customers ───────────────────────────────────────────────────────────── */
 
-export function CustomerSheet() {
-  const router = useRouter();
-  const [open, setOpen] = useUrlSheet('new-customer');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [addressLine, setAddressLine] = useState('');
-  const [city, setCity] = useState('');
-  const [notes, setNotes] = useState('');
+export type CustomerValues = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  addressLine: string;
+  city: string;
+  notes: string;
+};
 
-  const { execute, isPending } = useAction(createCustomer, {
+export function CustomerSheet({
+  initial,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  /** Omit for a blank form with its own "Add customer" trigger. */
+  initial?: CustomerValues;
+  /** Pass both to drive the sheet from a row action instead of the URL. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
+  const router = useRouter();
+  const urlSheet = useUrlSheet('new-customer');
+  const open = openProp ?? urlSheet[0];
+  const setOpen = onOpenChangeProp ?? urlSheet[1];
+  const isEdit = Boolean(initial);
+  const formId = useId();
+
+  const [name, setName] = useState(initial?.name ?? '');
+  const [phone, setPhone] = useState(initial?.phone ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [addressLine, setAddressLine] = useState(initial?.addressLine ?? '');
+  const [city, setCity] = useState(initial?.city ?? '');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
+
+  // Two separate hook calls, not `useAction(isEdit ? updateCustomer : createCustomer)`:
+  // TypeScript cannot always assign a union of two SafeActionFn types (their
+  // input schemas differ by exactly the `id` field) to the single function
+  // type useAction's generic inference expects — it depends on how large and
+  // how structurally distinct the two schemas are, and customer/category/
+  // supplier/member all hit it where product's more complex schema happens
+  // not to. Calling both hooks unconditionally (never conditionally — that
+  // would break the rules of hooks) and picking the result is the version
+  // that typechecks regardless.
+  const resetCreateFields = () => {
+    setName('');
+    setPhone('');
+    setEmail('');
+    setAddressLine('');
+    setCity('');
+    setNotes('');
+  };
+  const createHook = useAction(createCustomer, {
     onSuccess({ data }) {
       toast.success(`${data?.name} added`, { description: `Code ${data?.code}` });
       setOpen(false);
-      setName('');
-      setPhone('');
-      setEmail('');
-      setAddressLine('');
-      setCity('');
-      setNotes('');
+      resetCreateFields();
       router.refresh();
     },
     onError({ error }) {
       toast.error(error.serverError ?? 'Could not add the customer');
     },
   });
+  const updateHook = useAction(updateCustomer, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} updated`);
+      setOpen(false);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not update the customer');
+    },
+  });
+  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   return (
     <>
-      <Trigger label="Add customer" onClick={() => setOpen(true)} />
+      {initial === undefined ? (
+        <Trigger label="Add customer" onClick={() => setOpen(true)} />
+      ) : null}
       <FormSheet
         open={open}
         onOpenChange={setOpen}
-        title="Add a customer"
-        description="A code is allocated automatically. Order counts and lifetime spend are derived from confirmed sales and never typed in."
-        formId="customer-form"
+        title={isEdit ? 'Edit customer' : 'Add a customer'}
+        description={
+          isEdit
+            ? undefined
+            : 'A code is allocated automatically. Order counts and lifetime spend are derived from confirmed sales and never typed in.'
+        }
+        formId={formId}
         pending={isPending}
-        submitLabel="Add customer"
+        submitLabel={isEdit ? 'Save changes' : 'Add customer'}
       >
         <form
-          id="customer-form"
+          id={formId}
           onSubmit={(event) => {
             event.preventDefault();
+            // `execute` is a union of the create and update action's own
+            // function types (see the comment above), so TypeScript cannot
+            // check a single call against both — the branch above already
+            // guarantees the right shape reaches the right action.
             execute({
+              ...(isEdit ? { id: initial?.id as string } : {}),
               name,
               phone: phone || undefined,
               email: email || undefined,
               addressLine: addressLine || undefined,
               city: city || undefined,
               notes: notes || undefined,
-            });
+            } as never);
           }}
         >
           <SheetSection title="Details">
@@ -198,14 +269,30 @@ export function CustomerSheet() {
 
 /* ── Categories ──────────────────────────────────────────────────────────── */
 
-export function CategorySheet() {
-  const router = useRouter();
-  const [open, setOpen] = useUrlSheet('new-category');
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
+export type CategoryValues = { id: string; name: string; slug: string };
 
-  const { execute, isPending } = useAction(createCategory, {
+export function CategorySheet({
+  initial,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  initial?: CategoryValues;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
+  const router = useRouter();
+  const urlSheet = useUrlSheet('new-category');
+  const open = openProp ?? urlSheet[0];
+  const setOpen = onOpenChangeProp ?? urlSheet[1];
+  const isEdit = Boolean(initial);
+  const formId = useId();
+
+  const [name, setName] = useState(initial?.name ?? '');
+  const [slug, setSlug] = useState(initial?.slug ?? '');
+  const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
+
+  // Two hook calls, always both — see the comment in CustomerSheet above.
+  const createHook = useAction(createCategory, {
     onSuccess({ data }) {
       toast.success(`${data?.name} added`);
       setOpen(false);
@@ -218,24 +305,41 @@ export function CategorySheet() {
       toast.error(error.serverError ?? 'Could not add the category');
     },
   });
+  const updateHook = useAction(updateCategory, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} updated`);
+      setOpen(false);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not update the category');
+    },
+  });
+  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   return (
     <>
-      <Trigger label="Add category" onClick={() => setOpen(true)} />
+      {initial === undefined ? (
+        <Trigger label="Add category" onClick={() => setOpen(true)} />
+      ) : null}
       <FormSheet
         open={open}
         onOpenChange={setOpen}
-        title="Add a category"
+        title={isEdit ? 'Edit category' : 'Add a category'}
         description="How products are grouped, here and on the public catalog."
-        formId="category-form"
+        formId={formId}
         pending={isPending}
-        submitLabel="Add category"
+        submitLabel={isEdit ? 'Save changes' : 'Add category'}
       >
         <form
-          id="category-form"
+          id={formId}
           onSubmit={(event) => {
             event.preventDefault();
-            execute({ name, slug: slug || slugify(name) });
+            execute({
+              ...(isEdit ? { id: initial?.id as string } : {}),
+              name,
+              slug: slug || slugify(name),
+            } as never);
           }}
         >
           <SheetSection title="Details">
@@ -272,15 +376,37 @@ export function CategorySheet() {
 
 /* ── Suppliers ───────────────────────────────────────────────────────────── */
 
-export function SupplierSheet() {
-  const router = useRouter();
-  const [open, setOpen] = useUrlSheet('new-supplier');
-  const [name, setName] = useState('');
-  const [kind, setKind] = useState<'amazon' | 'aliexpress' | 'other'>('other');
-  const [website, setWebsite] = useState('');
-  const [notes, setNotes] = useState('');
+export type SupplierValues = {
+  id: string;
+  name: string;
+  kind: 'amazon' | 'aliexpress' | 'other';
+  website: string;
+  notes: string;
+};
 
-  const { execute, isPending } = useAction(createSupplier, {
+export function SupplierSheet({
+  initial,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  initial?: SupplierValues;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
+  const router = useRouter();
+  const urlSheet = useUrlSheet('new-supplier');
+  const open = openProp ?? urlSheet[0];
+  const setOpen = onOpenChangeProp ?? urlSheet[1];
+  const isEdit = Boolean(initial);
+  const formId = useId();
+
+  const [name, setName] = useState(initial?.name ?? '');
+  const [kind, setKind] = useState<'amazon' | 'aliexpress' | 'other'>(initial?.kind ?? 'other');
+  const [website, setWebsite] = useState(initial?.website ?? '');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
+
+  // Two hook calls, always both — see the comment in CustomerSheet above.
+  const createHook = useAction(createSupplier, {
     onSuccess({ data }) {
       toast.success(`${data?.name} added`);
       setOpen(false);
@@ -293,29 +419,43 @@ export function SupplierSheet() {
       toast.error(error.serverError ?? 'Could not add the supplier');
     },
   });
+  const updateHook = useAction(updateSupplier, {
+    onSuccess({ data }) {
+      toast.success(`${data?.name} updated`);
+      setOpen(false);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not update the supplier');
+    },
+  });
+  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   return (
     <>
-      <Trigger label="Add supplier" onClick={() => setOpen(true)} />
+      {initial === undefined ? (
+        <Trigger label="Add supplier" onClick={() => setOpen(true)} />
+      ) : null}
       <FormSheet
         open={open}
         onOpenChange={setOpen}
-        title="Add a supplier"
+        title={isEdit ? 'Edit supplier' : 'Add a supplier'}
         description="Where stock is bought."
-        formId="supplier-form"
+        formId={formId}
         pending={isPending}
-        submitLabel="Add supplier"
+        submitLabel={isEdit ? 'Save changes' : 'Add supplier'}
       >
         <form
-          id="supplier-form"
+          id={formId}
           onSubmit={(event) => {
             event.preventDefault();
             execute({
+              ...(isEdit ? { id: initial?.id as string } : {}),
               name,
               kind,
               website: website || undefined,
               notes: notes || undefined,
-            });
+            } as never);
           }}
         >
           <SheetSection title="Details">
@@ -363,15 +503,37 @@ export function SupplierSheet() {
 
 /* ── Team ────────────────────────────────────────────────────────────────── */
 
-export function MemberSheet() {
-  const router = useRouter();
-  const [open, setOpen] = useUrlSheet('invite');
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'owner' | 'staff' | 'viewer'>('staff');
-  const [isPrincipal, setIsPrincipal] = useState(false);
+export type MemberValues = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: 'owner' | 'staff' | 'viewer';
+  isPrincipal: boolean;
+};
 
-  const { execute, isPending } = useAction(inviteMember, {
+export function MemberSheet({
+  initial,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  initial?: MemberValues;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
+  const router = useRouter();
+  const urlSheet = useUrlSheet('invite');
+  const open = openProp ?? urlSheet[0];
+  const setOpen = onOpenChangeProp ?? urlSheet[1];
+  const isEdit = Boolean(initial);
+  const formId = useId();
+
+  const [fullName, setFullName] = useState(initial?.fullName ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [role, setRole] = useState<'owner' | 'staff' | 'viewer'>(initial?.role ?? 'staff');
+  const [isPrincipal, setIsPrincipal] = useState(initial?.isPrincipal ?? false);
+
+  // Two hook calls, always both — see the comment in CustomerSheet above.
+  const createHook = useAction(inviteMember, {
     onSuccess({ data }) {
       toast.success(`${data?.fullName} invited`, {
         description: `They can sign in at any time with ${data?.email}.`,
@@ -385,24 +547,45 @@ export function MemberSheet() {
       toast.error(error.serverError ?? 'Could not send the invitation');
     },
   });
+  const updateHook = useAction(updateMember, {
+    onSuccess({ data }) {
+      toast.success(`${data?.fullName} updated`);
+      setOpen(false);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not update the member');
+    },
+  });
+  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   return (
     <>
-      <Trigger label="Invite" onClick={() => setOpen(true)} />
+      {initial === undefined ? <Trigger label="Invite" onClick={() => setOpen(true)} /> : null}
       <FormSheet
         open={open}
         onOpenChange={setOpen}
-        title="Invite someone"
-        description="Creating the record is the invitation. Nothing is emailed: they sign in with this address at the normal sign-in page, and their first sign-in claims the invitation."
-        formId="member-form"
+        title={isEdit ? 'Edit team member' : 'Invite someone'}
+        description={
+          isEdit
+            ? undefined
+            : 'Creating the record is the invitation. Nothing is emailed: they sign in with this address at the normal sign-in page, and their first sign-in claims the invitation.'
+        }
+        formId={formId}
         pending={isPending}
-        submitLabel="Invite"
+        submitLabel={isEdit ? 'Save changes' : 'Invite'}
       >
         <form
-          id="member-form"
+          id={formId}
           onSubmit={(event) => {
             event.preventDefault();
-            execute({ fullName, email, role, isPrincipal });
+            execute({
+              ...(isEdit ? { id: initial?.id as string } : {}),
+              fullName,
+              email,
+              role,
+              isPrincipal,
+            } as never);
           }}
         >
           <SheetSection title="Person">

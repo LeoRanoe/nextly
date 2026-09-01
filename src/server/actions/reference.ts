@@ -10,7 +10,7 @@ import {
   uuid,
 } from '@/lib/schemas';
 import { db } from '../db/client';
-import { categories, customers, members, suppliers } from '../db/schema';
+import { categories, customers, members, purchaseOrders, sales, suppliers } from '../db/schema';
 import { logActivity } from '../services/posting';
 import { ActionError, ownerAction, writeAction } from './client';
 
@@ -106,6 +106,52 @@ export const updateCustomer = writeAction
     return { name: input.name };
   });
 
+/**
+ * Refused if any non-void sale references this customer. A void sale is kept
+ * as a record that something *didn't* happen and carries no revenue, so it is
+ * not a reason to refuse — but a real sale is, since `sales.customer_id`
+ * being `ON DELETE SET NULL` would otherwise silently turn a past order into
+ * a walk-in's.
+ */
+export const deleteCustomer = ownerAction
+  .metadata({ action: 'deleted', entity: 'customer' })
+  .inputSchema(z.object({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const name = await db.transaction(async (tx) => {
+      const [customer] = await tx
+        .select()
+        .from(customers)
+        .where(eq(customers.id, input.id))
+        .limit(1);
+
+      if (!customer) throw new ActionError('That customer no longer exists.');
+
+      const [sale] = await tx
+        .select({ id: sales.id })
+        .from(sales)
+        .where(sql`${sales.customerId} = ${input.id} AND ${sales.status} != 'void'`)
+        .limit(1);
+
+      if (sale) {
+        throw new ActionError(
+          'This customer has sales on the books. That history stays, so the customer cannot be deleted.',
+        );
+      }
+
+      await tx.delete(customers).where(eq(customers.id, input.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'deleted customer',
+        entityType: 'customer',
+        entityLabel: customer.name,
+      });
+
+      return customer.name;
+    });
+    return { name };
+  });
+
 export const createCategory = writeAction
   .metadata({ action: 'created', entity: 'category' })
   .inputSchema(categorySchema)
@@ -139,6 +185,66 @@ export const createCategory = writeAction
     return result;
   });
 
+export const updateCategory = writeAction
+  .metadata({ action: 'updated', entity: 'category' })
+  .inputSchema(categorySchema.extend({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(categories)
+        .where(eq(categories.id, input.id))
+        .limit(1);
+
+      if (!existing) throw new ActionError('That category no longer exists.');
+
+      await tx
+        .update(categories)
+        .set({ name: input.name, slug: input.slug })
+        .where(eq(categories.id, input.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated category',
+        entityType: 'category',
+        entityId: input.id,
+        entityLabel: input.name,
+      });
+    });
+    return { name: input.name };
+  });
+
+/** Always permitted: `products.category_id` is `ON DELETE SET NULL`, so a
+ *  category with products still just detaches them rather than orphaning
+ *  anything. `listCategories`' `productCount` is what tells the confirm
+ *  dialog to say so before this ever runs. */
+export const deleteCategory = ownerAction
+  .metadata({ action: 'deleted', entity: 'category' })
+  .inputSchema(z.object({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const name = await db.transaction(async (tx) => {
+      const [category] = await tx
+        .select()
+        .from(categories)
+        .where(eq(categories.id, input.id))
+        .limit(1);
+
+      if (!category) throw new ActionError('That category no longer exists.');
+
+      await tx.delete(categories).where(eq(categories.id, input.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'deleted category',
+        entityType: 'category',
+        entityLabel: category.name,
+      });
+
+      return category.name;
+    });
+    return { name };
+  });
+
 export const createSupplier = writeAction
   .metadata({ action: 'created', entity: 'supplier' })
   .inputSchema(supplierSchema)
@@ -167,6 +273,87 @@ export const createSupplier = writeAction
       return { id: supplier.id, name: supplier.name };
     });
     return result;
+  });
+
+export const updateSupplier = writeAction
+  .metadata({ action: 'updated', entity: 'supplier' })
+  .inputSchema(supplierSchema.extend({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(suppliers)
+        .where(eq(suppliers.id, input.id))
+        .limit(1);
+
+      if (!existing) throw new ActionError('That supplier no longer exists.');
+
+      await tx
+        .update(suppliers)
+        .set({
+          name: input.name,
+          kind: input.kind,
+          website: input.website ?? null,
+          notes: input.notes ?? null,
+        })
+        .where(eq(suppliers.id, input.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated supplier',
+        entityType: 'supplier',
+        entityId: input.id,
+        entityLabel: input.name,
+      });
+    });
+    return { name: input.name };
+  });
+
+/**
+ * Refused if any purchase order references this supplier — a supplier with
+ * trading history is a fact about the past, and `purchase_orders.supplier_id`
+ * being `ON DELETE SET NULL` would otherwise silently detach every order from
+ * who it was bought from. Products referencing it (also `SET NULL`) are not
+ * a reason to refuse; `listSuppliers`' `productCount` tells the confirm
+ * dialog to warn about that instead.
+ */
+export const deleteSupplier = ownerAction
+  .metadata({ action: 'deleted', entity: 'supplier' })
+  .inputSchema(z.object({ id: uuid }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const name = await db.transaction(async (tx) => {
+      const [supplier] = await tx
+        .select()
+        .from(suppliers)
+        .where(eq(suppliers.id, input.id))
+        .limit(1);
+
+      if (!supplier) throw new ActionError('That supplier no longer exists.');
+
+      const [order] = await tx
+        .select({ id: purchaseOrders.id })
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.supplierId, input.id))
+        .limit(1);
+
+      if (order) {
+        throw new ActionError(
+          'This supplier has purchase order history. That stays on the books, so the supplier cannot be deleted.',
+        );
+      }
+
+      await tx.delete(suppliers).where(eq(suppliers.id, input.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'deleted supplier',
+        entityType: 'supplier',
+        entityLabel: supplier.name,
+      });
+
+      return supplier.name;
+    });
+    return { name };
   });
 
 /**

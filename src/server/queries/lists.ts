@@ -289,7 +289,9 @@ export type CustomerRow = {
   name: string;
   phone: string | null;
   email: string | null;
+  addressLine: string | null;
   city: string | null;
+  notes: string | null;
   orderCount: number;
   spentCents: Cents;
   grossCents: Cents;
@@ -301,7 +303,7 @@ export async function listCustomers(): Promise<CustomerRow[]> {
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      c.id, c.code, c.name, c.phone, c.email, c.city,
+      c.id, c.code, c.name, c.phone, c.email, c.address_line, c.city, c.notes,
       t.order_count::text, t.spent_usd_cents::text,
       t.gross_profit_cents::text, t.last_order_at::text
     FROM customers c
@@ -315,7 +317,9 @@ export async function listCustomers(): Promise<CustomerRow[]> {
     name: text(row.name),
     phone: maybe(row.phone),
     email: maybe(row.email),
+    addressLine: maybe(row.address_line),
     city: maybe(row.city),
+    notes: maybe(row.notes),
     orderCount: num(row.order_count),
     spentCents: num(row.spent_usd_cents),
     grossCents: num(row.gross_profit_cents),

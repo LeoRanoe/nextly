@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { CustomerSheet } from '@/components/forms/reference-sheets';
+import { CustomerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Money } from '@/components/ui/money';
@@ -71,6 +72,7 @@ async function CustomersTable() {
             <TH numeric>Spent</TH>
             <TH numeric>Gross earned</TH>
             <TH>Last order</TH>
+            <TH />
           </TR>
         </THead>
         <TBody>
@@ -93,6 +95,17 @@ async function CustomersTable() {
               </TD>
               <TD className="whitespace-nowrap text-[12px] text-ink-4">
                 {formatRelative(row.lastOrderAt)}
+              </TD>
+              <TD className="text-right">
+                <CustomerActions
+                  id={row.id}
+                  name={row.name}
+                  phone={row.phone ?? ''}
+                  email={row.email ?? ''}
+                  addressLine={row.addressLine ?? ''}
+                  city={row.city ?? ''}
+                  notes={row.notes ?? ''}
+                />
               </TD>
             </TR>
           ))}
