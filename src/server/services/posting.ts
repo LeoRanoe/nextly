@@ -88,7 +88,9 @@ export type StockPosting = {
   /** Signed cost movement, same sign convention as quantity. */
   valueCents: Cents;
   sourceKind: DocumentKind;
-  sourceId: string;
+  /** Null for a manual adjustment, which has no document behind it. Matches
+   *  the nullable column, and `LedgerPosting.sourceId` already allows null. */
+  sourceId: string | null;
   occurredAt: Date;
   note?: string;
   memberId: string;

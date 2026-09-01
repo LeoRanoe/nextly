@@ -2,6 +2,8 @@
 
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { consumeStock } from '@/lib/costing';
+import { mulDivRound } from '@/lib/money';
 import { productSchema, uuid } from '@/lib/schemas';
 import { db } from '../db/client';
 import {
@@ -11,7 +13,7 @@ import {
   purchaseOrderItems,
   saleItems,
 } from '../db/schema';
-import { logActivity } from '../services/posting';
+import { lockValuation, logActivity, postStockMovement } from '../services/posting';
 import { ActionError, writeAction } from './client';
 
 export const createProduct = writeAction
@@ -270,28 +272,35 @@ export const adjustStock = writeAction
 
       if (!variant) throw new ActionError('That variant no longer exists.');
 
+      // `lockValuation`, not a bare SUM: an adjustment read without FOR UPDATE
+      // races a concurrent sale reading the same average, and both write a cost
+      // based on stock only one of them can have.
+      const valuation = await lockValuation(tx, input.variantId);
+
       // Value the adjustment at the current weighted average, so a correction
       // does not silently change what the remaining stock is worth per unit.
-      const [position] = await tx.execute<{ quantity: string; value_cents: string }>(sql`
-        SELECT COALESCE(SUM(quantity), 0)::text    AS quantity,
-               COALESCE(SUM(value_cents), 0)::text AS value_cents
-          FROM inventory_movements
-         WHERE variant_id = ${input.variantId}
-      `);
+      // Removals go through `consumeStock` — the same arithmetic a sale uses —
+      // rather than multiplying a rounded unit cost, which drifts a cent per
+      // adjustment and can drive the valuation negative when the write-off
+      // exceeds what is on hand.
+      const valueCents =
+        input.quantity > 0
+          ? valuation.quantity > 0
+            ? mulDivRound(valuation.valueCents, input.quantity, valuation.quantity)
+            : 0
+          : -consumeStock(valuation, -input.quantity).cogsCents;
 
-      const onHand = Number(position?.quantity ?? 0);
-      const valueCents = Number(position?.value_cents ?? 0);
-      const unitValue = onHand > 0 ? Math.round(valueCents / onHand) : 0;
-
-      await tx.execute(sql`
-        INSERT INTO inventory_movements
-          (variant_id, kind, quantity, value_cents, source_kind, source_id,
-           occurred_at, note, created_by_id)
-        VALUES
-          (${input.variantId}, ${input.kind}::movement_kind, ${input.quantity},
-           ${unitValue * input.quantity}, 'manual', NULL, now(),
-           ${input.reason}, ${ctx.member.id})
-      `);
+      await postStockMovement(tx, {
+        variantId: input.variantId,
+        kind: input.kind,
+        quantity: input.quantity,
+        valueCents,
+        sourceKind: 'manual',
+        sourceId: null,
+        occurredAt: new Date(),
+        note: input.reason,
+        memberId: ctx.member.id,
+      });
 
       await logActivity(tx, {
         memberId: ctx.member.id,
@@ -301,7 +310,7 @@ export const adjustStock = writeAction
         entityLabel: variant.sku,
       });
 
-      return { sku: variant.sku, onHand: onHand + input.quantity };
+      return { sku: variant.sku, onHand: valuation.quantity + input.quantity };
     });
     return result;
   });
