@@ -6,6 +6,7 @@ import { isDatabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 import { db } from './db/client';
 import { members } from './db/schema';
+import { ActionError } from './errors';
 
 export type Member = typeof members.$inferSelect;
 
@@ -85,11 +86,18 @@ export async function requireMember(): Promise<Member> {
   redirect('/login');
 }
 
-/** Additionally permitted to change data. Viewers are read-only. */
+/**
+ * Additionally permitted to change data. Viewers are read-only.
+ *
+ * Throws `ActionError`, not a plain `Error`: `handleServerError`
+ * (`actions/client.ts`) only passes `ActionError` messages through to the
+ * client, so a viewer who reaches this needs to actually see why they were
+ * refused rather than a generic "something went wrong".
+ */
 export async function requireWrite(): Promise<Member> {
   const member = await requireMember();
   if (member.role === 'viewer') {
-    throw new Error('Your account has read-only access.');
+    throw new ActionError('Your account has read-only access.');
   }
   return member;
 }
@@ -97,7 +105,7 @@ export async function requireWrite(): Promise<Member> {
 export async function requireOwner(): Promise<Member> {
   const member = await requireMember();
   if (member.role !== 'owner') {
-    throw new Error('Only owners can perform this action.');
+    throw new ActionError('Only owners can perform this action.');
   }
   return member;
 }

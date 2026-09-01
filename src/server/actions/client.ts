@@ -1,7 +1,8 @@
 import { createSafeActionClient } from 'next-safe-action';
 import { z } from 'zod';
 import type { Member } from '../auth';
-import { getCurrentMember, requireMember, requireOwner, requireWrite } from '../auth';
+import { getCurrentMember, requireOwner, requireWrite } from '../auth';
+import { ActionError } from '../errors';
 
 /**
  * Server Action clients.
@@ -13,15 +14,10 @@ import { getCurrentMember, requireMember, requireOwner, requireWrite } from '../
  * handler and throws otherwise.
  *
  * Never call `db` from a bare `createSafeActionClient()`. Start from one of the
- * three exported clients below.
+ * two exported clients below.
  */
 
-export class ActionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ActionError';
-  }
-}
+export { ActionError };
 
 const base = createSafeActionClient({
   defineMetadataSchema() {
@@ -31,13 +27,16 @@ const base = createSafeActionClient({
       entity: z.string(),
     });
   },
-  handleServerError(error) {
-    // Anything we raised deliberately is safe to show. Anything else is a bug
-    // or a database constraint, and its text could leak schema details, so it
-    // stays on the server.
+  handleServerError(error, { metadata }) {
+    // Anything we raised deliberately is safe to show — including
+    // `requireWrite`/`requireOwner` refusals, which are `ActionError` too, so
+    // a viewer clicking a write action sees why, not a generic apology.
+    // Anything else is a bug or a database constraint, and its text could leak
+    // schema details, so it stays on the server; `metadata` turns that log
+    // line back into something you can triage instead of a bare stack trace.
     if (error instanceof ActionError) return error.message;
 
-    console.error('[action]', error);
+    console.error(`[action] ${metadata.action} ${metadata.entity}`, error);
 
     if (error.message.includes('duplicate key')) {
       return 'That already exists. Check for an existing record with the same code or number.';
@@ -50,12 +49,6 @@ const base = createSafeActionClient({
 });
 
 export type ActionContext = { member: Member };
-
-/** Signed in and invited. Reads that still need to know who is asking. */
-export const memberAction = base.use(async ({ next }) => {
-  const member = await requireMember();
-  return next({ ctx: { member } satisfies ActionContext });
-});
 
 /** The default for mutations. Owners and staff; viewers are refused. */
 export const writeAction = base.use(async ({ next }) => {
