@@ -1,6 +1,6 @@
 'use server';
 
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { normaliseToUsd } from '@/lib/fx';
 import {
@@ -12,7 +12,7 @@ import {
 } from '@/lib/schemas';
 import { db } from '../db/client';
 import { expenses, fxRates, ledgerEntries, settings } from '../db/schema';
-import { logActivity, postLedgerEntry } from '../services/posting';
+import { clearDocumentPostings, logActivity, postLedgerEntry } from '../services/posting';
 import { rateForRecord, rateOn } from '../services/rates';
 import { ActionError, ownerAction, writeAction } from './client';
 
@@ -94,10 +94,9 @@ export const deleteExpense = writeAction
 
       // Its ledger entry described a payment that is being retracted, so it
       // goes too. Anything else would leave cash reduced by a cost that no
-      // longer exists.
-      await tx.execute(
-        sql`DELETE FROM ledger_entries WHERE source_kind = 'expense' AND source_id = ${expense.id}`,
-      );
+      // longer exists. Routed through the posting service rather than a raw
+      // DELETE, so this stays the only place that ever removes a posting.
+      await clearDocumentPostings(tx, 'expense', expense.id);
       await tx.delete(expenses).where(eq(expenses.id, expense.id));
 
       await logActivity(tx, {
