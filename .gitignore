@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next
+.next/
+.next-build/
+out/
+next-env.d.ts
+
+# env
+.env
+.env.local
+.env*.local
+.vercel
+
+# build / cache
+*.tsbuildinfo
+.turbo/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

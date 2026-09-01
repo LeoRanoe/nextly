@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../styles/tokens.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Token → utility mapping. `inline` keeps the var reference live so the
+   light/dark swap happens in CSS with no re-render.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --color-sunken: var(--nx-bg-sunken);
+  --color-base: var(--nx-bg-base);
+  --color-raised: var(--nx-bg-raised);
+  --color-overlay: var(--nx-bg-overlay);
+  --color-inset: var(--nx-bg-inset);
+  --color-hover: var(--nx-bg-hover);
+  --color-active: var(--nx-bg-active);
+
+  --color-line-subtle: var(--nx-border-subtle);
+  --color-line: var(--nx-border);
+  --color-line-strong: var(--nx-border-strong);
+
+  --color-ink: var(--nx-text);
+  --color-ink-2: var(--nx-text-secondary);
+  --color-ink-3: var(--nx-text-tertiary);
+  --color-ink-4: var(--nx-text-faint);
+
+  --color-accent: var(--nx-accent);
+  --color-accent-hover: var(--nx-accent-hover);
+  --color-accent-fg: var(--nx-accent-fg);
+  --color-accent-muted: var(--nx-accent-muted);
+  --color-accent-border: var(--nx-accent-border);
+  --color-ring: var(--nx-ring);
+  --color-highlight: var(--nx-highlight);
+
+  --color-positive: var(--nx-positive);
+  --color-positive-muted: var(--nx-positive-muted);
+  --color-negative: var(--nx-negative);
+  --color-negative-muted: var(--nx-negative-muted);
+  --color-warning: var(--nx-warning);
+  --color-warning-muted: var(--nx-warning-muted);
+  --color-info: var(--nx-info);
+  --color-info-muted: var(--nx-info-muted);
+
+  --color-chart-1: var(--nx-chart-1);
+  --color-chart-2: var(--nx-chart-2);
+  --color-chart-3: var(--nx-chart-3);
+  --color-chart-4: var(--nx-chart-4);
+  --color-chart-5: var(--nx-chart-5);
+  --color-chart-grid: var(--nx-chart-grid);
+  --color-chart-axis: var(--nx-chart-axis);
+
+  /* Restrained radii. Nothing is rounded-2xl. */
+  --radius-row: 2px;
+  --radius-control: 6px;
+  --radius-card: 10px;
+
+  --shadow-raised: var(--nx-shadow-raised);
+  --shadow-overlay: var(--nx-shadow-overlay);
+
+  --font-sans:
+    var(--font-instrument-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  /* 4 / 8 / 12 / 16 / 24 / 32 / 48 rhythm — declared so it is deliberate. */
+  --spacing-row: 2rem; /* 32px table row */
+  --spacing-gutter: 1.5rem; /* 24px page gutter */
+
+  --ease-out-instrument: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  * {
+    border-color: var(--nx-border-subtle);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--nx-bg-base);
+    color: var(--nx-text);
+    font-family: var(--font-sans);
+    font-feature-settings:
+      "cv05" 1,
+      "cv08" 1,
+      "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Every number in this app is tabular. Money columns must align on the
+     decimal — it is the single detail that makes a ledger feel engineered. */
+  .tabular,
+  [data-numeric] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings:
+      "tnum" 1,
+      "zero" 1;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: var(--nx-accent);
+    color: var(--nx-accent-fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--nx-ring);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* Thin, tinted scrollbars — default chrome scrollbars break the palette. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--nx-border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--nx-border-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--nx-text-faint);
+  }
+
+  /* biome-ignore-start lint/complexity/noImportantStyles: honouring a system
+     accessibility preference has to beat whatever duration a component set,
+     and there is no selector specific enough to do that from here. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  /* biome-ignore-end lint/complexity/noImportantStyles: end reduced-motion */
+}
+
+@layer components {
+  /* Hairline top highlight used instead of drop shadows in dark mode. */
+  .surface-raised {
+    background-color: var(--nx-bg-raised);
+    border: 1px solid var(--nx-border-subtle);
+    box-shadow:
+      var(--nx-shadow-raised),
+      inset 0 1px 0 0 var(--nx-highlight);
+  }
+}

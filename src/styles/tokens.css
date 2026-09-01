@@ -1,0 +1,121 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Nextly design tokens — "Instrument"
+   ──────────────────────────────────────────────────────────────────────────
+   The neutral ramp is NOT grey. Every surface, border and text colour is
+   tinted toward hue 207° — the hue of #125488 from the brand palette. That
+   single decision is what stops the shell reading as a default template.
+
+   Chrome is near-monochrome. #37CAEC is the only interactive accent.
+   The five palette colours are reserved for data visualisation only.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --nx-bg-sunken: hsl(205 28% 95.5%);
+  --nx-bg-base: hsl(205 30% 98.5%);
+  --nx-bg-raised: hsl(0 0% 100%);
+  --nx-bg-overlay: hsl(0 0% 100%);
+  --nx-bg-inset: hsl(205 26% 96.8%);
+  --nx-bg-hover: hsl(207 26% 94.5%);
+  --nx-bg-active: hsl(207 26% 91.5%);
+
+  /* ── Borders ──────────────────────────────────────────────────────────── */
+  --nx-border-subtle: hsl(207 22% 91%);
+  --nx-border: hsl(207 20% 85%);
+  --nx-border-strong: hsl(207 18% 71%);
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --nx-text: hsl(207 48% 11%);
+  --nx-text-secondary: hsl(207 16% 38%);
+  --nx-text-tertiary: hsl(207 14% 52%);
+  --nx-text-faint: hsl(207 13% 64%);
+
+  /* ── Accent (interactive) ─────────────────────────────────────────────── */
+  /* Light mode darkens the brand cyan so text on white clears WCAG AA. */
+  --nx-accent: hsl(196 82% 36%);
+  --nx-accent-hover: hsl(196 84% 30%);
+  --nx-accent-fg: hsl(0 0% 100%);
+  --nx-accent-muted: hsl(193 80% 94%);
+  --nx-accent-border: hsl(194 70% 78%);
+  --nx-ring: hsl(196 82% 42%);
+
+  /* ── Semantic (money has direction) ───────────────────────────────────── */
+  --nx-positive: hsl(179 78% 27%);
+  --nx-positive-muted: hsl(179 52% 93%);
+  --nx-negative: hsl(4 68% 46%);
+  --nx-negative-muted: hsl(4 76% 96%);
+  --nx-warning: hsl(33 88% 38%);
+  --nx-warning-muted: hsl(40 90% 94%);
+  --nx-info: hsl(203 67% 42%);
+  --nx-info-muted: hsl(203 72% 94%);
+
+  /* ── Data visualisation — the brand palette, used ONLY here ───────────── */
+  --nx-chart-1: #125488;
+  --nx-chart-2: #2a93d5;
+  --nx-chart-3: #37caec;
+  --nx-chart-4: #3dd9d6;
+  --nx-chart-5: #8fc7c6;
+  --nx-chart-grid: hsl(207 20% 89%);
+  --nx-chart-axis: hsl(207 14% 56%);
+
+  /* ── Elevation — one step, borders do the rest ────────────────────────── */
+  --nx-shadow-raised:
+    0 1px 2px -1px hsl(207 40% 20% / 0.1), 0 2px 6px -2px hsl(207 40% 20% / 0.08);
+  --nx-shadow-overlay:
+    0 4px 12px -2px hsl(207 40% 18% / 0.12), 0 12px 32px -8px hsl(207 40% 18% / 0.14);
+  --nx-highlight: transparent;
+
+  color-scheme: light;
+}
+
+.dark {
+  --nx-bg-sunken: hsl(207 45% 3.5%);
+  --nx-bg-base: hsl(207 42% 5.5%);
+  --nx-bg-raised: hsl(207 32% 8.5%);
+  --nx-bg-overlay: hsl(207 30% 11%);
+  --nx-bg-inset: hsl(207 36% 7%);
+  --nx-bg-hover: hsl(207 28% 13%);
+  --nx-bg-active: hsl(207 26% 16.5%);
+
+  --nx-border-subtle: hsl(207 22% 15.5%);
+  --nx-border: hsl(207 20% 20.5%);
+  --nx-border-strong: hsl(207 18% 31%);
+
+  --nx-text: hsl(200 30% 96%);
+  --nx-text-secondary: hsl(205 14% 68%);
+  --nx-text-tertiary: hsl(207 12% 48%);
+  --nx-text-faint: hsl(207 12% 36%);
+
+  --nx-accent: hsl(191 83% 57%);
+  --nx-accent-hover: hsl(191 88% 67%);
+  --nx-accent-fg: hsl(202 80% 7%);
+  --nx-accent-muted: hsl(196 60% 14%);
+  --nx-accent-border: hsl(194 45% 26%);
+  --nx-ring: hsl(191 83% 57%);
+
+  --nx-positive: hsl(179 67% 55%);
+  --nx-positive-muted: hsl(179 44% 13%);
+  --nx-negative: hsl(4 82% 66%);
+  --nx-negative-muted: hsl(4 44% 15%);
+  --nx-warning: hsl(38 92% 62%);
+  --nx-warning-muted: hsl(38 48% 14%);
+  --nx-info: hsl(203 67% 58%);
+  --nx-info-muted: hsl(203 48% 14%);
+
+  --nx-chart-1: #1b6fb0;
+  --nx-chart-2: #2a93d5;
+  --nx-chart-3: #37caec;
+  --nx-chart-4: #3dd9d6;
+  --nx-chart-5: #add9d8;
+  --nx-chart-grid: hsl(207 20% 17%);
+  --nx-chart-axis: hsl(207 12% 45%);
+
+  /* Dark surfaces get a hairline top highlight instead of a drop shadow —
+     shadows are invisible on near-black and just add mud. */
+  --nx-shadow-raised: none;
+  --nx-shadow-overlay:
+    0 8px 24px -6px hsl(207 60% 2% / 0.6), 0 20px 48px -12px hsl(207 60% 2% / 0.5);
+  --nx-highlight: hsl(207 30% 100% / 0.055);
+
+  color-scheme: dark;
+}
