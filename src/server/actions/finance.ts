@@ -79,7 +79,10 @@ export const createExpense = writeAction
     return result;
   });
 
-export const deleteExpense = writeAction
+/** `ownerAction`, matching the RLS policy: DELETE is granted to
+ *  `private.is_owner()` only, and Drizzle bypasses RLS, so the app layer is
+ *  what actually enforces this. */
+export const deleteExpense = ownerAction
   .metadata({ action: 'deleted', entity: 'expense' })
   .inputSchema(z.object({ id: uuid }))
   .action(async ({ parsedInput: input, ctx }) => {

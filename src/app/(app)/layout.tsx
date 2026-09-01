@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { MemberProvider } from '@/components/providers/member-provider';
 import { SetupBanner } from '@/components/shell/setup-banner';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
@@ -31,24 +32,21 @@ import { requireMember } from '@/server/auth';
 export const instant = false;
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const member = await requireMember();
+  const currentMember = { fullName: member.fullName, email: member.email, role: member.role };
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-dvh border-line-subtle border-r bg-sunken lg:block">
-        <Sidebar />
-      </aside>
+    <MemberProvider member={currentMember}>
+      <div className="min-h-dvh lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
+        <aside className="sticky top-0 hidden h-dvh border-line-subtle border-r bg-sunken lg:block">
+          <Sidebar />
+        </aside>
 
-      <div className="flex min-w-0 flex-col">
-        <Topbar
-          member={{
-            fullName: member.fullName,
-            email: member.email,
-            role: member.role,
-          }}
-        />
-        <SetupBanner />
-        <main className="flex-1 px-4 py-6 lg:px-6">{children}</main>
+        <div className="flex min-w-0 flex-col">
+          <Topbar member={currentMember} />
+          <SetupBanner />
+          <main className="flex-1 px-4 py-6 lg:px-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </MemberProvider>
   );
 }

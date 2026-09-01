@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
+import { useMember } from '@/components/providers/member-provider';
 import { Button } from '@/components/ui/button';
 import { Field, Textarea } from '@/components/ui/field';
 import { Sheet, SheetSection } from '@/components/ui/sheet';
@@ -318,6 +319,7 @@ export function LedgerActions({ id, description }: { id: string; description: st
 
 export function ExpenseActions({ id, description }: { id: string; description: string }) {
   const router = useRouter();
+  const { role } = useMember();
 
   const deleteAction = useAction(deleteExpense, {
     onSuccess({ data }) {
@@ -326,6 +328,10 @@ export function ExpenseActions({ id, description }: { id: string; description: s
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove'),
   });
+
+  // deleteExpense is an ownerAction: staff would only see this refused, so
+  // don't offer a menu with nothing they can do.
+  if (role !== 'owner') return null;
 
   return (
     <Menu>
@@ -348,6 +354,7 @@ export function ExpenseActions({ id, description }: { id: string; description: s
 
 export function MemberActions({ id, fullName }: { id: string; fullName: string }) {
   const router = useRouter();
+  const { role } = useMember();
 
   const removeAction = useAction(removeMember, {
     onSuccess({ data }) {
@@ -356,6 +363,9 @@ export function MemberActions({ id, fullName }: { id: string; fullName: string }
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove'),
   });
+
+  // removeMember is an ownerAction; same reasoning as ExpenseActions above.
+  if (role !== 'owner') return null;
 
   return (
     <Menu>

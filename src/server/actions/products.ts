@@ -14,7 +14,7 @@ import {
   saleItems,
 } from '../db/schema';
 import { lockValuation, logActivity, postStockMovement } from '../services/posting';
-import { ActionError, writeAction } from './client';
+import { ActionError, ownerAction, writeAction } from './client';
 
 export const createProduct = writeAction
   .metadata({ action: 'created', entity: 'product' })
@@ -170,6 +170,11 @@ export const updateProduct = writeAction
             .set({ isActive: false })
             .where(eq(productVariants.id, variant.id));
         } else {
+          // Deliberately still on `updateProduct` (`writeAction`), not
+          // promoted to owner-only like `deleteProduct`: this branch only
+          // ever runs for a variant with no movements, no sale lines and no
+          // PO lines — a variant with no history is a typo, not a record, and
+          // requiring an owner to fix a typo mid-edit would be absurd.
           await tx.delete(productVariants).where(eq(productVariants.id, variant.id));
         }
       }
@@ -316,8 +321,10 @@ export const adjustStock = writeAction
   });
 
 /** Only for a product nothing has ever referenced. Anything with history is
- *  archived instead — see `setProductStatus`. */
-export const deleteProduct = writeAction
+ *  archived instead — see `setProductStatus`. `ownerAction`, matching the
+ *  RLS policy: DELETE is granted to `private.is_owner()` only, and Drizzle
+ *  bypasses RLS, so the app layer is what actually enforces this. */
+export const deleteProduct = ownerAction
   .metadata({ action: 'deleted', entity: 'product' })
   .inputSchema(z.object({ id: uuid }))
   .action(async ({ parsedInput: input, ctx }) => {
