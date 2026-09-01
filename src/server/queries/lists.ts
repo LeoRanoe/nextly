@@ -1,6 +1,11 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
-import type { SaleQuery } from '@/lib/list-params';
+import type {
+  ProductQuery,
+  PurchaseOrderQuery,
+  SaleQuery,
+  StockQuery,
+} from '@/lib/list-params';
 import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
 import { clampPage, clampPerPage, type Page, toPage } from './paginate';
@@ -36,8 +41,36 @@ export type ProductRow = {
   listPriceCents: Cents;
 };
 
-export async function listProducts(): Promise<ProductRow[]> {
-  if (!isDatabaseConfigured()) return [];
+// onHand/stockValue recompute the same subquery the SELECT list builds,
+// rather than referencing its output alias: that alias is cast ::text for
+// the JS driver, and Postgres would then sort it lexicographically —
+// "10" before "2" — not numerically.
+const PRODUCT_SORT: Record<ProductQuery['sort'], SQL> = {
+  name: sql`p.name`,
+  onHand: sql`COALESCE((SELECT SUM(sl.on_hand) FROM v_stock_levels sl
+                          WHERE sl.product_id = p.id), 0)`,
+  stockValue: sql`COALESCE((SELECT SUM(sl.value_cents) FROM v_stock_levels sl
+                              WHERE sl.product_id = p.id), 0)`,
+};
+
+export async function listProducts(
+  query: ProductQuery = {} as ProductQuery,
+): Promise<Page<ProductRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`(p.name ILIKE ${term} OR p.code ILIKE ${term})`);
+  }
+  if (query.status) conditions.push(sql`p.status = ${query.status}::product_status`);
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = PRODUCT_SORT[query.sort] ?? PRODUCT_SORT.name;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -52,27 +85,37 @@ export async function listProducts(): Promise<ProductRow[]> {
       COALESCE((SELECT SUM(sl.value_cents) FROM v_stock_levels sl
                  WHERE sl.product_id = p.id), 0)::text AS stock_value_cents,
       COALESCE((SELECT MIN(v.list_price_cents) FROM product_variants v
-                 WHERE v.product_id = p.id AND v.is_active), 0)::text AS list_price_cents
+                 WHERE v.product_id = p.id AND v.is_active), 0)::text AS list_price_cents,
+      COUNT(*) OVER()::text AS total_count
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers  s ON s.id = p.supplier_id
-    ORDER BY p.name
+    ${where}
+    ORDER BY ${orderBy} ${direction}, p.name
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => ({
-    id: text(row.id),
-    code: text(row.code),
-    name: text(row.name),
-    categoryName: maybe(row.category_name),
-    supplierName: maybe(row.supplier_name),
-    status: text(row.status) as ProductRow['status'],
-    catalogPublished: bool(row.catalog_published),
-    variantCount: num(row.variant_count),
-    imageCount: num(row.image_count),
-    onHand: num(row.on_hand),
-    stockValueCents: num(row.stock_value_cents),
-    listPriceCents: num(row.list_price_cents),
-  }));
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => ({
+      id: text(row.id),
+      code: text(row.code),
+      name: text(row.name),
+      categoryName: maybe(row.category_name),
+      supplierName: maybe(row.supplier_name),
+      status: text(row.status) as ProductRow['status'],
+      catalogPublished: bool(row.catalog_published),
+      variantCount: num(row.variant_count),
+      imageCount: num(row.image_count),
+      onHand: num(row.on_hand),
+      stockValueCents: num(row.stock_value_cents),
+      listPriceCents: num(row.list_price_cents),
+    })),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type StockLevelRow = {
@@ -91,8 +134,31 @@ export type StockLevelRow = {
   lastMovementAt: string | null;
 };
 
-export async function listStock(): Promise<StockLevelRow[]> {
-  if (!isDatabaseConfigured()) return [];
+const STOCK_SORT: Record<StockQuery['sort'], SQL> = {
+  name: sql`s.product_name, s.variant_name`,
+  onHand: sql`s.on_hand`,
+  value: sql`s.value_cents`,
+};
+
+export async function listStock(
+  query: StockQuery = {} as StockQuery,
+): Promise<Page<StockLevelRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(
+      sql`(s.sku ILIKE ${term} OR s.product_name ILIKE ${term} OR s.variant_name ILIKE ${term})`,
+    );
+  }
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = STOCK_SORT[query.sort] ?? STOCK_SORT.name;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -105,31 +171,41 @@ export async function listStock(): Promise<StockLevelRow[]> {
           FROM purchase_order_items i
           JOIN purchase_orders p ON p.id = i.purchase_order_id
          WHERE i.variant_id = s.variant_id AND p.status IN ('ordered', 'shipped')
-      ), 0)::text AS inbound
+      ), 0)::text AS inbound,
+      COUNT(*) OVER()::text AS total_count
     FROM v_stock_levels s
     JOIN products pr ON pr.id = s.product_id
     LEFT JOIN categories c ON c.id = pr.category_id
-    ORDER BY s.product_name, s.variant_name
+    ${where}
+    ORDER BY ${orderBy} ${direction}
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => {
-    const onHand = num(row.on_hand);
-    const valueCents = num(row.value_cents);
-    return {
-      variantId: text(row.variant_id),
-      sku: text(row.sku),
-      productName: text(row.product_name),
-      variantName: text(row.variant_name),
-      categoryName: maybe(row.category_name),
-      onHand,
-      received: num(row.total_received),
-      sold: num(row.total_sold),
-      inbound: num(row.inbound),
-      valueCents,
-      unitCostCents: onHand > 0 ? valueCents / onHand : null,
-      lastMovementAt: maybe(row.last_movement_at),
-    };
-  });
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => {
+      const onHand = num(row.on_hand);
+      const valueCents = num(row.value_cents);
+      return {
+        variantId: text(row.variant_id),
+        sku: text(row.sku),
+        productName: text(row.product_name),
+        variantName: text(row.variant_name),
+        categoryName: maybe(row.category_name),
+        onHand,
+        received: num(row.total_received),
+        sold: num(row.total_sold),
+        inbound: num(row.inbound),
+        valueCents,
+        unitCostCents: onHand > 0 ? valueCents / onHand : null,
+        lastMovementAt: maybe(row.last_movement_at),
+      };
+    }),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type LedgerRow = {
@@ -275,8 +351,36 @@ export type PurchaseOrderRow = {
   unallocated: boolean;
 };
 
-export async function listPurchaseOrders(limit = 200): Promise<PurchaseOrderRow[]> {
-  if (!isDatabaseConfigured()) return [];
+// `total` recomputes the same sum the SELECT list builds, rather than
+// referencing its alias: those aliases are cast ::text for the JS driver, and
+// Postgres has no `+` operator for text.
+const PURCHASE_ORDER_SORT: Record<PurchaseOrderQuery['sort'], SQL> = {
+  ordered: sql`COALESCE(p.ordered_at, p.created_at)`,
+  supplier: sql`s.name NULLS LAST`,
+  total: sql`(p.tax_cents + p.card_fee_cents + p.delivery_cents
+              + p.shipping_cents + p.shipping_tax_cents)
+             + COALESCE((SELECT SUM(i.subtotal_cents) FROM purchase_order_items i
+                          WHERE i.purchase_order_id = p.id), 0)`,
+};
+
+export async function listPurchaseOrders(
+  query: PurchaseOrderQuery = {} as PurchaseOrderQuery,
+): Promise<Page<PurchaseOrderRow>> {
+  if (!isDatabaseConfigured()) return toPage([], 0, 1, 50);
+
+  const page = clampPage(query.page);
+  const perPage = clampPerPage(query.perPage);
+
+  const conditions: SQL[] = [];
+  if (query.q) {
+    const term = `%${query.q}%`;
+    conditions.push(sql`(p.number ILIKE ${term} OR s.name ILIKE ${term})`);
+  }
+  if (query.status) conditions.push(sql`p.status = ${query.status}::purchase_order_status`);
+  const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+
+  const orderBy = PURCHASE_ORDER_SORT[query.sort] ?? PURCHASE_ORDER_SORT.ordered;
+  const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -294,32 +398,41 @@ export async function listPurchaseOrders(limit = 200): Promise<PurchaseOrderRow[
         AND (p.tax_cents + p.card_fee_cents + p.delivery_cents
              + p.shipping_cents + p.shipping_tax_cents) > 0
         AND COALESCE((SELECT SUM(i.overhead_cents) FROM purchase_order_items i
-                       WHERE i.purchase_order_id = p.id), 0) = 0)::text AS unallocated
+                       WHERE i.purchase_order_id = p.id), 0) = 0)::text AS unallocated,
+      COUNT(*) OVER()::text AS total_count
     FROM purchase_orders p
     LEFT JOIN suppliers s ON s.id = p.supplier_id
-    ORDER BY COALESCE(p.ordered_at, p.created_at) DESC, p.number DESC
-    LIMIT ${limit}
+    ${where}
+    ORDER BY ${orderBy} ${direction}, p.number DESC
+    LIMIT ${perPage} OFFSET ${(page - 1) * perPage}
   `);
 
-  return rows.map((row) => {
-    const goodsCents = num(row.goods_cents);
-    const overheadCents = num(row.overhead_cents);
-    return {
-      id: text(row.id),
-      number: text(row.number),
-      supplierName: maybe(row.supplier_name),
-      status: text(row.status) as PurchaseOrderRow['status'],
-      orderedAt: maybe(row.ordered_at),
-      expectedAt: maybe(row.expected_at),
-      receivedAt: maybe(row.received_at),
-      itemCount: num(row.item_count),
-      unitCount: num(row.unit_count),
-      goodsCents,
-      overheadCents,
-      totalCents: goodsCents + overheadCents,
-      unallocated: bool(row.unallocated),
-    };
-  });
+  const total = num(rows[0]?.total_count);
+
+  return toPage(
+    rows.map((row) => {
+      const goodsCents = num(row.goods_cents);
+      const overheadCents = num(row.overhead_cents);
+      return {
+        id: text(row.id),
+        number: text(row.number),
+        supplierName: maybe(row.supplier_name),
+        status: text(row.status) as PurchaseOrderRow['status'],
+        orderedAt: maybe(row.ordered_at),
+        expectedAt: maybe(row.expected_at),
+        receivedAt: maybe(row.received_at),
+        itemCount: num(row.item_count),
+        unitCount: num(row.unit_count),
+        goodsCents,
+        overheadCents,
+        totalCents: goodsCents + overheadCents,
+        unallocated: bool(row.unallocated),
+      };
+    }),
+    total,
+    page,
+    perPage,
+  );
 }
 
 export type CustomerRow = {
