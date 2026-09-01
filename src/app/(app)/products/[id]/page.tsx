@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ProductForm } from '@/components/forms/product-form';
+import { ProductImages } from '@/components/forms/product-images';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,32 +43,35 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
   if (!product) notFound();
 
   return (
-    <ProductForm
-      categories={categories}
-      suppliers={suppliers}
-      initial={{
-        id: product.id,
-        code: product.code,
-        name: product.name,
-        slug: product.slug,
-        categoryId: product.categoryId,
-        supplierId: product.supplierId,
-        sourceUrl: product.sourceUrl ?? '',
-        summary: product.summary ?? '',
-        description: product.description ?? '',
-        status: product.status,
-        catalogPublished: product.catalogPublished,
-        notes: product.notes ?? '',
-        variants: product.variants.map((variant) => ({
-          key: variant.id,
-          id: variant.id,
-          name: variant.name,
-          sku: variant.sku,
-          listPrice: toDecimalString(variant.listPriceCents),
-          referenceCost: toDecimalString(variant.referenceCostCents),
-          isActive: variant.isActive,
-        })),
-      }}
-    />
+    <div className="space-y-4">
+      <ProductImages productId={product.id} initial={product.images} />
+      <ProductForm
+        categories={categories}
+        suppliers={suppliers}
+        initial={{
+          id: product.id,
+          code: product.code,
+          name: product.name,
+          slug: product.slug,
+          categoryId: product.categoryId,
+          supplierId: product.supplierId,
+          sourceUrl: product.sourceUrl ?? '',
+          summary: product.summary ?? '',
+          description: product.description ?? '',
+          status: product.status,
+          catalogPublished: product.catalogPublished,
+          notes: product.notes ?? '',
+          variants: product.variants.map((variant) => ({
+            key: variant.id,
+            id: variant.id,
+            name: variant.name,
+            sku: variant.sku,
+            listPrice: toDecimalString(variant.listPriceCents),
+            referenceCost: toDecimalString(variant.referenceCostCents),
+            isActive: variant.isActive,
+          })),
+        }}
+      />
+    </div>
   );
 }

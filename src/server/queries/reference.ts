@@ -329,6 +329,16 @@ export type ProductDetail = {
     onHand: number;
     valueCents: Cents;
   }[];
+  images: {
+    id: string;
+    url: string;
+    thumbUrl: string | null;
+    width: number;
+    height: number;
+    alt: string | null;
+    isPrimary: boolean;
+    position: number;
+  }[];
 };
 
 /** Everything the edit form needs, in one round trip. */
@@ -344,16 +354,25 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
 
   if (!row) return null;
 
-  const variants = await db.execute<Record<string, string | null>>(sql`
-    SELECT v.id, v.name, v.sku, v.list_price_cents::text, v.reference_cost_cents::text,
-           v.is_active::text AS is_active,
-           COALESCE(s.on_hand, 0)::text     AS on_hand,
-           COALESCE(s.value_cents, 0)::text AS value_cents
-      FROM product_variants v
-      LEFT JOIN v_stock_levels s ON s.variant_id = v.id
-     WHERE v.product_id = ${id}
-     ORDER BY v.position
-  `);
+  const [variants, images] = await Promise.all([
+    db.execute<Record<string, string | null>>(sql`
+      SELECT v.id, v.name, v.sku, v.list_price_cents::text, v.reference_cost_cents::text,
+             v.is_active::text AS is_active,
+             COALESCE(s.on_hand, 0)::text     AS on_hand,
+             COALESCE(s.value_cents, 0)::text AS value_cents
+        FROM product_variants v
+        LEFT JOIN v_stock_levels s ON s.variant_id = v.id
+       WHERE v.product_id = ${id}
+       ORDER BY v.position
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, url, thumb_url, width::text, height::text, alt,
+             is_primary::text AS is_primary, position::text
+        FROM product_images
+       WHERE product_id = ${id}
+       ORDER BY position
+    `),
+  ]);
 
   return {
     id: text(row.id),
@@ -377,6 +396,16 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       isActive: bool(variant.is_active),
       onHand: num(variant.on_hand),
       valueCents: num(variant.value_cents),
+    })),
+    images: images.map((image) => ({
+      id: text(image.id),
+      url: text(image.url),
+      thumbUrl: maybe(image.thumb_url),
+      width: num(image.width),
+      height: num(image.height),
+      alt: maybe(image.alt),
+      isPrimary: bool(image.is_primary),
+      position: num(image.position),
     })),
   };
 }
