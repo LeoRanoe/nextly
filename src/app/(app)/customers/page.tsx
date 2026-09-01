@@ -1,5 +1,6 @@
 import { Users } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
+import Link from 'next/link';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { CustomerSheet } from '@/components/forms/reference-sheets';
@@ -79,7 +80,14 @@ async function CustomersTable() {
           {rows.map((row) => (
             <TR key={row.id}>
               <TD className="tabular whitespace-nowrap text-ink-3">{row.code}</TD>
-              <TD className="text-ink">{row.name}</TD>
+              <TD className="text-ink">
+                <Link
+                  href={`/customers/${row.id}` as Route}
+                  className="hover:text-accent hover:underline"
+                >
+                  {row.name}
+                </Link>
+              </TD>
               <TD className="whitespace-nowrap text-[12px] text-ink-3">
                 {row.phone ?? row.email ?? '—'}
               </TD>

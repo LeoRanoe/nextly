@@ -1,5 +1,6 @@
 import { Truck } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { SupplierSheet } from '@/components/forms/reference-sheets';
 import { SupplierActions } from '@/components/forms/row-actions';
@@ -70,7 +71,14 @@ async function SuppliersTable() {
         <TBody>
           {rows.map((row) => (
             <TR key={row.id}>
-              <TD className="text-ink">{row.name}</TD>
+              <TD className="text-ink">
+                <Link
+                  href={`/suppliers/${row.id}` as Route}
+                  className="hover:text-accent hover:underline"
+                >
+                  {row.name}
+                </Link>
+              </TD>
               <TD>
                 <Badge>{humanise(row.kind)}</Badge>
               </TD>

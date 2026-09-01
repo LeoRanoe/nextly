@@ -79,6 +79,78 @@ export async function listSuppliers(): Promise<SupplierRow[]> {
   }));
 }
 
+export type SupplierDetail = SupplierRow & {
+  products: { id: string; name: string; code: string }[];
+  purchaseOrders: {
+    id: string;
+    number: string;
+    status: string;
+    orderedAt: string | null;
+    totalCents: Cents;
+  }[];
+};
+
+export async function getSupplier(id: string): Promise<SupplierDetail | null> {
+  if (!isDatabaseConfigured()) return null;
+
+  const [row] = await db.execute<Record<string, string | null>>(sql`
+    SELECT
+      s.id, s.name, s.kind::text AS kind, s.website, s.notes,
+      (SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id)::text AS product_count,
+      (SELECT COUNT(*) FROM purchase_orders o WHERE o.supplier_id = s.id)::text AS order_count,
+      COALESCE((
+        SELECT SUM(i.landed_cost_cents)
+          FROM purchase_order_items i
+          JOIN purchase_orders o ON o.id = i.purchase_order_id
+         WHERE o.supplier_id = s.id AND o.status = 'received'
+      ), 0)::text AS spend_cents
+    FROM suppliers s
+    WHERE s.id = ${id}
+    LIMIT 1
+  `);
+
+  if (!row) return null;
+
+  const [products, purchaseOrders] = await Promise.all([
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, name, code FROM products WHERE supplier_id = ${id} ORDER BY name
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT
+        o.id, o.number, o.status::text,
+        o.ordered_at::text,
+        COALESCE((SELECT SUM(i.landed_cost_cents) FROM purchase_order_items i
+                   WHERE i.purchase_order_id = o.id), 0)::text AS total_cents
+      FROM purchase_orders o
+      WHERE o.supplier_id = ${id}
+      ORDER BY o.ordered_at DESC NULLS LAST
+    `),
+  ]);
+
+  return {
+    id: text(row.id),
+    name: text(row.name),
+    kind: text(row.kind, 'other') as SupplierRow['kind'],
+    website: text(row.website),
+    notes: text(row.notes),
+    productCount: num(row.product_count),
+    orderCount: num(row.order_count),
+    spendCents: num(row.spend_cents),
+    products: products.map((product) => ({
+      id: text(product.id),
+      name: text(product.name),
+      code: text(product.code),
+    })),
+    purchaseOrders: purchaseOrders.map((order) => ({
+      id: text(order.id),
+      number: text(order.number),
+      status: text(order.status),
+      orderedAt: maybe(order.ordered_at),
+      totalCents: num(order.total_cents),
+    })),
+  };
+}
+
 export type MemberRow = {
   id: string;
   fullName: string;
@@ -233,6 +305,77 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       isActive: bool(variant.is_active),
       onHand: num(variant.on_hand),
       valueCents: num(variant.value_cents),
+    })),
+  };
+}
+
+export type CustomerDetail = {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  addressLine: string | null;
+  city: string | null;
+  notes: string | null;
+  orderCount: number;
+  spentCents: Cents;
+  grossCents: Cents;
+  lastOrderAt: string | null;
+  sales: {
+    id: string;
+    number: string;
+    status: string;
+    soldAt: string;
+    totalUsdCents: Cents;
+    grossProfitCents: Cents;
+  }[];
+};
+
+export async function getCustomer(id: string): Promise<CustomerDetail | null> {
+  if (!isDatabaseConfigured()) return null;
+
+  const [row] = await db.execute<Record<string, string | null>>(sql`
+    SELECT
+      c.id, c.code, c.name, c.phone, c.email, c.address_line, c.city, c.notes,
+      t.order_count::text, t.spent_usd_cents::text,
+      t.gross_profit_cents::text, t.last_order_at::text
+    FROM customers c
+    JOIN v_customer_totals t ON t.customer_id = c.id
+    WHERE c.id = ${id}
+    LIMIT 1
+  `);
+
+  if (!row) return null;
+
+  const sales = await db.execute<Record<string, string | null>>(sql`
+    SELECT id, number, status::text, sold_at::text,
+           total_usd_cents::text, gross_profit_cents::text
+      FROM sales
+     WHERE customer_id = ${id}
+     ORDER BY sold_at DESC
+  `);
+
+  return {
+    id: text(row.id),
+    code: text(row.code),
+    name: text(row.name),
+    phone: maybe(row.phone),
+    email: maybe(row.email),
+    addressLine: maybe(row.address_line),
+    city: maybe(row.city),
+    notes: maybe(row.notes),
+    orderCount: num(row.order_count),
+    spentCents: num(row.spent_usd_cents),
+    grossCents: num(row.gross_profit_cents),
+    lastOrderAt: maybe(row.last_order_at),
+    sales: sales.map((sale) => ({
+      id: text(sale.id),
+      number: text(sale.number),
+      status: text(sale.status),
+      soldAt: text(sale.sold_at),
+      totalUsdCents: num(sale.total_usd_cents),
+      grossProfitCents: num(sale.gross_profit_cents),
     })),
   };
 }
