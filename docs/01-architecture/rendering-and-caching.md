@@ -79,6 +79,30 @@ export default function Page({ searchParams }: { searchParams: Promise<Query> })
 Awaiting at the top makes the whole page dynamic. Awaiting inside keeps the
 shell prerenderable. This is the pattern for every dynamic value.
 
+### No `loading.tsx`, anywhere — deliberate
+
+Every page already wraps its data in `<Suspense>` with a skeleton sized to
+match, which is what streams the *table*, the *chart*, the *panel* in behind
+a static shell. A route-level `loading.tsx` would compete with that: at
+`(app)/loading.tsx` it would replace the **entire shell** — sidebar and
+topbar included — with one fallback on every navigation, discarding the
+per-widget streaming the Overview is built around for something coarser. The
+same mistake at smaller scale applies to any single route's `loading.tsx`.
+So there are none, on purpose, and the per-widget `<Suspense>` boundaries
+above are the actual answer to "what does someone see while this loads".
+
+## Error and not-found boundaries
+
+Five files, split by which shell they need to preserve:
+
+| File | Covers | Why here |
+|---|---|---|
+| `src/app/global-error.tsx` | A throw in the root layout itself | The only boundary that replaces `<html>`/`<body>` entirely — `ThemeProvider` and the font providers in `src/app/layout.tsx` never ran, so it cannot depend on either. Inline-styled, no Tailwind classes. |
+| `src/app/error.tsx` | The public routes (`/login`, `/setup`, `/no-access`, `/auth/error`, `/design-system`) | Root layout rendered fine; a page below it threw. |
+| `src/app/not-found.tsx` | A dead URL outside `(app)` | Mistyped or stale link, no session to speak of. |
+| `src/app/(app)/error.tsx` | Any of the 17 routes under the shell | Renders **inside** the `(app)` layout, so the sidebar and topbar survive. Every route here is fully dynamic and hits the database on every request (see "Where each route lands" above), so a dropped connection is a live failure path, not a theoretical one — and the copy says so, deliberately unlike the setup banner below. |
+| `src/app/(app)/not-found.tsx` | `notFound()` calls from inside the shell | The highest-value of the five: before it existed, `notFound()` in `products/[id]:42` fell through to the root 404, stranding the visitor with no sidebar and no way back. Every future detail route's `notFound()` lands here too. |
+
 ## Freshness after a write
 
 `router.refresh()` in the form, after the action resolves. The page re-renders
