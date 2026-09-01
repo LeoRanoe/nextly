@@ -1,0 +1,12 @@
+-- Historical record, matching what is actually applied on the deployed
+-- database: private.claim_membership() was created alongside auth_user_id
+-- (originally, the migration that is now 0002_member_auth_link.sql) for
+-- claiming an invitation from inside a SECURITY DEFINER function, then found
+-- unreachable — membership claiming happens in application code
+-- (src/server/auth.ts), which connects as `postgres` and so has no
+-- auth.uid() for this function to read — and dropped.
+--
+-- 0002_member_auth_link.sql was edited in place afterwards to never create
+-- the function at all, so this is a no-op on both this database and a fresh
+-- one. See 0004_move_helpers_to_private_schema.sql for how this was checked.
+DROP FUNCTION IF EXISTS private.claim_membership();

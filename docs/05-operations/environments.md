@@ -143,6 +143,19 @@ Applied so far:
 | `0001_rls_views_functions` | RLS on every table, five views, the `private` helper schema, gapless numbering |
 | `0002_member_auth_link` | Split `members.id` from `auth_user_id` so owners can exist before signing in |
 | `0003_ledger_sequence` | `seq bigserial` on both append-only ledgers, so the running balance is deterministic |
+| `0004_move_helpers_to_private_schema` | Historical: the RLS helpers briefly lived in `public` before `0001` was edited in place to create them directly in `private`. No-op against this database. |
+| `0005_drop_unused_claim_membership` | Historical: drops a `private.claim_membership()` that `0002` was edited in place to never create. No-op against this database. |
+
+**An applied migration file is never edited again.** `0001` and `0002` were,
+which is exactly how the database's own applied-migration history (6 entries)
+came to disagree with this directory (previously 4 files) — the files were
+brought up to date, but nothing recorded that two intermediate steps had ever
+run. `0004` and `0005` above exist to close that gap: every statement in them
+is a no-op against the current schema, verified read-only (function and policy
+listings) rather than by replaying them end-to-end on a disposable copy,
+because Supabase branching needs the Pro plan and this project is on Free.
+From here on, a correction to something already applied is a new numbered
+migration, never an edit to an old one.
 
 After any schema change, run the security advisor:
 

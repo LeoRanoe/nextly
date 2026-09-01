@@ -29,6 +29,20 @@
       "when": 1788266119117,
       "tag": "0003_ledger_sequence",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788289746519,
+      "tag": "0004_move_helpers_to_private_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788289748061,
+      "tag": "0005_drop_unused_claim_membership",
+      "breakpoints": true
     }
   ]
 }
