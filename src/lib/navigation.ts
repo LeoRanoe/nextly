@@ -4,6 +4,7 @@ import {
   FileText,
   LayoutDashboard,
   type LucideIcon,
+  MessageSquareText,
   Package,
   Receipt,
   Settings,
@@ -85,6 +86,12 @@ export const NAVIGATION: NavGroup[] = [
         keywords: ['orders', 'revenue', 'invoice', 'margin'],
       },
       { href: '/customers', label: 'Customers', Icon: Users, keywords: ['clients', 'buyers'] },
+      {
+        href: '/quotes',
+        label: 'Requests',
+        Icon: MessageSquareText,
+        keywords: ['quote', 'enquiry', 'inquiry', 'storefront', 'leads'],
+      },
     ],
   },
   {

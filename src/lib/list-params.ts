@@ -51,6 +51,7 @@ export type PurchaseOrderQuery = z.infer<typeof purchaseOrderQuerySchema>;
 export const productQuerySchema = z.object({
   ...base,
   status: z.enum(['draft', 'active', 'archived']).optional().catch(undefined),
+  catalog: z.enum(['published', 'draft']).optional().catch(undefined),
   sort: z.enum(['name', 'onHand', 'stockValue']).catch('name'),
   dir,
 });
@@ -96,6 +97,13 @@ export const expenseQuerySchema = z.object({
   dir,
 });
 export type ExpenseQuery = z.infer<typeof expenseQuerySchema>;
+
+/** Quote requests (F-5) have no sortable columns yet — newest first always. */
+export const quoteQuerySchema = z.object({
+  ...base,
+  status: z.enum(['new', 'contacted', 'converted', 'declined']).optional().catch(undefined),
+});
+export type QuoteQuery = z.infer<typeof quoteQuerySchema>;
 
 export const categoryQuerySchema = z.object({
   ...base,

@@ -10,7 +10,9 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { productStatus, supplierKind } from './enums';
+import { productStatus, quoteRequestStatus, supplierKind } from './enums';
+import { members } from './identity';
+import { sales } from './sales';
 
 export const categories = pgTable(
   'categories',
@@ -65,6 +67,9 @@ export const products = pgTable(
     /** Free-form spec sheet rendered as a table on the catalog page. */
     specs: jsonb().$type<Record<string, string>>().notNull().default({}),
     status: productStatus().notNull().default('draft'),
+    /** F-6: 0 means "no warranty". Expiry is derived from the sale's soldAt,
+     *  never stored, so a later change to the term cannot rewrite history. */
+    warrantyMonths: integer('warranty_months').notNull().default(0),
 
     catalogPublished: boolean().notNull().default(false),
     catalogPublishedAt: timestamp({ withTimezone: true }),
@@ -170,4 +175,47 @@ export const customers = pgTable(
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('customers_code_key').on(t.code), index('customers_name_idx').on(t.name)],
+);
+
+/**
+ * A visitor asking what something would cost (F-5).
+ *
+ * The storefront has a WhatsApp button and nothing else; this is the other
+ * half of demand capture — one that lands inside the books instead of a chat
+ * history. Nothing here is trusted as it arrives: the form is public, so the
+ * columns are generous free text and the only server-side promise is that the
+ * product id, if present, refers to a real published product.
+ *
+ * The request names a *product*, never a variant. Visitors read colorways as
+ * choices on one item, not as separate things; pinning a request to "Black"
+ * would make it vanish from everything listed under "White". Which variant an
+ * owner actually quoted is recorded on the sale the request becomes — and the
+ * product reference is `ON DELETE RESTRICT`, because a request that led to a
+ * quote is history, and history must not disappear when the catalog changes.
+ *
+ * `saleId` is set when an owner converts a request into a draft sale. It is
+ * deliberately not a cascade path — a quote request is evidence of where a
+ * sale came from and must outlive anything done to it afterwards.
+ */
+export const quoteRequests = pgTable(
+  'quote_requests',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    contact: text().notNull(),
+    productId: uuid().references(() => products.id, { onDelete: 'restrict' }),
+    quantity: integer().notNull().default(1),
+    details: text(),
+    status: quoteRequestStatus().notNull().default('new'),
+    /** The draft sale this became, if an owner converted it. */
+    saleId: uuid().references(() => sales.id, { onDelete: 'set null' }),
+    /** Set by whoever handled it, for the audit trail. */
+    handledById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('quote_requests_status_idx').on(t.status, t.createdAt.desc()),
+    index('quote_requests_product_idx').on(t.productId),
+  ],
 );

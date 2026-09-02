@@ -50,6 +50,16 @@ const base = createSafeActionClient({
 
 export type ActionContext = { member: Member };
 
+/**
+ * Unauthenticated. Deliberately the only client without a guard, and there is
+ * exactly one action built on it (`createQuoteRequest`) — a signed-out
+ * storefront visitor asking about a product. Anything added here later must be
+ * justified in the same way: writes that create no money and touch no existing
+ * record, validated entirely by their input schema. Do not reach for this to
+ * "fix" an auth error on a mutation that should be on `writeAction`.
+ */
+export const publicAction = base;
+
 /** The default for mutations. Owners and staff; viewers are refused. */
 export const writeAction = base.use(async ({ next }) => {
   const member = await requireWrite();

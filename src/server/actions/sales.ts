@@ -1,19 +1,25 @@
 'use server';
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { returnedPortion } from '@/lib/costing';
+import type { RateMicros } from '@/lib/fx';
 import { normaliseToUsd } from '@/lib/fx';
-import { quantity, saleSchema, uuid } from '@/lib/schemas';
+import type { Cents, CurrencyCode } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
+import { balanceCentsOf, paymentStatusOf } from '@/lib/payment-status';
+import { moneyInput, quantity, salePaymentSchema, saleSchema, uuid } from '@/lib/schemas';
 import { db } from '../db/client';
-import { saleItems, sales } from '../db/schema';
+import { saleItemSerials, saleItems, salePayments, sales } from '../db/schema';
 import {
   clearDocumentPostings,
   consumeStockFor,
   logActivity,
   nextDocumentNumber,
+  type PaymentMethod as PaymentMethodName,
   postLedgerEntry,
   postStockMovement,
+  type Tx,
 } from '../services/posting';
 import { rateForRecord, rateOn } from '../services/rates';
 import { ActionError, writeAction } from './client';
@@ -27,6 +33,73 @@ import { ActionError, writeAction } from './client';
  * posted its receipt would be worse than one that failed outright, because
  * nobody would notice until the books stopped balancing.
  */
+
+/**
+ * Record money received against a sale and post its receipt (F-4).
+ *
+ * The ledger entry is tagged with the *payment's* id, not the sale's. That is
+ * deliberate: `clearDocumentPostings(tx, 'sale', saleId)` removes what a sale
+ * posted whenever it is edited or voided, and receipts for money that actually
+ * arrived must survive that. The payment row and its receipt are created and
+ * destroyed together, so derived `paid` can never disagree with banked cash.
+ */
+async function insertPayment(
+  tx: Tx,
+  input: {
+    saleId: string;
+    number: string;
+    amountCents: Cents;
+    currency: CurrencyCode;
+    rateMicros: RateMicros;
+    method: PaymentMethodName;
+    receivedAt: Date;
+    memberId: string;
+    notes?: string | null;
+  },
+): Promise<{ id: string }> {
+  if (input.amountCents <= 0) throw new ActionError('A payment must be more than zero.');
+
+  const [payment] = await tx
+    .insert(salePayments)
+    .values({
+      saleId: input.saleId,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      fxRateMicros: input.rateMicros,
+      method: input.method,
+      receivedAt: input.receivedAt,
+      notes: input.notes ?? null,
+      memberId: input.memberId,
+      createdById: input.memberId,
+    })
+    .returning();
+
+  if (!payment) throw new ActionError('Could not record the payment.');
+
+  await postLedgerEntry(tx, {
+    direction: 'in',
+    category: 'sales_receipt',
+    description: `${input.number} · payment`,
+    currency: input.currency,
+    rateMicros: input.rateMicros,
+    amountCents: input.amountCents,
+    paymentMethod: input.method,
+    occurredAt: input.receivedAt,
+    memberId: input.memberId,
+    sourceKind: 'sale',
+    sourceId: payment.id,
+  });
+
+  return { id: payment.id };
+}
+
+/** What has been paid on a sale so far, in the currency of the sale. */
+async function paidOnSale(tx: Tx, saleId: string): Promise<Cents> {
+  const [row] = await tx.execute<{ paid: string }>(
+    sql`SELECT COALESCE(SUM(amount_cents), 0)::text AS paid FROM sale_payments WHERE sale_id = ${saleId}`,
+  );
+  return Number(row?.paid ?? 0);
+}
 export const createSale = writeAction
   .metadata({ action: 'created', entity: 'sale' })
   .inputSchema(saleSchema)
@@ -56,8 +129,8 @@ export const createSale = writeAction
 
       if (!sale) throw new ActionError('Could not create the sale.');
 
-      let totalCents = 0;
-      let totalUsdCents = 0;
+      let grossCents = 0;
+      let grossUsdCents = 0;
       let cogsCents = 0;
       let shortfallTotal = 0;
 
@@ -89,49 +162,83 @@ export const createSale = writeAction
           shortfall = consumed.shortfall;
         }
 
-        await tx.insert(saleItems).values({
-          saleId: sale.id,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          unitPriceCents: item.unitPriceCents,
-          unitPriceUsdCents,
-          lineTotalUsdCents,
-          cogsCents: lineCogs,
-          shortfall,
-          position: index + 1,
-        });
+        const [line] = await tx
+          .insert(saleItems)
+          .values({
+            saleId: sale.id,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            unitPriceCents: item.unitPriceCents,
+            unitPriceUsdCents,
+            lineTotalUsdCents,
+            cogsCents: lineCogs,
+            shortfall,
+            position: index + 1,
+          })
+          .returning({ id: saleItems.id });
 
-        totalCents += lineTotalCents;
-        totalUsdCents += lineTotalUsdCents;
+        if (line && item.serials.length > 0) {
+          await tx
+            .insert(saleItemSerials)
+            .values(item.serials.map((serial) => ({ saleItemId: line.id, serial })));
+        }
+
+        grossCents += lineTotalCents;
+        grossUsdCents += lineTotalUsdCents;
         cogsCents += lineCogs;
         shortfallTotal += shortfall;
       }
+
+      // The discount is subtracted from the document, never from the lines:
+      // `sale_items` keeps what each product was charged at so price
+      // realisation stays measurable, while `total_*` is what is payable and
+      // what the receipt posts for.
+      const discountUsdCents = normaliseToUsd(input.discountCents, input.currency, rateMicros);
+      const totalCents = grossCents - input.discountCents;
+      const totalUsdCents = grossUsdCents - discountUsdCents;
 
       await tx
         .update(sales)
         .set({
           totalCents,
           totalUsdCents,
+          discountCents: input.discountCents,
+          discountReason: input.discountReason ?? null,
           cogsCents,
           grossProfitCents: totalUsdCents - cogsCents,
         })
         .where(eq(sales.id, sale.id));
 
-      // A draft has not happened yet, so it moves no cash.
+      // A draft has not happened yet, so it moves no cash. A confirmed sale
+      // whose money has not arrived posts nothing either (F-4): the balance
+      // stays receivable until each payment banks its own receipt. Every
+      // amount that did arrive, including a paid-in-full sale, goes through
+      // insertPayment so the payment row and its ledger receipt cannot drift.
       if (input.confirm) {
-        await postLedgerEntry(tx, {
-          direction: 'in',
-          category: 'sales_receipt',
-          description: `${number}${input.customerId ? '' : ' (walk-in)'}`,
-          currency: input.currency,
-          rateMicros,
-          amountCents: totalCents,
-          paymentMethod: input.paymentMethod,
-          occurredAt: input.soldAt,
-          memberId: ctx.member.id,
-          sourceKind: 'sale',
-          sourceId: sale.id,
-        });
+        const paidNow = input.paidInFull ? totalCents : (input.paidNowCents ?? 0);
+        if (paidNow >= totalCents && totalCents > 0) {
+          await insertPayment(tx, {
+            saleId: sale.id,
+            number: `${number}${input.customerId ? '' : ' (walk-in)'}`,
+            amountCents: totalCents,
+            currency: input.currency,
+            rateMicros,
+            method: input.paymentMethod,
+            receivedAt: input.soldAt,
+            memberId: ctx.member.id,
+          });
+        } else if (paidNow > 0 && totalCents > 0) {
+          await insertPayment(tx, {
+            saleId: sale.id,
+            number,
+            amountCents: paidNow,
+            currency: input.currency,
+            rateMicros,
+            method: input.paymentMethod,
+            receivedAt: input.soldAt,
+            memberId: ctx.member.id,
+          });
+        }
       }
 
       await logActivity(tx, {
@@ -181,12 +288,20 @@ export const updateSale = writeAction
           : await rateForRecord(input.soldAt, tx);
 
       // A draft has posted no stock and no cash, so there is nothing to
-      // unwind — this only guards the case of a leftover posting.
+      // unwind — this only guards the case of a leftover posting. Payments are
+      // checked because their receipts are tagged with the payment's own id
+      // and would survive that cleanup: money on a draft means something went
+      // wrong earlier, and silently orphaning it is worse than refusing.
+      if ((await paidOnSale(tx, input.id)) > 0) {
+        throw new ActionError(
+          'Money has already been recorded against this sale. Void it and record the correction instead.',
+        );
+      }
       await clearDocumentPostings(tx, 'sale', input.id);
       await tx.delete(saleItems).where(eq(saleItems.saleId, input.id));
 
-      let totalCents = 0;
-      let totalUsdCents = 0;
+      let grossCents = 0;
+      let grossUsdCents = 0;
       let cogsCents = 0;
       let shortfallTotal = 0;
 
@@ -216,23 +331,36 @@ export const updateSale = writeAction
           shortfall = consumed.shortfall;
         }
 
-        await tx.insert(saleItems).values({
-          saleId: input.id,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          unitPriceCents: item.unitPriceCents,
-          unitPriceUsdCents,
-          lineTotalUsdCents,
-          cogsCents: lineCogs,
-          shortfall,
-          position: index + 1,
-        });
+        const [line] = await tx
+          .insert(saleItems)
+          .values({
+            saleId: input.id,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            unitPriceCents: item.unitPriceCents,
+            unitPriceUsdCents,
+            lineTotalUsdCents,
+            cogsCents: lineCogs,
+            shortfall,
+            position: index + 1,
+          })
+          .returning({ id: saleItems.id });
 
-        totalCents += lineTotalCents;
-        totalUsdCents += lineTotalUsdCents;
+        if (line && item.serials.length > 0) {
+          await tx
+            .insert(saleItemSerials)
+            .values(item.serials.map((serial) => ({ saleItemId: line.id, serial })));
+        }
+
+        grossCents += lineTotalCents;
+        grossUsdCents += lineTotalUsdCents;
         cogsCents += lineCogs;
         shortfallTotal += shortfall;
       }
+
+      const discountUsdCents = normaliseToUsd(input.discountCents, input.currency, rateMicros);
+      const totalCents = grossCents - input.discountCents;
+      const totalUsdCents = grossUsdCents - discountUsdCents;
 
       await tx
         .update(sales)
@@ -243,6 +371,8 @@ export const updateSale = writeAction
           fxRateMicros: rateMicros,
           totalCents,
           totalUsdCents,
+          discountCents: input.discountCents,
+          discountReason: input.discountReason ?? null,
           cogsCents,
           grossProfitCents: totalUsdCents - cogsCents,
           paymentMethod: input.paymentMethod,
@@ -252,19 +382,30 @@ export const updateSale = writeAction
         .where(eq(sales.id, input.id));
 
       if (input.confirm) {
-        await postLedgerEntry(tx, {
-          direction: 'in',
-          category: 'sales_receipt',
-          description: `${sale.number}${input.customerId ? '' : ' (walk-in)'}`,
-          currency: input.currency,
-          rateMicros,
-          amountCents: totalCents,
-          paymentMethod: input.paymentMethod,
-          occurredAt: input.soldAt,
-          memberId: ctx.member.id,
-          sourceKind: 'sale',
-          sourceId: input.id,
-        });
+        const paidNow = input.paidInFull ? totalCents : (input.paidNowCents ?? 0);
+        if (paidNow >= totalCents && totalCents > 0) {
+          await insertPayment(tx, {
+            saleId: input.id,
+            number: `${sale.number}${input.customerId ? '' : ' (walk-in)'}`,
+            amountCents: totalCents,
+            currency: input.currency,
+            rateMicros,
+            method: input.paymentMethod,
+            receivedAt: input.soldAt,
+            memberId: ctx.member.id,
+          });
+        } else if (paidNow > 0 && totalCents > 0) {
+          await insertPayment(tx, {
+            saleId: input.id,
+            number: sale.number,
+            amountCents: paidNow,
+            currency: input.currency,
+            rateMicros,
+            method: input.paymentMethod,
+            receivedAt: input.soldAt,
+            memberId: ctx.member.id,
+          });
+        }
       }
 
       await logActivity(tx, {
@@ -283,10 +424,23 @@ export const updateSale = writeAction
 
 /**
  * Confirm a draft sale: this is when it actually happens.
+ *
+ * `paidInFull` decides what happens to the money (F-4). A full payment and a
+ * deposit both become payment rows with their own ledger receipt. "Later"
+ * posts nothing: stock moves and margin books, but the cash stays receivable
+ * until each payment arrives.
  */
 export const confirmSale = writeAction
   .metadata({ action: 'confirmed', entity: 'sale' })
-  .inputSchema(z.object({ id: uuid }))
+  .inputSchema(
+    z.object({
+      id: uuid,
+      paidInFull: z.boolean().default(true),
+      /** Only meaningful with `paidInFull: false`; clamped below the total by
+       *  the code below, because the total lives in the database, not here. */
+      paidNowCents: moneyInput.default(0),
+    }),
+  )
   .action(async ({ parsedInput: input, ctx }) => {
     const number = await db.transaction(async (tx) => {
       const [sale] = await tx.select().from(sales).where(eq(sales.id, input.id)).limit(1);
@@ -325,23 +479,39 @@ export const confirmSale = writeAction
         })
         .where(eq(sales.id, sale.id));
 
-      await postLedgerEntry(tx, {
-        direction: 'in',
-        category: 'sales_receipt',
-        description: sale.number,
-        currency: sale.currency,
-        rateMicros: sale.fxRateMicros,
-        amountCents: sale.totalCents,
-        paymentMethod: sale.paymentMethod,
-        occurredAt: sale.soldAt,
-        memberId: ctx.member.id,
-        sourceKind: 'sale',
-        sourceId: sale.id,
-      });
+      const alreadyPaid = await paidOnSale(tx, sale.id);
+      const paidNow = Math.min(
+        input.paidInFull ? sale.totalCents : input.paidNowCents + alreadyPaid,
+        sale.totalCents,
+      );
+
+      if (paidNow >= sale.totalCents && alreadyPaid === 0 && sale.totalCents > 0) {
+        await insertPayment(tx, {
+          saleId: sale.id,
+          number: sale.number,
+          amountCents: sale.totalCents,
+          currency: sale.currency,
+          rateMicros: sale.fxRateMicros,
+          method: sale.paymentMethod,
+          receivedAt: sale.soldAt,
+          memberId: ctx.member.id,
+        });
+      } else if (paidNow > alreadyPaid) {
+        await insertPayment(tx, {
+          saleId: sale.id,
+          number: sale.number,
+          amountCents: paidNow - alreadyPaid,
+          currency: sale.currency,
+          rateMicros: sale.fxRateMicros,
+          method: sale.paymentMethod,
+          receivedAt: sale.soldAt,
+          memberId: ctx.member.id,
+        });
+      }
 
       await logActivity(tx, {
         memberId: ctx.member.id,
-        action: 'confirmed sale',
+        action: input.paidInFull ? 'confirmed sale' : 'confirmed sale on credit',
         entityType: 'sale',
         entityId: sale.id,
         entityLabel: sale.number,
@@ -351,6 +521,74 @@ export const confirmSale = writeAction
     });
 
     return { number };
+  });
+
+/**
+ * Record money received against a sale (F-4).
+ *
+ * Overpaying is refused rather than rounded down: an extra cent in the ledger
+ * that matches no invoice is exactly the drift this whole system exists to
+ * prevent, and the cashier can look at the balance shown beside the form and
+ * type what was actually handed over.
+ */
+export const recordSalePayment = writeAction
+  .metadata({ action: 'recorded', entity: 'sale_payment' })
+  .inputSchema(salePaymentSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.saleId)).limit(1);
+      if (!sale) throw new ActionError('That sale no longer exists.');
+      if (sale.status !== 'confirmed') {
+        throw new ActionError(
+          sale.status === 'draft'
+            ? 'A draft has not happened yet — confirm it before collecting money on it.'
+            : 'That sale is void; nothing is owed on it.',
+        );
+      }
+
+      const alreadyPaid = await paidOnSale(tx, sale.id);
+      const balance = balanceCentsOf(sale.totalCents, alreadyPaid);
+      if (balance <= 0) throw new ActionError('That sale is already paid in full.');
+      if (input.amountCents > balance) {
+        throw new ActionError(
+          `That is more than the outstanding balance (${formatMoney(balance, sale.currency)}).`,
+        );
+      }
+
+      await insertPayment(tx, {
+        saleId: sale.id,
+        number: sale.number,
+        amountCents: input.amountCents,
+        currency: sale.currency,
+        rateMicros: sale.fxRateMicros,
+        method: input.paymentMethod,
+        receivedAt: input.receivedAt ?? new Date(),
+        memberId: ctx.member.id,
+        notes: input.notes ?? null,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'recorded payment on sale',
+        entityType: 'sale',
+        entityId: sale.id,
+        entityLabel: sale.number,
+        diff: {
+          paid_cents: { from: alreadyPaid, to: alreadyPaid + input.amountCents },
+        },
+      });
+
+      const paid = alreadyPaid + input.amountCents;
+      return {
+        number: sale.number,
+        currency: sale.currency,
+        amountCents: input.amountCents,
+        paymentStatus: paymentStatusOf(sale.totalCents, paid),
+        balanceCents: balanceCentsOf(sale.totalCents, paid),
+      };
+    });
+
+    return result;
   });
 
 /**

@@ -43,6 +43,8 @@ export type ProductFormValues = {
   summary: string;
   description: string;
   status: 'draft' | 'active' | 'archived';
+  /** F-6: months of warranty from the day of sale; '0' means none. */
+  warrantyMonths: string;
   catalogPublished: boolean;
   notes: string;
   variants: VariantRow[];
@@ -70,6 +72,7 @@ const emptyProduct = (): ProductFormValues => ({
   summary: '',
   description: '',
   status: 'active',
+  warrantyMonths: '0',
   catalogPublished: false,
   notes: '',
   variants: [{ ...blankVariant(), name: 'Standard' }],
@@ -167,6 +170,7 @@ export function ProductForm({
           summary: values.summary || undefined,
           description: values.description || undefined,
           status: values.status,
+          warrantyMonths: values.warrantyMonths || '0',
           catalogPublished: values.catalogPublished,
           notes: values.notes || undefined,
           variants: values.variants.map((variant) => ({
@@ -411,6 +415,21 @@ export function ProductForm({
               <option value="active">Active — buy and sell it</option>
               <option value="archived">Archived — keep history, stop using</option>
             </Select>
+          </Field>
+
+          <Field
+            label="Warranty (months)"
+            htmlFor="warrantyMonths"
+            hint="0 = none. Expiry counts from the day of sale."
+          >
+            <Input
+              id="warrantyMonths"
+              numeric
+              inputMode="numeric"
+              placeholder="0"
+              value={values.warrantyMonths}
+              onChange={(event) => set('warrantyMonths', event.target.value)}
+            />
           </Field>
 
           <label className="flex cursor-pointer items-start gap-2.5 rounded-control border border-line bg-inset p-3">

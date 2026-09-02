@@ -1,0 +1,12 @@
+-- F-2 · Discounts.
+--
+-- sales.discount_cents has existed since 0000 and was never written: a dead
+-- column that looked like a feature. The sale form now writes it, so a
+-- document-level discount is stored separately from the line prices instead
+-- of being folded into them — which keeps "what does this product normally
+-- sell for" answerable after a haggle.
+--
+-- The reason is optional free text, not an enum: "rounding down to $200",
+-- "bundle", "damaged box" and "loyal customer" are all real and none of them
+-- deserve a code list someone has to maintain.
+ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS discount_reason text;

@@ -1,17 +1,26 @@
+'use client';
+
+import { useState } from 'react';
 import { Sparkline } from '@/components/charts/sparkline';
+import { Button } from '@/components/ui/button';
 import { Money, Percent } from '@/components/ui/money';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { formatRate } from '@/lib/fx';
-import { getFxExposure } from '@/server/queries/reports';
+import type { FxExposure } from '@/server/queries/reports';
 
 /**
  * What actually moves when the SRD rate moves: every SRD-denominated
  * ledger entry, booked at the rate in force when it happened, revalued at
  * today's rate. The difference is an unrealised gain or loss purely from
  * the rate — not from anything the business did.
+ *
+ * When there is no SRD exposure at all (P1-3), the panel collapses to a
+ * one-line summary so the P&L can have the space. The full panel returns
+ * automatically as soon as an SRD transaction exists; expansion is a
+ * local view state, never persisted.
  */
-export async function FxExposureReport() {
-  const exposure = await getFxExposure();
+export function FxExposureReport({ exposure }: { exposure: FxExposure }) {
+  const [expanded, setExpanded] = useState(false);
 
   if (exposure.currentRateMicros === null) {
     return (
@@ -24,12 +33,48 @@ export async function FxExposureReport() {
     );
   }
 
+  const rateLabel = `1 USD = ${formatRate(exposure.currentRateMicros, 2)} SRD`;
+  const hasSrd =
+    exposure.srdBookedUsdCents !== 0 ||
+    exposure.srdRevenueShare > 0 ||
+    exposure.srdCashShare > 0;
+
+  if (!hasSrd && !expanded) {
+    const since = exposure.srdEarliestFrom
+      ? new Intl.DateTimeFormat('en-US', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }).format(new Date(`${exposure.srdEarliestFrom}T00:00:00Z`))
+      : null;
+    return (
+      <Surface>
+        <SurfaceHeader title="FX exposure" hint={rateLabel} />
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+          <p className="text-[13px] text-ink-3">
+            No SRD-denominated entries.{' '}
+            {since ? (
+              <span className="text-ink-4">
+                {rateLabel} since {since}.
+              </span>
+            ) : null}
+          </p>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+          >
+            Show details
+          </Button>
+        </div>
+      </Surface>
+    );
+  }
+
   return (
     <Surface className="overflow-hidden">
-      <SurfaceHeader
-        title="FX exposure"
-        hint={`1 USD = ${formatRate(exposure.currentRateMicros, 2)} SRD today`}
-      />
+      <SurfaceHeader title="FX exposure" hint={`${rateLabel} today`} />
       <div className="grid grid-cols-2 gap-4 p-4">
         <Stat
           label="SRD booked at"
@@ -66,6 +111,11 @@ export async function FxExposureReport() {
           <p className="text-[11px] text-ink-4">Cash movement in SRD</p>
           <Percent value={exposure.srdCashShare} digits={0} className="mt-0.5 text-[13px]" />
         </div>
+        {!hasSrd ? (
+          <Button variant="link" size="sm" onClick={() => setExpanded(false)} aria-expanded>
+            Hide
+          </Button>
+        ) : null}
       </div>
     </Surface>
   );

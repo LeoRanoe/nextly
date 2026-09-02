@@ -150,25 +150,47 @@ export type ProductMarginRow = {
 
 export type ProductMarginSort = 'gross' | 'revenue' | 'units';
 
-/** Reads `public.v_product_margins` — created in migration 0001, never
- *  queried until now. The view has no date scope: it aggregates every
- *  confirmed sale for all time, so this table is lifetime, not scoped to
- *  the report's period. Scoping it would mean a new migration adding a
- *  period-aware function, not altering a view with GRANT dependencies. */
+/** Period-aware margin by product, net of returns.
+ *
+ *  Replaces the lifetime view read that P1-2 flagged: the previous
+ *  implementation queried `v_product_margins`, which has no date scope and
+ *  does not net returns out — so a heavily-returned product still looked
+ *  like a winner, and the panel sat under a period selector it ignored.
+ *
+ *  A return in this codebase reverses the sale's postings rather than
+ *  rewriting `sale_items`, so we prorate each line's revenue and COGS by
+ *  `(quantity − quantityReturned) / quantity`. The view is left alone for
+ *  its other consumers (overview's margin leaders). */
 export async function listProductMargins(
   sort: ProductMarginSort = 'gross',
+  range?: { from: Date; to: Date },
 ): Promise<ProductMarginRow[]> {
   if (!isDatabaseConfigured()) return [];
 
   const column =
     sort === 'revenue' ? 'revenue_cents' : sort === 'units' ? 'units_sold' : 'gross_cents';
 
+  const scope = range
+    ? sql`AND s.sold_at >= ${range.from.toISOString()} AND s.sold_at < ${range.to.toISOString()}`
+    : sql``;
+
   const rows = await db.execute<Record<string, string>>(sql`
-    SELECT product_id, code, name, units_sold::text, revenue_cents::text,
-           cogs_cents::text, gross_cents::text
-      FROM v_product_margins
-     WHERE units_sold > 0
-     ORDER BY ${sql.raw(column)} DESC, name
+    SELECT p.id AS product_id, p.code, p.name,
+           SUM(si.quantity - si.quantity_returned)::text AS units_sold,
+           SUM(ROUND(si.line_total_usd_cents::numeric
+               * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))::text
+             AS revenue_cents,
+           SUM(ROUND(si.cogs_cents::numeric
+               * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))::text
+             AS cogs_cents
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      JOIN product_variants v ON v.id = si.variant_id
+      JOIN products p ON p.id = v.product_id
+     WHERE s.status = 'confirmed' ${scope}
+     GROUP BY p.id, p.code, p.name
+    HAVING SUM(si.quantity - si.quantity_returned) > 0
+     ORDER BY ${sql.raw(column)} DESC, p.name
   `);
 
   return rows.map((row) => {
@@ -202,6 +224,9 @@ export type FxExposure = {
   /** Share of total cash movement (in or out) that was in SRD. */
   srdCashShare: number;
   rateSeries: { effectiveFrom: string; rateMicros: number }[];
+  /** ISO date of the earliest rate on record — used by the collapsed
+   *  one-line summary when there is no SRD exposure to show (P1-3). */
+  srdEarliestFrom: string | null;
 };
 
 export async function getFxExposure(): Promise<FxExposure> {
@@ -214,6 +239,7 @@ export async function getFxExposure(): Promise<FxExposure> {
       srdRevenueShare: 0,
       srdCashShare: 0,
       rateSeries: [],
+      srdEarliestFrom: null,
     };
   }
 
@@ -256,5 +282,6 @@ export async function getFxExposure(): Promise<FxExposure> {
       effectiveFrom: r.effectiveFrom,
       rateMicros: r.rateMicros,
     })),
+    srdEarliestFrom: rates.at(-1)?.effectiveFrom ?? null,
   };
 }

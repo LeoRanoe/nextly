@@ -14,7 +14,7 @@ const OPTIONS = [
 /** Segmented three-way theme control. A single sun/moon toggle cannot express
  *  "follow the system", which is the setting most people actually want. */
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -23,22 +23,27 @@ export function ThemeToggle() {
       <legend className="sr-only">Colour theme</legend>
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = mounted && theme === value;
+        const tooltip =
+          value === 'system' && mounted
+            ? `System (${resolvedTheme === 'dark' ? 'dark' : 'light'})`
+            : label;
         return (
           <button
             key={value}
             type="button"
             onClick={() => setTheme(value)}
-            aria-label={label}
+            aria-label={tooltip}
+            title={tooltip}
             aria-pressed={active}
             className={cn(
-              'grid size-6 place-items-center rounded-[4px] transition-colors duration-150',
+              'grid size-8 place-items-center rounded-[4px] transition-colors duration-150',
               'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
               active
-                ? 'bg-raised text-ink shadow-[inset_0_1px_0_0_var(--nx-highlight)]'
+                ? 'bg-active border border-line-strong text-accent'
                 : 'text-ink-4 hover:text-ink-2',
             )}
           >
-            <Icon className="size-3.5" />
+            <Icon className="size-4" />
           </button>
         );
       })}

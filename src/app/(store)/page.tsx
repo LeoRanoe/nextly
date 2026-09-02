@@ -15,6 +15,7 @@ import {
   listCatalogProducts,
 } from '@/server/queries/catalog';
 import { getCurrentRate } from '@/server/queries/overview';
+import { getSettings } from '@/server/queries/reference';
 
 export const metadata: Metadata = {
   title: 'Catalog',
@@ -102,9 +103,10 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   const sortRaw = typeof raw.sort === 'string' ? raw.sort : undefined;
   const sort = isCatalogSort(sortRaw) ? sortRaw : undefined;
 
-  const [products, rate] = await Promise.all([
+  const [products, rate, settings] = await Promise.all([
     listCatalogProducts({ q, category, sort }),
     getCurrentRate(),
+    getSettings(),
   ]);
 
   if (products.length === 0) {
@@ -132,7 +134,12 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} srdRate={rate?.rateMicros} />
+        <ProductCard
+          key={product.id}
+          product={product}
+          srdRate={rate?.rateMicros}
+          whatsapp={settings?.whatsapp ?? null}
+        />
       ))}
     </div>
   );

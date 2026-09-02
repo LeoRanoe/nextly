@@ -55,6 +55,31 @@ export const settings = pgTable(
     baseCurrency: text().notNull().default('USD'),
     displayCurrency: text().notNull().default('SRD'),
     lowStockThreshold: bigint({ mode: 'number' }).notNull().default(5),
+
+    /* ── Business identity (F-3) ───────────────────────────────────────────
+       What an invoice has to say about who issued it. All optional: a
+       document renders whatever is filled in and omits the rest, so the shop
+       can start printing receipts before every field exists. `whatsapp` is
+       separate from `phone` because the click-to-chat number is not always
+       the number you would print as a contact — and neither is hard-coded
+       into a template that goes stale on the day the shop moves street. */
+    legalName: text(),
+    addressLine: text(),
+    city: text(),
+    phone: text(),
+    whatsapp: text(),
+    email: text(),
+    taxId: text(),
+    logoUrl: text(),
+    invoiceFooter: text(),
+
+    /* ── Storefront footer (P0-10) ─────────────────────────────────────────
+       The public site's footer needs a real identity — where the shop is,
+       when it opens, how to reach it. Free text so the phrasing belongs to
+       the business, not to a template. */
+    instagram: text(),
+    openingHours: text(),
+
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('settings_singleton_key').on(t.singleton)],

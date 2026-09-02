@@ -28,14 +28,30 @@ import type { Option, VariantOption } from '@/server/queries/pickers';
  * shown before submitting is the number that gets stored.
  */
 
-type Line = { key: string; variantId: string | null; quantity: string; unitPrice: string };
+type Line = {
+  key: string;
+  variantId: string | null;
+  quantity: string;
+  unitPrice: string;
+  /** F-6: raw textarea contents — one serial per line, parsed on submit. */
+  serials: string;
+};
 
 const newLine = (): Line => ({
   key: crypto.randomUUID(),
   variantId: null,
   quantity: '1',
   unitPrice: '',
+  serials: '',
 });
+
+/** Textarea contents → the `string[]` the schema expects: trimmed, blanks
+ *  dropped. Dedup happens server-side (schemas.ts) so this stays cheap. */
+const parseSerials = (value: string): string[] =>
+  value
+    .split('\n')
+    .map((serial) => serial.trim())
+    .filter(Boolean);
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -46,7 +62,9 @@ export type SaleFormValues = {
   currency: 'USD' | 'SRD';
   paymentMethod: string;
   notes: string;
-  items: { variantId: string; quantity: string; unitPrice: string }[];
+  discount: string;
+  discountReason: string;
+  items: { variantId: string; quantity: string; unitPrice: string; serials: string }[];
 };
 
 export function SaleForm({
@@ -71,6 +89,13 @@ export function SaleForm({
   const [currency, setCurrency] = useState<'USD' | 'SRD'>(initial?.currency ?? 'USD');
   const [paymentMethod, setPaymentMethod] = useState(initial?.paymentMethod ?? 'cash');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [discount, setDiscount] = useState(initial?.discount ?? '');
+  const [discountReason, setDiscountReason] = useState(initial?.discountReason ?? '');
+  /** F-4: confirming can either take the money now (the one-click default that
+   *  matches how most sales close) or put the sale on credit with an optional
+   *  deposit. Only consulted when the form confirms — a draft pays nothing. */
+  const [paidInFull, setPaidInFull] = useState(true);
+  const [deposit, setDeposit] = useState('');
   const [lines, setLines] = useState<Line[]>(
     () =>
       initial?.items.map((item) => ({
@@ -78,6 +103,7 @@ export function SaleForm({
         variantId: item.variantId,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        serials: item.serials,
       })) ?? [newLine()],
   );
 
@@ -115,12 +141,24 @@ export function SaleForm({
    * Cost of goods uses `round(value x n / q)` per line — the same weighted
    * average call the posting service makes — rather than multiplying a rounded
    * unit cost, so the margin shown here does not shift by a cent on submit.
+   *
+   * `gross` is the sum of the lines; `revenue` is gross less the discount. The
+   * discount lives on the document, never in the line prices, so the products
+   * keep recording what they actually sold for.
    */
   const totals = useMemo(() => {
-    let revenue = 0;
+    let gross = 0;
     let cogs = 0;
     let units = 0;
     const shortfalls: { label: string; short: number }[] = [];
+
+    // Carry a running position so repeated variants consume stock sequentially
+    // rather than each reading the original onHand/valueCents. Without this,
+    // the client margin drifts from the server when the same variant appears
+    // twice and the first line exhausts the stock.
+    const position = new Map(
+      variants.map((v) => [v.id, { qty: v.onHand, value: v.valueCents }]),
+    );
 
     for (const line of lines) {
       const variant = line.variantId ? byId.get(line.variantId) : undefined;
@@ -136,30 +174,87 @@ export function SaleForm({
         unitPrice = 0;
       }
 
-      // Normalise the line total through the exact integer path, the same way
-      // the action will. A float divide here would drift from what gets stored.
       const lineRevenue = unitPrice * quantity;
-      revenue += currency === 'SRD' ? toBase(lineRevenue, rateMicros) : lineRevenue;
+      gross += currency === 'SRD' ? toBase(lineRevenue, rateMicros) : lineRevenue;
       units += quantity;
 
-      if (variant.onHand > 0) {
-        const consumable = Math.min(quantity, variant.onHand);
-        cogs +=
-          consumable === variant.onHand
-            ? variant.valueCents
-            : mulDivRound(variant.valueCents, consumable, variant.onHand);
-      }
-
-      if (quantity > Math.max(variant.onHand, 0)) {
-        shortfalls.push({
-          label: `${variant.productName} · ${variant.variantName}`,
-          short: quantity - Math.max(variant.onHand, 0),
+      const pos = position.get(variant.id);
+      if (pos) {
+        const take = Math.min(quantity, Math.max(pos.qty, 0));
+        const cost = take === pos.qty ? pos.value : mulDivRound(pos.value, take, pos.qty);
+        cogs += cost;
+        position.set(variant.id, {
+          qty: pos.qty - take,
+          value: pos.value - cost,
         });
+
+        if (quantity > take) {
+          shortfalls.push({
+            label: `${variant.productName} · ${variant.variantName}`,
+            short: quantity - take,
+          });
+        }
       }
     }
 
-    return { revenue, cogs, gross: revenue - cogs, units, shortfalls };
-  }, [lines, byId, currency, rateMicros]);
+    let discountUsd = 0;
+    try {
+      const parsed = parseMoney(discount || '0');
+      discountUsd = currency === 'SRD' ? toBase(parsed, rateMicros) : parsed;
+    } catch {
+      discountUsd = 0;
+    }
+    // Clamped here so the panel cannot show a negative revenue while the
+    // field is mid-edit; the server's schema rejects an oversized discount.
+    discountUsd = Math.min(Math.max(discountUsd, 0), gross);
+
+    const revenue = gross - discountUsd;
+    return {
+      gross,
+      revenue,
+      discount: discountUsd,
+      cogs,
+      profit: revenue - cogs,
+      units,
+      shortfalls,
+    };
+  }, [lines, byId, currency, rateMicros, variants, discount]);
+
+  /** Native-currency total: sum of line totals less the discount, both in the
+   *  sale's currency. `paidNowCents` is a payment on this number, not on the
+   *  USD revenue below — the ledger receives the native amount and converts it
+   *  at the rate frozen on the sale. */
+  const nativeTotal = useMemo(() => {
+    let grossNative = 0;
+    for (const line of lines) {
+      if (!line.variantId) continue;
+      const quantity = Number.parseInt(line.quantity, 10);
+      if (!Number.isFinite(quantity) || quantity <= 0) continue;
+      let unitPrice = 0;
+      try {
+        unitPrice = parseMoney(line.unitPrice || '0');
+      } catch {
+        unitPrice = 0;
+      }
+      grossNative += unitPrice * quantity;
+    }
+    let discountNative = 0;
+    try {
+      discountNative = parseMoney(discount || '0');
+    } catch {
+      discountNative = 0;
+    }
+    return Math.max(0, grossNative - Math.min(discountNative, grossNative));
+  }, [lines, discount]);
+
+  let depositInput = 0;
+  try {
+    depositInput = parseMoney(deposit || '0');
+  } catch {
+    depositInput = 0;
+  }
+  if (!Number.isFinite(depositInput) || depositInput < 0) depositInput = 0;
+  const depositCents = Math.min(depositInput, nativeTotal);
 
   // Two hook calls, always both — createSale and updateSale have different
   // input schemas (update adds `id`), and TypeScript cannot always assign
@@ -219,6 +314,7 @@ export function SaleForm({
         variantId: line.variantId as string,
         quantity: line.quantity,
         unitPriceCents: line.unitPrice || '0',
+        serials: parseSerials(line.serials),
       }));
 
     if (items.length === 0) {
@@ -236,7 +332,11 @@ export function SaleForm({
       currency,
       paymentMethod: paymentMethod as 'cash',
       notes: notes || undefined,
+      discountCents: discount || '0',
+      discountReason: discountReason || undefined,
       confirm,
+      paidInFull: !confirm || paidInFull,
+      paidNowCents: String(confirm && !paidInFull ? depositCents : 0),
       items,
     } as never);
   }
@@ -317,16 +417,6 @@ export function SaleForm({
           <SurfaceHeader
             title="Items"
             hint="Prices default to the list price and can be overridden"
-            action={
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => setLines((current) => [...current, newLine()])}
-              >
-                <Plus className="size-3.5" /> Add line
-              </Button>
-            }
           />
           <div className="divide-y divide-line-subtle">
             {lines.map((line, index) => {
@@ -334,11 +424,26 @@ export function SaleForm({
               const quantity = Number.parseInt(line.quantity, 10) || 0;
               const oversold = variant ? quantity > Math.max(variant.onHand, 0) : false;
 
+              let unitPrice = 0;
+              try {
+                unitPrice = parseMoney(line.unitPrice || '0');
+              } catch {
+                unitPrice = 0;
+              }
+              const lineTotal = unitPrice * quantity;
+
               return (
                 <div
                   key={line.key}
-                  className="grid gap-2 p-4 sm:grid-cols-[1fr_88px_120px_32px]"
+                  className="grid gap-2 p-4 sm:grid-cols-[24px_1fr_72px_100px_100px_32px]"
                 >
+                  {index === 0 ? (
+                    <span className="hidden text-[11px] text-ink-4 uppercase tracking-[0.06em] sm:block" />
+                  ) : null}
+                  <span className="hidden self-center tabular text-[12px] text-ink-4 sm:block">
+                    {index + 1}
+                  </span>
+
                   <Field label={index === 0 ? 'Product' : ''} htmlFor={`variant-${line.key}`}>
                     <Combobox
                       id={`variant-${line.key}`}
@@ -352,8 +457,6 @@ export function SaleForm({
                               ? {
                                   ...candidate,
                                   variantId: value,
-                                  // Prefill from the price list, in the sale's
-                                  // currency, so the common case is one click.
                                   unitPrice: picked
                                     ? toDecimalString(
                                         currency === 'SRD'
@@ -412,6 +515,12 @@ export function SaleForm({
                     />
                   </Field>
 
+                  <div className={index === 0 ? 'pt-0.5' : ''}>
+                    <span className="hidden self-center tabular text-right text-[13px] text-ink-2 sm:block">
+                      {line.variantId && lineTotal > 0 ? toDecimalString(lineTotal) : '—'}
+                    </span>
+                  </div>
+
                   <div
                     className={cn('flex', index === 0 ? 'items-end pb-0.5' : 'items-center')}
                   >
@@ -431,8 +540,34 @@ export function SaleForm({
                     </Button>
                   </div>
 
+                  {line.variantId ? (
+                    <Field
+                      label="Serial numbers"
+                      htmlFor={`serials-${line.key}`}
+                      hint={`Optional — one per line, up to ${quantity || 1} for this line`}
+                      className="sm:col-span-6"
+                    >
+                      <Textarea
+                        id={`serials-${line.key}`}
+                        rows={2}
+                        spellCheck={false}
+                        placeholder="e.g. SN-48213-X"
+                        value={line.serials}
+                        onChange={(event) =>
+                          setLines((current) =>
+                            current.map((candidate) =>
+                              candidate.key === line.key
+                                ? { ...candidate, serials: event.target.value }
+                                : candidate,
+                            ),
+                          )
+                        }
+                      />
+                    </Field>
+                  ) : null}
+
                   {oversold && variant ? (
-                    <p className="flex items-center gap-1.5 text-[11px] text-warning sm:col-span-4">
+                    <p className="flex items-center gap-1.5 text-[11px] text-warning sm:col-span-6">
                       <AlertTriangle className="size-3" />
                       Only {Math.max(variant.onHand, 0)} on hand. The sale will still record,
                       and the shortfall will be flagged.
@@ -441,6 +576,47 @@ export function SaleForm({
                 </div>
               );
             })}
+          </div>
+          <div className="flex items-center justify-between border-line-subtle border-t px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() => setLines((current) => [...current, newLine()])}
+              className="flex w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-line py-2 text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2"
+            >
+              <Plus className="size-3.5" /> Add another product
+            </button>
+            <span className="hidden shrink-0 pl-4 tabular text-[11px] text-ink-4 sm:block">
+              {lines.length} {lines.length === 1 ? 'line' : 'lines'} · {totals.units}{' '}
+              {totals.units === 1 ? 'unit' : 'units'}
+            </span>
+          </div>
+        </Surface>
+
+        <Surface>
+          <SurfaceHeader title="Discount" hint="Applied to the whole sale, not a single item" />
+          <div className="grid gap-3 p-4 sm:grid-cols-[160px_1fr]">
+            <Field label={`Amount (${currency})`} htmlFor="discount">
+              <Input
+                id="discount"
+                numeric
+                inputMode="decimal"
+                placeholder="0.00"
+                value={discount}
+                onChange={(event) => setDiscount(event.target.value)}
+              />
+            </Field>
+            <Field
+              label="Reason"
+              htmlFor="discountReason"
+              hint="Optional — rounded down, bundle…"
+            >
+              <Input
+                id="discountReason"
+                placeholder="Why the price came down"
+                value={discountReason}
+                onChange={(event) => setDiscountReason(event.target.value)}
+              />
+            </Field>
           </div>
         </Surface>
 
@@ -461,20 +637,24 @@ export function SaleForm({
         <SurfaceHeader title="Margin" hint="Recomputed as you type" />
         <dl className="space-y-2 p-4">
           <Row label="Units" value={String(totals.units)} />
+          <Row label="Subtotal" value={formatMoney(totals.gross)} />
+          {totals.discount > 0 ? (
+            <Row label="Discount" value={`−${formatMoney(totals.discount)}`} muted />
+          ) : null}
           <Row label="Revenue" value={formatMoney(totals.revenue)} />
           <Row label="Cost of goods" value={formatMoney(totals.cogs)} muted />
           <div className="border-line-subtle border-t pt-2">
             <div className="flex items-baseline justify-between gap-3">
               <dt className="text-[13px] text-ink-2">Gross profit</dt>
               <dd>
-                <Money cents={totals.gross} tone="flow" size="lg" />
+                <Money cents={totals.profit} tone="flow" size="lg" />
               </dd>
             </div>
             <div className="mt-1 flex items-baseline justify-between gap-3">
               <dt className="text-[12px] text-ink-4">Margin</dt>
               <dd>
                 <Percent
-                  value={totals.revenue === 0 ? 0 : totals.gross / totals.revenue}
+                  value={totals.revenue === 0 ? 0 : totals.profit / totals.revenue}
                   tone="muted"
                 />
               </dd>
@@ -508,6 +688,75 @@ export function SaleForm({
             </div>
           ) : null}
         </dl>
+
+        <div className="border-line-subtle border-t p-4">
+          <fieldset disabled={isPending}>
+            <legend className="text-[11px] text-ink-3 uppercase tracking-[0.08em]">
+              Payment when confirmed
+            </legend>
+            <div className="mt-2 space-y-1.5">
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-2 rounded-control border p-2.5 text-[12px] transition-colors has-[:checked]:border-accent-border has-[:checked]:bg-accent-muted/40',
+                  paidInFull ? 'border-accent-border bg-accent-muted/40' : 'border-line',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="sale-payment-timing"
+                  checked={paidInFull}
+                  onChange={() => setPaidInFull(true)}
+                  className="mt-0.5 accent-accent"
+                />
+                <span>
+                  <span className="block text-ink">Paid in full now</span>
+                  <span className="block text-ink-4">
+                    Posts one receipt for {formatMoney(nativeTotal, currency)} to the cash
+                    ledger.
+                  </span>
+                </span>
+              </label>
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-2 rounded-control border p-2.5 text-[12px] transition-colors',
+                  !paidInFull ? 'border-accent-border bg-accent-muted/40' : 'border-line',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="sale-payment-timing"
+                  checked={!paidInFull}
+                  onChange={() => setPaidInFull(false)}
+                  className="mt-0.5 accent-accent"
+                />
+                <span>
+                  <span className="block text-ink">Money comes later</span>
+                  <span className="block text-ink-4">
+                    The sale is confirmed on credit and tracked until it is settled.
+                  </span>
+                </span>
+              </label>
+            </div>
+            {!paidInFull ? (
+              <div className="mt-2">
+                <Field
+                  label={`Deposit now (${currency})`}
+                  htmlFor="deposit-now"
+                  hint={`Balance ${formatMoney(Math.max(0, nativeTotal - depositCents), currency)} goes on credit`}
+                >
+                  <Input
+                    id="deposit-now"
+                    numeric
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={deposit}
+                    onChange={(event) => setDeposit(event.target.value)}
+                  />
+                </Field>
+              </div>
+            ) : null}
+          </fieldset>
+        </div>
 
         <div className="flex flex-col gap-2 border-line-subtle border-t p-4">
           <SubmitButton pending={isPending} size="lg" className="w-full">

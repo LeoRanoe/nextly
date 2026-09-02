@@ -115,16 +115,40 @@ export function RateSheet({ currentRate }: { currentRate: number | null }) {
 
 /* ── Business settings ───────────────────────────────────────────────────── */
 
-export function SettingsSheet({
-  initial,
-}: {
-  initial: { businessName: string; displayCurrency: string; lowStockThreshold: number };
-}) {
+export type SettingsInitial = {
+  businessName: string;
+  displayCurrency: string;
+  lowStockThreshold: number;
+  legalName: string;
+  addressLine: string;
+  city: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  taxId: string;
+  logoUrl: string;
+  invoiceFooter: string;
+  instagram: string;
+  openingHours: string;
+};
+
+export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [businessName, setBusinessName] = useState(initial.businessName);
   const [displayCurrency, setDisplayCurrency] = useState(initial.displayCurrency);
   const [lowStockThreshold, setLowStockThreshold] = useState(String(initial.lowStockThreshold));
+  const [legalName, setLegalName] = useState(initial.legalName);
+  const [addressLine, setAddressLine] = useState(initial.addressLine);
+  const [city, setCity] = useState(initial.city);
+  const [phone, setPhone] = useState(initial.phone);
+  const [whatsapp, setWhatsapp] = useState(initial.whatsapp);
+  const [email, setEmail] = useState(initial.email);
+  const [taxId, setTaxId] = useState(initial.taxId);
+  const [logoUrl, setLogoUrl] = useState(initial.logoUrl);
+  const [invoiceFooter, setInvoiceFooter] = useState(initial.invoiceFooter);
+  const [instagram, setInstagram] = useState(initial.instagram);
+  const [openingHours, setOpeningHours] = useState(initial.openingHours);
 
   const { execute, isPending } = useAction(updateSettings, {
     onSuccess() {
@@ -166,6 +190,17 @@ export function SettingsSheet({
               businessName,
               displayCurrency: displayCurrency as 'SRD',
               lowStockThreshold: Number(lowStockThreshold),
+              legalName: legalName || undefined,
+              addressLine: addressLine || undefined,
+              city: city || undefined,
+              phone: phone || undefined,
+              whatsapp: whatsapp || undefined,
+              email: email || undefined,
+              taxId: taxId || undefined,
+              logoUrl: logoUrl || undefined,
+              invoiceFooter: invoiceFooter || undefined,
+              instagram: instagram || undefined,
+              openingHours: openingHours || undefined,
             });
           }}
         >
@@ -199,6 +234,108 @@ export function SettingsSheet({
                 />
               </Field>
             </FieldRow>
+          </SheetSection>
+
+          <SheetSection
+            title="On the invoice"
+            hint="Printed with every receipt — fill in what applies"
+          >
+            <Field
+              label="Legal name"
+              htmlFor="legalName"
+              hint="If different from the trading name"
+            >
+              <Input
+                id="legalName"
+                value={legalName}
+                onChange={(event) => setLegalName(event.target.value)}
+              />
+            </Field>
+            <Field label="Address" htmlFor="addressLine">
+              <Input
+                id="addressLine"
+                value={addressLine}
+                onChange={(event) => setAddressLine(event.target.value)}
+              />
+            </Field>
+            <FieldRow>
+              <Field label="City" htmlFor="city">
+                <Input
+                  id="city"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                />
+              </Field>
+              <Field label="Tax / BTW number" htmlFor="taxId">
+                <Input
+                  id="taxId"
+                  value={taxId}
+                  onChange={(event) => setTaxId(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field label="Phone" htmlFor="phone">
+                <Input
+                  id="phone"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              </Field>
+              <Field label="WhatsApp" htmlFor="whatsapp" hint="Click-to-chat number">
+                <Input
+                  id="whatsapp"
+                  value={whatsapp}
+                  onChange={(event) => setWhatsapp(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <Field label="Email" htmlFor="email">
+              <Input
+                id="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </Field>
+            <Field
+              label="Logo URL"
+              htmlFor="logoUrl"
+              hint="Optional — shown top-left of the invoice"
+            >
+              <Input
+                id="logoUrl"
+                value={logoUrl}
+                onChange={(event) => setLogoUrl(event.target.value)}
+              />
+            </Field>
+            <Field
+              label="Invoice footer"
+              htmlFor="invoiceFooter"
+              hint="Warranty terms, thank-you, anything"
+            >
+              <Textarea
+                id="invoiceFooter"
+                value={invoiceFooter}
+                onChange={(event) => setInvoiceFooter(event.target.value)}
+              />
+            </Field>
+          </SheetSection>
+
+          <SheetSection title="On the website" hint="Shown in the storefront footer">
+            <Field label="Opening hours" htmlFor="openingHours" hint="e.g. Mon–Sat 09:00–18:00">
+              <Input
+                id="openingHours"
+                value={openingHours}
+                onChange={(event) => setOpeningHours(event.target.value)}
+              />
+            </Field>
+            <Field label="Instagram" htmlFor="instagram" hint="Handle or full URL">
+              <Input
+                id="instagram"
+                value={instagram}
+                onChange={(event) => setInstagram(event.target.value)}
+              />
+            </Field>
           </SheetSection>
         </form>
       </Sheet>

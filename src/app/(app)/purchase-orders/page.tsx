@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { ReceiveOrderSheet } from '@/components/forms/finance-sheets';
 import { PurchaseOrderActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportButton } from '@/components/patterns/export-button';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +76,7 @@ export default function PurchaseOrdersPage({
         <ListToolbar>
           <ListSearch placeholder="Search by number or supplier" />
           <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
+          <ExportButton entity="purchase-orders" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-16', 'w-32', 'w-20']} />}>
           <OrdersTable searchParams={searchParams} />
@@ -231,6 +233,7 @@ async function OrdersTable({ searchParams }: { searchParams: Promise<RawSearchPa
                         id={row.id}
                         number={row.number}
                         status={row.status}
+                        balanceCents={Math.max(row.landedCents - row.paidCents, 0)}
                       />
                     </span>
                   </TD>
@@ -285,7 +288,12 @@ async function OrdersTable({ searchParams }: { searchParams: Promise<RawSearchPa
                   unitCount={row.unitCount}
                 />
               ) : null}
-              <PurchaseOrderActions id={row.id} number={row.number} status={row.status} />
+              <PurchaseOrderActions
+                id={row.id}
+                number={row.number}
+                status={row.status}
+                balanceCents={Math.max(row.landedCents - row.paidCents, 0)}
+              />
             </div>
           </MobileRow>
         ))}

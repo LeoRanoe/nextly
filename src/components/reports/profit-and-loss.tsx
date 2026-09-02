@@ -4,6 +4,9 @@ import { cn } from '@/lib/cn';
 import { type PeriodPreset, periodRange } from '@/lib/report-period';
 import { getProfitAndLoss } from '@/server/queries/reports';
 
+const dateFormat = (d: Date) =>
+  d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+
 /**
  * Revenue to net, over the selected period, with the immediately preceding
  * window of equal length as a comparison column — a P&L without a
@@ -13,13 +16,15 @@ export async function ProfitAndLossReport({ preset }: { preset: PeriodPreset }) 
   const { from, to } = periodRange(preset);
   const report = await getProfitAndLoss({ from, to });
 
+  const rangeLabel =
+    preset === 'all'
+      ? 'All time'
+      : `${dateFormat(from)} – ${dateFormat(new Date(to.getTime() - 1))}`;
+
   if (report.revenueCents === 0 && report.expensesCents === 0) {
     return (
       <Surface>
-        <SurfaceHeader
-          title="Profit and loss"
-          hint="Revenue to net, over the selected period"
-        />
+        <SurfaceHeader title="Profit and loss" hint={`${rangeLabel}`} />
         <p className="px-4 py-10 text-center text-[13px] text-ink-4">
           No confirmed sales or expenses in this period.
         </p>
@@ -34,7 +39,7 @@ export async function ProfitAndLossReport({ preset }: { preset: PeriodPreset }) 
 
   return (
     <Surface className="overflow-hidden">
-      <SurfaceHeader title="Profit and loss" hint="Revenue to net, over the selected period" />
+      <SurfaceHeader title="Profit and loss" hint={rangeLabel} />
       <div className="p-4">
         <dl className="divide-y divide-line-subtle">
           <Row

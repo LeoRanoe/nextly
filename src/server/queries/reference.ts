@@ -1,7 +1,8 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
 import type { CategoryQuery, SupplierQuery } from '@/lib/list-params';
-import type { Cents } from '@/lib/money';
+import type { Cents, CurrencyCode } from '@/lib/money';
+import { balanceCentsOf, type PaymentBadgeCode, paymentBadgeOf } from '@/lib/payment-status';
 import { db } from '../db/client';
 import { clampPage, clampPerPage, type Page, toPage } from './paginate';
 import { bool, maybe, num, text } from './row';
@@ -287,13 +288,26 @@ export type SettingsRow = {
   baseCurrency: string;
   displayCurrency: string;
   lowStockThreshold: number;
+  legalName: string | null;
+  addressLine: string | null;
+  city: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  taxId: string | null;
+  logoUrl: string | null;
+  invoiceFooter: string | null;
+  instagram: string | null;
+  openingHours: string | null;
 };
 
 export async function getSettings(): Promise<SettingsRow | null> {
   if (!isDatabaseConfigured()) return null;
 
   const [row] = await db.execute<Record<string, string>>(sql`
-    SELECT business_name, base_currency, display_currency, low_stock_threshold::text
+    SELECT business_name, base_currency, display_currency, low_stock_threshold::text,
+           legal_name, address_line, city, phone, whatsapp, email, tax_id, logo_url, invoice_footer,
+           instagram, opening_hours
       FROM settings LIMIT 1
   `);
 
@@ -303,6 +317,17 @@ export async function getSettings(): Promise<SettingsRow | null> {
     baseCurrency: text(row.base_currency, 'USD'),
     displayCurrency: text(row.display_currency, 'SRD'),
     lowStockThreshold: num(row.low_stock_threshold, 5),
+    legalName: row.legal_name ?? null,
+    addressLine: row.address_line ?? null,
+    city: row.city ?? null,
+    phone: row.phone ?? null,
+    whatsapp: row.whatsapp ?? null,
+    email: row.email ?? null,
+    taxId: row.tax_id ?? null,
+    logoUrl: row.logo_url ?? null,
+    invoiceFooter: row.invoice_footer ?? null,
+    instagram: row.instagram ?? null,
+    openingHours: row.opening_hours ?? null,
   };
 }
 
@@ -317,6 +342,8 @@ export type ProductDetail = {
   summary: string | null;
   description: string | null;
   status: 'draft' | 'active' | 'archived';
+  /** F-6: months of cover from the day of sale; 0 means none. */
+  warrantyMonths: number;
   catalogPublished: boolean;
   notes: string | null;
   variants: {
@@ -348,6 +375,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT id, code, name, slug, category_id, supplier_id, source_url,
            summary, description, status::text AS status,
+           warranty_months::text AS warranty_months,
            catalog_published::text AS catalog_published, notes
       FROM products WHERE id = ${id} LIMIT 1
   `);
@@ -385,6 +413,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     summary: maybe(row.summary),
     description: maybe(row.description),
     status: text(row.status) as ProductDetail['status'],
+    warrantyMonths: num(row.warranty_months),
     catalogPublished: bool(row.catalog_published),
     notes: maybe(row.notes),
     variants: variants.map((variant) => ({
@@ -423,6 +452,8 @@ export type CustomerDetail = {
   spentCents: Cents;
   grossCents: Cents;
   lastOrderAt: string | null;
+  /** Confirmed sales not yet collected, normalised to USD cents (F-4). */
+  outstandingUsdCents: Cents;
   sales: {
     id: string;
     number: string;
@@ -430,6 +461,12 @@ export type CustomerDetail = {
     soldAt: string;
     totalUsdCents: Cents;
     grossProfitCents: Cents;
+    /** What is still owed on this sale, in the currency it was quoted in. */
+    balanceCents: Cents;
+    currency: CurrencyCode;
+    /** In the currency of the sale, like `totalCents` there. Null on drafts
+     *  and voids — nothing is owed on a sale that has not settled. */
+    paymentStatus: PaymentBadgeCode | null;
   }[];
 };
 
@@ -440,7 +477,28 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
     SELECT
       c.id, c.code, c.name, c.phone, c.email, c.address_line, c.city, c.notes,
       t.order_count::text, t.spent_usd_cents::text,
-      t.gross_profit_cents::text, t.last_order_at::text
+      t.gross_profit_cents::text, t.last_order_at::text,
+      COALESCE((
+        SELECT SUM(GREATEST(
+          s.total_usd_cents
+          - COALESCE((
+              SELECT SUM(le.amount_usd_cents)
+                FROM sale_payments sp
+                JOIN ledger_entries le ON le.source_kind = 'sale' AND le.source_id = sp.id
+               WHERE sp.sale_id = s.id
+            ), 0)
+          - COALESCE((
+              SELECT SUM(CASE WHEN le.direction = 'in' THEN le.amount_usd_cents
+                              ELSE -le.amount_usd_cents END)
+                FROM ledger_entries le
+               WHERE le.source_kind = 'sale'
+                 AND le.source_id = s.id
+                 AND le.category = 'sales_receipt'
+            ), 0),
+          0))
+          FROM sales s
+         WHERE s.customer_id = c.id AND s.status = 'confirmed'
+      ), 0)::text AS outstanding_usd_cents
     FROM customers c
     JOIN v_customer_totals t ON t.customer_id = c.id
     WHERE c.id = ${id}
@@ -450,8 +508,20 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
   if (!row) return null;
 
   const sales = await db.execute<Record<string, string | null>>(sql`
-    SELECT id, number, status::text, sold_at::text,
-           total_usd_cents::text, gross_profit_cents::text
+    SELECT id, number, status::text, sold_at::text, currency::text,
+           total_cents::text, total_usd_cents::text, gross_profit_cents::text,
+           (
+             COALESCE((SELECT SUM(amount_cents) FROM sale_payments p
+                        WHERE p.sale_id = sales.id), 0)
+             + COALESCE((
+                 SELECT SUM(CASE WHEN l.direction = 'in' THEN l.amount_cents
+                                 ELSE -l.amount_cents END)
+                   FROM ledger_entries l
+                  WHERE l.source_kind = 'sale'
+                    AND l.source_id = sales.id
+                    AND l.category = 'sales_receipt'
+               ), 0)
+           )::text AS paid_cents
       FROM sales
      WHERE customer_id = ${id}
      ORDER BY sold_at DESC
@@ -470,13 +540,25 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
     spentCents: num(row.spent_usd_cents),
     grossCents: num(row.gross_profit_cents),
     lastOrderAt: maybe(row.last_order_at),
-    sales: sales.map((sale) => ({
-      id: text(sale.id),
-      number: text(sale.number),
-      status: text(sale.status),
-      soldAt: text(sale.sold_at),
-      totalUsdCents: num(sale.total_usd_cents),
-      grossProfitCents: num(sale.gross_profit_cents),
-    })),
+    outstandingUsdCents: num(row.outstanding_usd_cents),
+    sales: sales.map((sale) => {
+      const status = text(sale.status);
+      const totalCents = num(sale.total_cents);
+      const paidCents = num(sale.paid_cents);
+      return {
+        id: text(sale.id),
+        number: text(sale.number),
+        status,
+        soldAt: text(sale.sold_at),
+        totalUsdCents: num(sale.total_usd_cents),
+        grossProfitCents: num(sale.gross_profit_cents),
+        balanceCents: balanceCentsOf(totalCents, paidCents),
+        currency: text(sale.currency) === 'SRD' ? 'SRD' : 'USD',
+        paymentStatus:
+          status === 'confirmed'
+            ? paymentBadgeOf(totalCents, paidCents, new Date(text(sale.sold_at)))
+            : null,
+      };
+    }),
   };
 }

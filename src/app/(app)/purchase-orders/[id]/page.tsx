@@ -22,6 +22,8 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { formatDate, formatRelative, humanise } from '@/lib/format';
 import { formatRate } from '@/lib/fx';
 import { formatMoney, toDecimalString } from '@/lib/money';
+import type { PaymentBadgeCode } from '@/lib/payment-status';
+import { PAYMENT_LABELS, paymentStatusOf } from '@/lib/payment-status';
 import { listActivity } from '@/server/queries/activity';
 import { getPurchaseOrder } from '@/server/queries/documents';
 import { listSupplierOptions, listVariantOptions } from '@/server/queries/pickers';
@@ -35,6 +37,12 @@ const STATUS_TONE = {
   received: 'positive',
   cancelled: 'negative',
 } as const;
+const PAYMENT_TONE: Record<PaymentBadgeCode, 'positive' | 'warning' | 'info' | 'negative'> = {
+  paid: 'positive',
+  partly: 'info',
+  unpaid: 'warning',
+  overdue: 'negative',
+};
 
 type SearchParams = Promise<{ editing?: string }>;
 
@@ -124,6 +132,16 @@ async function Loader({
   const landedTotal = order.items.reduce((sum, item) => sum + item.landedCostCents, 0);
   const canReceive = order.status === 'ordered' || order.status === 'shipped';
 
+  /** Derived, never stored (F-9): what the supplier is still owed. Cancelled
+   *  orders are not owed anything — their payments were reversed or refunded
+   *  as separate entries, so no badge. */
+  const paidCents = order.paidCents;
+  const balanceCents = Math.max(0, landedTotal - paidCents);
+  const paymentBadge =
+    order.status === 'received' && landedTotal > 0
+      ? paymentStatusOf(landedTotal, paidCents)
+      : null;
+
   return (
     <div className="space-y-4">
       <Surface>
@@ -132,6 +150,9 @@ async function Loader({
             <span className="inline-flex items-center gap-2">
               <span className="tabular">{order.number}</span>
               <Badge tone={STATUS_TONE[order.status]}>{humanise(order.status)}</Badge>
+              {paymentBadge ? (
+                <Badge tone={PAYMENT_TONE[paymentBadge]}>{PAYMENT_LABELS[paymentBadge]}</Badge>
+              ) : null}
             </span>
           }
           hint={
@@ -162,7 +183,13 @@ async function Loader({
                   unitCount={unitCount}
                 />
               ) : null}
-              <PurchaseOrderActions id={order.id} number={order.number} status={order.status} />
+              <PurchaseOrderActions
+                id={order.id}
+                number={order.number}
+                status={order.status}
+                currency={order.currency}
+                balanceCents={balanceCents}
+              />
             </span>
           }
         />
@@ -171,6 +198,16 @@ async function Loader({
           <Field label="Expected" value={formatDate(order.expectedAt)} />
           <Field label="Received" value={formatDate(order.receivedAt)} />
           <Field label="Rate" value={`1 USD = ${formatRate(order.fxRateMicros, 2)} SRD`} />
+          {order.status === 'received' ? (
+            <>
+              <Field label="Landed" value={formatMoney(landedTotal, order.currency)} />
+              <Field label="Paid" value={formatMoney(paidCents, order.currency)} />
+              <Field
+                label="Owed"
+                value={balanceCents > 0 ? formatMoney(balanceCents, order.currency) : 'Settled'}
+              />
+            </>
+          ) : null}
         </div>
       </Surface>
 
@@ -300,6 +337,36 @@ async function Loader({
           </MobileList>
         </Surface>
       </div>
+
+      {order.payments.length > 0 ? (
+        <Surface className="overflow-hidden">
+          <SurfaceHeader
+            title="Payments"
+            hint="Each payment posted its own expense to the cash ledger when it was recorded"
+          />
+          <div className="divide-y divide-line-subtle">
+            {order.payments.map((payment) => (
+              <div
+                key={payment.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <span className="min-w-0 truncate text-[13px] text-ink-2">
+                  {humanise(payment.method)}
+                  {payment.notes ? (
+                    <span className="text-ink-4"> · {payment.notes}</span>
+                  ) : null}
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-[12px] text-ink-4">{formatDate(payment.paidAt)}</span>
+                  <span className="text-[13px] text-negative">
+                    {formatMoney(payment.amountCents, order.currency)}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Surface>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Surface className="overflow-hidden">

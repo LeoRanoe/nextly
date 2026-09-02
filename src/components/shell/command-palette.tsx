@@ -3,11 +3,13 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Command } from 'cmdk';
-import { Plus, Search } from 'lucide-react';
+import { Fingerprint, Plus, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
 import { ALL_NAV_ITEMS } from '@/lib/navigation';
+import { searchSerialsAction } from '@/server/actions/search';
+import type { SerialHit } from '@/server/queries/warranty';
 
 /**
  * Command palette.
@@ -37,16 +39,18 @@ const ACTIONS = [
     label: 'Add a customer',
     keywords: 'client buyer contact',
   },
-  {
-    href: '/settings?invite=1',
-    label: 'Invite someone',
-    keywords: 'team member access staff owner',
-  },
 ] as const;
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+
+  // F-6: serial lookup. The input is controlled so a ≥3-character prefix can
+  // be debounced into `searchSerialsAction`; results render as their own group
+  // and are exempt from cmdk's built-in filtering via `keywords` (see Item).
+  const [term, setTerm] = useState('');
+  const [serialHits, setSerialHits] = useState<SerialHit[]>([]);
+  const requestSeq = useRef(0);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -58,6 +62,32 @@ export function CommandPalette() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setTerm('');
+      setSerialHits([]);
+      return;
+    }
+    const prefix = term.trim();
+    if (prefix.length < 3) {
+      setSerialHits([]);
+      return;
+    }
+    const seq = ++requestSeq.current;
+    const timer = setTimeout(() => {
+      searchSerialsAction(prefix)
+        .then((hits) => {
+          // A stale response must not overwrite a newer one — keystrokes can
+          // resolve out of order.
+          if (requestSeq.current === seq) setSerialHits(hits);
+        })
+        .catch(() => {
+          if (requestSeq.current === seq) setSerialHits([]);
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [term, open]);
 
   const go = useCallback(
     (href: string) => {
@@ -113,7 +143,9 @@ export function CommandPalette() {
                 <Search className="size-4 shrink-0 text-ink-4" />
                 <Command.Input
                   autoFocus
-                  placeholder="Search actions and pages"
+                  value={term}
+                  onValueChange={setTerm}
+                  placeholder="Search actions, pages or serials"
                   className="h-11 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-4"
                 />
               </div>
@@ -122,6 +154,30 @@ export function CommandPalette() {
                 <Command.Empty className="px-3 py-8 text-center text-[13px] text-ink-4">
                   Nothing matches that.
                 </Command.Empty>
+
+                {serialHits.length > 0 ? (
+                  <Command.Group heading="Serial numbers">
+                    {serialHits.map((hit) => (
+                      <Item
+                        key={`${hit.saleId}-${hit.serial}`}
+                        value={`serial ${hit.serial}`}
+                        // cmdk filters locally and never saw the server's
+                        // answer — without keywords the hits would vanish from
+                        // the list as soon as the prefix narrows.
+                        keywords={[hit.serial, hit.productName, hit.customerName ?? '']}
+                        onSelect={() => go(`/sales/${hit.saleId}`)}
+                      >
+                        <Fingerprint className="size-4 shrink-0 text-accent" />
+                        <span className="min-w-0 truncate">
+                          <span className="tabular">{hit.serial}</span>
+                          {' · '}
+                          {hit.productName}
+                          {hit.customerName ? ` · ${hit.customerName}` : ''}
+                        </span>
+                      </Item>
+                    ))}
+                  </Command.Group>
+                ) : null}
 
                 <Command.Group heading="Actions">
                   {ACTIONS.map((action) => (
@@ -159,16 +215,20 @@ export function CommandPalette() {
 
 function Item({
   value,
+  keywords,
   onSelect,
   children,
 }: {
   value: string;
+  /** Extra words cmdk matches against, in place of the rendered label. */
+  keywords?: string[];
   onSelect: () => void;
   children: React.ReactNode;
 }) {
   return (
     <Command.Item
       value={value}
+      keywords={keywords}
       onSelect={onSelect}
       className={cn(
         'flex h-9 cursor-pointer items-center gap-2.5 rounded-control px-3 text-[13px] text-ink-2',

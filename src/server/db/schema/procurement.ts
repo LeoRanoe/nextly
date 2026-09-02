@@ -9,7 +9,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { productVariants, suppliers } from './catalog';
-import { currencyCode, purchaseOrderStatus } from './enums';
+import { currencyCode, paymentMethod, purchaseOrderStatus } from './enums';
 import { members } from './identity';
 
 /**
@@ -90,5 +90,45 @@ export const purchaseOrderItems = pgTable(
   (t) => [
     index('purchase_order_items_po_idx').on(t.purchaseOrderId, t.position),
     index('purchase_order_items_variant_idx').on(t.variantId),
+  ],
+);
+
+/**
+ * Money paid to a supplier against a purchase order (F-9).
+ *
+ * The buy-side mirror of `sale_payments`, and for the same reason: a payment
+ * happened at a moment and by a person, so correcting a mistake means recording
+ * another row rather than rewriting one. Each row posts its own `purchase`
+ * ledger entry whose source_id is this row's id — never the order's — so
+ * cancelling an order cannot take payments for money that actually left down
+ * with it. What has been paid is derived from these rows; nothing on
+ * `purchase_orders` stores it.
+ */
+export const purchaseOrderPayments = pgTable(
+  'purchase_order_payments',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    purchaseOrderId: uuid()
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: 'cascade' }),
+
+    /** In the currency of the order; the rate snapshot rides along so the
+     *  payment posts converts exactly as the order would have. */
+    amountCents: bigint({ mode: 'number' }).notNull(),
+    currency: currencyCode().notNull().default('USD'),
+    fxRateMicros: bigint({ mode: 'number' }).notNull().default(1_000_000),
+
+    method: paymentMethod().notNull().default('card'),
+    paidAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    notes: text(),
+
+    /** Who banked it, for the audit trail. */
+    memberId: uuid().references(() => members.id, { onDelete: 'set null' }),
+    createdById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('po_payments_order_idx').on(t.purchaseOrderId),
+    index('po_payments_paid_idx').on(t.paidAt.desc()),
   ],
 );

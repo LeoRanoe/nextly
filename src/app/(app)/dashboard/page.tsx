@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { AlertsPanel } from '@/components/overview/alerts-panel';
@@ -7,9 +8,11 @@ import { CashFlowChart } from '@/components/overview/cash-flow-chart';
 import { InventoryHealth } from '@/components/overview/inventory-health';
 import { MarginLeaders } from '@/components/overview/margin-leaders';
 import { MarginWaterfall } from '@/components/overview/margin-waterfall';
+import { MoneyOwed } from '@/components/overview/money-owed';
 import { OwnerEquity } from '@/components/overview/owner-equity';
 import { PositionStrip, PositionStripSkeleton } from '@/components/overview/position-strip';
 import { RecentActivity } from '@/components/overview/recent-activity';
+import { SetupChecklist } from '@/components/overview/setup-checklist';
 import { PageHeader } from '@/components/patterns/page-header';
 import { PeriodSelector } from '@/components/patterns/period-selector';
 import { Button } from '@/components/ui/button';
@@ -17,7 +20,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { formatRate } from '@/lib/fx';
 import { isPeriodPreset, type PeriodPreset } from '@/lib/report-period';
-import { getCashFlow, getCurrentRate } from '@/server/queries/overview';
+import { getCashFlow, getCurrentRate, getSetupState } from '@/server/queries/overview';
+
+/** Set by POST /api/setup-banner when the checklist is dismissed (F-13). */
+const SETUP_DISMISS_COOKIE = 'setup-checklist-dismissed';
 
 /** Stable keys for placeholder rows. Skeletons never reorder, but an
  *  index key still teaches the wrong habit to whoever copies this next. */
@@ -62,6 +68,10 @@ export default function OverviewPage({ searchParams }: { searchParams: SearchPar
       />
 
       <div className="space-y-4">
+        <Suspense fallback={null}>
+          <SetupSection />
+        </Suspense>
+
         <Suspense fallback={<PositionStripSkeleton />}>
           <PositionStrip />
         </Suspense>
@@ -94,6 +104,21 @@ export default function OverviewPage({ searchParams }: { searchParams: SearchPar
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <Surface>
+            <SurfaceHeader
+              title="Money owed"
+              hint="Credit sales waiting to be settled"
+              action={
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/sales?status=confirmed">All sales</Link>
+                </Button>
+              }
+            />
+            <Suspense fallback={<PanelSkeleton rows={3} />}>
+              <MoneyOwed />
+            </Suspense>
+          </Surface>
+
           <Surface>
             <SurfaceHeader
               title="Needs attention"
@@ -167,6 +192,17 @@ export default function OverviewPage({ searchParams }: { searchParams: SearchPar
 async function CashFlow() {
   const data = await getCashFlow(12);
   return <CashFlowChart data={data} />;
+}
+
+/**
+ * The setup checklist, server-gated so a dismissal survives a reload (F-13).
+ * Reading the cookie here is what makes the page dynamic for that render —
+ * hence its own Suspense boundary, so the rest of the Overview still streams.
+ */
+async function SetupSection() {
+  const [state, cookieStore] = await Promise.all([getSetupState(), cookies()]);
+  if (state.complete || cookieStore.get(SETUP_DISMISS_COOKIE)) return null;
+  return <SetupChecklist state={state} />;
 }
 
 async function Waterfall({ searchParams }: { searchParams: SearchParams }) {

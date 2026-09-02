@@ -21,7 +21,8 @@ import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatDate, formatRelative, humanise } from '@/lib/format';
 import { formatRate, RATE_SCALE } from '@/lib/fx';
-import { toDecimalString } from '@/lib/money';
+import { formatMoney, toDecimalString } from '@/lib/money';
+import { PAYMENT_LABELS, type PaymentBadgeCode, paymentBadgeOf } from '@/lib/payment-status';
 import { listActivity } from '@/server/queries/activity';
 import { getSale } from '@/server/queries/documents';
 import { getCurrentRate } from '@/server/queries/overview';
@@ -30,6 +31,12 @@ import { listCustomerOptions, listVariantOptions } from '@/server/queries/picker
 export const metadata: Metadata = { title: 'Sale' };
 
 const STATUS_TONE = { draft: 'neutral', confirmed: 'positive', void: 'negative' } as const;
+const PAYMENT_TONE: Record<PaymentBadgeCode, 'positive' | 'warning' | 'info' | 'negative'> = {
+  paid: 'positive',
+  partly: 'info',
+  unpaid: 'warning',
+  overdue: 'negative',
+};
 
 type SearchParams = Promise<{ editing?: string }>;
 
@@ -92,10 +99,13 @@ async function Loader({
           currency: sale.currency,
           paymentMethod: sale.paymentMethod,
           notes: sale.notes ?? '',
+          discount: toDecimalString(sale.discountCents, sale.currency),
+          discountReason: sale.discountReason ?? '',
           items: sale.items.map((item) => ({
             variantId: item.variantId,
             quantity: String(item.quantity),
             unitPrice: toDecimalString(item.unitPriceCents, sale.currency),
+            serials: item.serials.join('\n'),
           })),
         }}
       />
@@ -103,6 +113,17 @@ async function Loader({
   }
 
   const marginRate = sale.totalUsdCents === 0 ? 0 : sale.grossProfitCents / sale.totalUsdCents;
+  const discountUsdCents = Math.round((sale.discountCents * sale.fxRateMicros) / RATE_SCALE);
+  const subtotalUsdCents = sale.totalUsdCents + discountUsdCents;
+
+  /** Derived, never stored (F-4): the badge answers "has the money arrived",
+   *  which is a different question from "did the sale happen" that the status
+   *  badge beside it answers. Drafts and voids owe nothing, so they get none. */
+  const paymentBadge =
+    sale.status === 'confirmed'
+      ? paymentBadgeOf(sale.totalCents, sale.paidCents, new Date(sale.soldAt))
+      : null;
+  const balanceCents = Math.max(0, sale.totalCents - sale.paidCents);
 
   return (
     <div className="space-y-4">
@@ -112,6 +133,9 @@ async function Loader({
             <span className="inline-flex items-center gap-2">
               <span className="tabular">{sale.number}</span>
               <Badge tone={STATUS_TONE[sale.status]}>{humanise(sale.status)}</Badge>
+              {paymentBadge ? (
+                <Badge tone={PAYMENT_TONE[paymentBadge]}>{PAYMENT_LABELS[paymentBadge]}</Badge>
+              ) : null}
             </span>
           }
           hint={
@@ -128,6 +152,11 @@ async function Loader({
           }
           action={
             <span className="inline-flex items-center gap-1">
+              {sale.status !== 'void' ? (
+                <Button asChild variant="secondary" size="sm">
+                  <Link href={`/invoice/${sale.id}` as Route}>Invoice</Link>
+                </Button>
+              ) : null}
               {sale.status === 'draft' ? (
                 <Button asChild variant="secondary" size="sm">
                   <Link href={`/sales/${sale.id}?editing=1` as Route}>Edit</Link>
@@ -148,7 +177,15 @@ async function Loader({
                   }))}
                 />
               ) : null}
-              <SaleActions id={sale.id} number={sale.number} status={sale.status} />
+              <SaleActions
+                id={sale.id}
+                number={sale.number}
+                status={sale.status}
+                totalCents={sale.totalCents}
+                paidCents={sale.paidCents}
+                currency={sale.currency}
+                paymentStatus={paymentBadge}
+              />
             </span>
           }
         />
@@ -157,6 +194,16 @@ async function Loader({
           <Field label="Currency" value={sale.currency} />
           <Field label="Rate" value={`1 USD = ${formatRate(sale.fxRateMicros, 2)} SRD`} />
           <Field label="Payment" value={humanise(sale.paymentMethod)} />
+          {sale.status === 'confirmed' ? (
+            <>
+              <Field label="Total" value={formatMoney(sale.totalCents, sale.currency)} />
+              <Field label="Paid" value={formatMoney(sale.paidCents, sale.currency)} />
+              <Field
+                label="Balance"
+                value={balanceCents > 0 ? formatMoney(balanceCents, sale.currency) : 'Settled'}
+              />
+            </>
+          ) : null}
         </div>
       </Surface>
 
@@ -197,6 +244,11 @@ async function Loader({
                             {item.quantityReturned} returned
                           </Badge>
                         ) : null}
+                        {item.serials.length > 0 ? (
+                          <span className="tabular block text-[11px] text-ink-4">
+                            {item.serials.join(' · ')}
+                          </span>
+                        ) : null}
                       </TD>
                       <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
                         {item.sku}
@@ -221,6 +273,32 @@ async function Loader({
                 })}
               </TBody>
               <tfoot className="border-line-subtle border-t bg-inset/60">
+                {sale.discountCents > 0 ? (
+                  <tr>
+                    <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
+                      Subtotal{sale.discountReason ? ` · ${sale.discountReason}` : ''}
+                    </td>
+                    <td className="h-9 px-3 text-right">
+                      <Money cents={subtotalUsdCents} size="sm" tone="muted" />
+                    </td>
+                    <td className="h-9 px-3" />
+                    <td className="h-9 px-3" />
+                  </tr>
+                ) : null}
+                <tr>
+                  <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
+                    {sale.discountCents > 0 ? 'Discount' : 'Totals'}
+                  </td>
+                  <td className="h-9 px-3 text-right">
+                    {sale.discountCents > 0 ? (
+                      <span className="text-[12px] text-ink-3">
+                        −<Money cents={discountUsdCents} size="sm" tone="muted" />
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="h-9 px-3" />
+                  <td className="h-9 px-3" />
+                </tr>
                 <tr>
                   <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
                     Totals
@@ -255,6 +333,11 @@ async function Loader({
                       <span className="text-ink-4"> · {item.variantName}</span>
                     </span>
                     <span className="tabular block text-[11px] text-ink-4">{item.sku}</span>
+                    {item.serials.length > 0 ? (
+                      <span className="tabular block text-[11px] text-ink-4">
+                        {item.serials.join(' · ')}
+                      </span>
+                    ) : null}
                   </span>
                   <Money cents={item.lineTotalUsdCents} size="sm" className="shrink-0" />
                 </MobileRowHeader>
@@ -283,6 +366,14 @@ async function Loader({
               </MobileRow>
             );
           })}
+          {sale.discountCents > 0 ? (
+            <div className="flex items-center justify-between gap-3 px-4 py-2 text-[12px] text-ink-3">
+              <span>Discount{sale.discountReason ? ` · ${sale.discountReason}` : ''}</span>
+              <span>
+                −<Money cents={discountUsdCents} size="sm" tone="muted" />
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3 px-4 py-3 text-[12px] text-ink-3">
             <span>Total</span>
             <span className="flex items-center gap-3">
@@ -292,6 +383,38 @@ async function Loader({
           </div>
         </MobileList>
       </Surface>
+
+      {sale.status === 'confirmed' && sale.payments.length > 0 ? (
+        <Surface className="overflow-hidden">
+          <SurfaceHeader
+            title="Payments"
+            hint="Each payment posted its own receipt to the cash ledger when it was recorded"
+          />
+          <div className="divide-y divide-line-subtle">
+            {sale.payments.map((payment) => (
+              <div
+                key={payment.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <span className="min-w-0 truncate text-[13px] text-ink-2">
+                  {humanise(payment.method)}
+                  {payment.notes ? (
+                    <span className="text-ink-4"> · {payment.notes}</span>
+                  ) : null}
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-[12px] text-ink-4">
+                    {formatDate(payment.receivedAt)}
+                  </span>
+                  <span className="text-[13px] text-positive">
+                    {formatMoney(payment.amountCents, sale.currency)}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Surface>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Surface className="overflow-hidden">

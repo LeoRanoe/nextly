@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { OwnerActions } from '@/components/forms/owner-actions';
 import { OwnerEquity } from '@/components/overview/owner-equity';
 import { PageHeader } from '@/components/patterns/page-header';
 import {
@@ -15,15 +16,19 @@ import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPercent } from '@/lib/money';
 import { getOwnerEquity } from '@/server/queries/overview';
+import { listPrincipalOptions } from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Owners' };
 
-export default function OwnersPage() {
+export default async function OwnersPage() {
+  const principals = await listPrincipalOptions();
+
   return (
     <>
       <PageHeader
         title="Owners"
         description="The split is computed from capital that actually moved through the ledger. Nobody types a percentage, so the shares cannot disagree with the cash."
+        action={<OwnerActions principals={principals} />}
       />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Surface className="overflow-hidden">

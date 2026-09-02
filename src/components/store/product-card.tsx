@@ -3,9 +3,10 @@ import type { Route } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
-import { Money } from '@/components/ui/money';
 import type { RateMicros } from '@/lib/fx';
 import type { CatalogListItem } from '@/server/queries/catalog';
+import { StorePrice } from './store-price';
+import { WhatsAppCta } from './whatsapp-cta';
 
 /**
  * One product in the storefront grid.
@@ -14,13 +15,18 @@ import type { CatalogListItem } from '@/server/queries/catalog';
  * elevation, semantic colour only where it means something (availability),
  * money always tabular. The image holds a 4:3 field so the grid stays calm
  * whether a product has photography yet or not.
+ *
+ * Priced SRD-first and closed with a WhatsApp enquiry — a visitor should be
+ * able to act without leaving the card (P0-10).
  */
 export function ProductCard({
   product,
   srdRate,
+  whatsapp,
 }: {
   product: CatalogListItem;
   srdRate?: RateMicros;
+  whatsapp: string | null;
 }) {
   const inStock = product.onHand > 0;
   const hasRange = product.maxPriceCents > product.minPriceCents;
@@ -52,8 +58,8 @@ export function ProductCard({
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         <div className="flex items-start justify-between gap-2">
           <p className="min-w-0 truncate font-medium text-[14px] text-ink">{product.name}</p>
-          <Badge tone={inStock ? 'positive' : 'negative'}>
-            {inStock ? 'In stock' : 'Out of stock'}
+          <Badge tone={inStock ? 'positive' : 'neutral'}>
+            {inStock ? `${product.onHand} in stock` : 'Sold out'}
           </Badge>
         </div>
 
@@ -63,14 +69,25 @@ export function ProductCard({
           </p>
         ) : null}
 
-        <div className="mt-auto flex items-end gap-1.5 pt-2">
-          {hasRange ? <span className="pb-0.5 text-[11px] text-ink-4">from</span> : null}
-          <Money cents={product.minPriceCents} srdRate={srdRate} className="items-start" />
+        <div className="mt-auto pt-2">
+          <StorePrice
+            usdCents={product.minPriceCents}
+            srdRate={srdRate}
+            size="md"
+            prefix={hasRange ? 'from' : undefined}
+          />
         </div>
 
-        {product.categoryName ? (
-          <p className="text-[11px] text-ink-4">{product.categoryName}</p>
-        ) : null}
+        <WhatsAppCta
+          number={whatsapp}
+          message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
+            inStock ? ' — is het op voorraad?' : ' — wanneer komt de volgende levering?'
+          }`}
+          label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
+          size="sm"
+          stopPropagation
+          className="mt-1 self-stretch"
+        />
       </div>
     </Link>
   );

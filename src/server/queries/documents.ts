@@ -26,6 +26,7 @@ export type SaleDetail = {
   totalCents: Cents;
   totalUsdCents: Cents;
   discountCents: Cents;
+  discountReason: string | null;
   cogsCents: Cents;
   grossProfitCents: Cents;
   paymentMethod: string;
@@ -45,6 +46,8 @@ export type SaleDetail = {
     lineTotalUsdCents: Cents;
     cogsCents: Cents;
     shortfall: number;
+    /** F-6: serials captured at the point of sale, in the order typed. */
+    serials: string[];
   }[];
   ledgerEntries: {
     id: string;
@@ -53,6 +56,17 @@ export type SaleDetail = {
     amountUsdCents: Cents;
     occurredAt: string;
   }[];
+  /** Money received against this sale (F-4). `paidCents` is in the currency of
+   *  the sale, like `totalCents`; the legacy ledger fallback keeps old direct
+   *  receipts truthful until the one-off reconciliation migrates them. */
+  payments: {
+    id: string;
+    amountCents: Cents;
+    method: string;
+    receivedAt: string;
+    notes: string | null;
+  }[];
+  paidCents: Cents;
   movements: {
     id: string;
     variantId: string;
@@ -71,8 +85,16 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       s.id, s.number, s.status::text, s.customer_id, c.name AS customer_name,
       s.currency::text, s.fx_rate_micros::text,
       s.total_cents::text, s.total_usd_cents::text, s.discount_cents::text,
+      s.discount_reason,
       s.cogs_cents::text, s.gross_profit_cents::text,
-      s.payment_method::text, s.sold_at::text, s.notes
+      s.payment_method::text, s.sold_at::text, s.notes,
+      COALESCE((
+        SELECT SUM(CASE WHEN l.direction = 'in' THEN l.amount_cents ELSE -l.amount_cents END)
+          FROM ledger_entries l
+         WHERE l.source_kind = 'sale'
+           AND l.source_id = s.id
+           AND l.category = 'sales_receipt'
+      ), 0)::text AS legacy_paid_cents
     FROM sales s
     LEFT JOIN customers c ON c.id = s.customer_id
     WHERE s.id = ${id}
@@ -81,7 +103,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
 
   if (!row) return null;
 
-  const [items, ledgerEntries, movements] = await Promise.all([
+  const [items, ledgerEntries, movements, payments, serials] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT
         si.id, si.variant_id, v.product_id, p.name AS product_name,
@@ -98,7 +120,9 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     db.execute<Record<string, string | null>>(sql`
       SELECT id, direction::text, description, amount_usd_cents::text, occurred_at::text
         FROM ledger_entries
-       WHERE source_kind = 'sale' AND source_id = ${id}
+       WHERE source_kind = 'sale'
+         AND (source_id = ${id}
+              OR source_id IN (SELECT id FROM sale_payments WHERE sale_id = ${id}))
        ORDER BY occurred_at, seq
     `),
     db.execute<Record<string, string | null>>(sql`
@@ -108,7 +132,27 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
        WHERE m.source_kind = 'sale' AND m.source_id = ${id}
        ORDER BY m.occurred_at, m.seq
     `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, amount_cents::text, method::text, received_at::text, notes
+        FROM sale_payments
+       WHERE sale_id = ${id}
+       ORDER BY received_at, created_at
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT sale_item_id, serial
+        FROM sale_item_serials
+       WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id = ${id})
+       ORDER BY created_at, serial
+    `),
   ]);
+
+  const serialsByLine = new Map<string, string[]>();
+  for (const row of serials) {
+    const lineId = text(row.sale_item_id);
+    const existing = serialsByLine.get(lineId);
+    if (existing) existing.push(text(row.serial));
+    else serialsByLine.set(lineId, [text(row.serial)]);
+  }
 
   return {
     id: text(row.id),
@@ -121,6 +165,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     totalCents: num(row.total_cents),
     totalUsdCents: num(row.total_usd_cents),
     discountCents: num(row.discount_cents),
+    discountReason: maybe(row.discount_reason),
     cogsCents: num(row.cogs_cents),
     grossProfitCents: num(row.gross_profit_cents),
     paymentMethod: text(row.payment_method),
@@ -140,6 +185,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       lineTotalUsdCents: num(item.line_total_usd_cents),
       cogsCents: num(item.cogs_cents),
       shortfall: num(item.shortfall),
+      serials: serialsByLine.get(text(item.id)) ?? [],
     })),
     ledgerEntries: ledgerEntries.map((entry) => ({
       id: text(entry.id),
@@ -148,6 +194,16 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       amountUsdCents: num(entry.amount_usd_cents),
       occurredAt: text(entry.occurred_at),
     })),
+    payments: payments.map((payment) => ({
+      id: text(payment.id),
+      amountCents: num(payment.amount_cents),
+      method: text(payment.method),
+      receivedAt: text(payment.received_at),
+      notes: maybe(payment.notes),
+    })),
+    paidCents:
+      payments.reduce((total, payment) => total + num(payment.amount_cents), 0) +
+      num(row.legacy_paid_cents),
     movements: movements.map((movement) => ({
       id: text(movement.id),
       variantId: text(movement.variant_id),
@@ -207,6 +263,15 @@ export type PurchaseOrderDetail = {
     valueCents: Cents;
     occurredAt: string;
   }[];
+  /** Money paid to the supplier (F-9). Derived, never stored on the order. */
+  paidCents: Cents;
+  payments: {
+    id: string;
+    amountCents: Cents;
+    method: string;
+    paidAt: string;
+    notes: string | null;
+  }[];
 };
 
 export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail | null> {
@@ -219,7 +284,18 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       o.tax_cents::text, o.card_fee_cents::text, o.delivery_cents::text,
       o.shipping_cents::text, o.shipping_tax_cents::text,
       o.ordered_at::text, o.expected_at::text, o.received_at::text,
-      o.reference, o.notes
+      o.reference, o.notes,
+      (
+        COALESCE((SELECT SUM(pp.amount_cents) FROM purchase_order_payments pp
+                   WHERE pp.purchase_order_id = o.id), 0)
+        + COALESCE((
+            SELECT SUM(CASE WHEN l.direction = 'out' THEN l.amount_cents ELSE -l.amount_cents END)
+              FROM ledger_entries l
+             WHERE l.source_kind = 'purchase_order'
+               AND l.source_id = o.id
+               AND l.category = 'purchase'
+          ), 0)
+      )::text AS paid_cents
     FROM purchase_orders o
     LEFT JOIN suppliers s ON s.id = o.supplier_id
     WHERE o.id = ${id}
@@ -228,7 +304,7 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
 
   if (!row) return null;
 
-  const [items, ledgerEntries, movements] = await Promise.all([
+  const [items, ledgerEntries, movements, payments] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT
         i.id, i.variant_id, v.product_id, p.name AS product_name,
@@ -244,7 +320,9 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
     db.execute<Record<string, string | null>>(sql`
       SELECT id, direction::text, description, amount_usd_cents::text, occurred_at::text
         FROM ledger_entries
-       WHERE source_kind = 'purchase_order' AND source_id = ${id}
+       WHERE source_kind = 'purchase_order'
+         AND (source_id = ${id}
+              OR source_id IN (SELECT id FROM purchase_order_payments WHERE purchase_order_id = ${id}))
        ORDER BY occurred_at, seq
     `),
     db.execute<Record<string, string | null>>(sql`
@@ -253,6 +331,12 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
         JOIN product_variants v ON v.id = m.variant_id
        WHERE m.source_kind = 'purchase_order' AND m.source_id = ${id}
        ORDER BY m.occurred_at, m.seq
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, amount_cents::text, method::text, paid_at::text, notes
+        FROM purchase_order_payments
+       WHERE purchase_order_id = ${id}
+       ORDER BY paid_at, created_at
     `),
   ]);
 
@@ -287,6 +371,7 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       overheadCents: num(item.overhead_cents),
       landedCostCents: num(item.landed_cost_cents),
     })),
+    paidCents: num(row.paid_cents),
     ledgerEntries: ledgerEntries.map((entry) => ({
       id: text(entry.id),
       direction: text(entry.direction) as 'in' | 'out',
@@ -301,6 +386,13 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       quantity: num(movement.quantity),
       valueCents: num(movement.value_cents),
       occurredAt: text(movement.occurred_at),
+    })),
+    payments: payments.map((payment) => ({
+      id: text(payment.id),
+      amountCents: num(payment.amount_cents),
+      method: text(payment.method),
+      paidAt: text(payment.paid_at),
+      notes: maybe(payment.notes),
     })),
   };
 }

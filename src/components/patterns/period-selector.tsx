@@ -8,7 +8,7 @@ import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/report-period';
  *  dates via `lib/report-period.ts`'s `periodRange`. The default must match
  *  the server page's own fallback, or the control shows one period while
  *  the figures are computed for another. */
-export function PeriodSelector({ defaultValue = 'month' }: { defaultValue?: PeriodPreset }) {
+export function PeriodSelector({ defaultValue = 'all' }: { defaultValue?: PeriodPreset }) {
   const [period, setPeriod] = useQueryState(
     'period',
     parseAsString.withDefault(defaultValue).withOptions({ shallow: false, history: 'replace' }),

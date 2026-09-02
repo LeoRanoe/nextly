@@ -35,6 +35,18 @@ export const movementKind = pgEnum('movement_kind', [
 
 export const saleStatus = pgEnum('sale_status', ['draft', 'confirmed', 'void']);
 
+/** Where a storefront quote request (F-5) stands. `converted` means an owner
+ *  turned it into a draft sale — the request stays as the record of where the
+ *  sale came from. There is no `quoted` state on purpose: until prices leave
+ *  this app (invoice, WhatsApp reply), the only real events are answering,
+ *  turning down, and selling. */
+export const quoteRequestStatus = pgEnum('quote_request_status', [
+  'new',
+  'contacted',
+  'converted',
+  'declined',
+]);
+
 export const ledgerDirection = pgEnum('ledger_direction', ['in', 'out']);
 
 export const ledgerCategory = pgEnum('ledger_category', [

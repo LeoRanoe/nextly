@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { SupplierSheet } from '@/components/forms/reference-sheets';
 import { SupplierActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportButton } from '@/components/patterns/export-button';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,7 @@ export default function SuppliersPage({
       <Surface className="overflow-hidden">
         <ListToolbar>
           <ListSearch placeholder="Search by name" />
+          <ExportButton entity="suppliers" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<Skeleton className="m-4 h-24" />}>
           <SuppliersTable searchParams={searchParams} />

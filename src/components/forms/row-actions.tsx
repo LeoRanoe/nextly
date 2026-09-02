@@ -15,20 +15,27 @@ import { useMember } from '@/components/providers/member-provider';
 import { ConfirmDialog } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Item, Menu } from '@/components/ui/dropdown-menu';
-import { Field, Textarea } from '@/components/ui/field';
+import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Sheet, SheetSection } from '@/components/ui/sheet';
 import { SubmitButton } from '@/components/ui/submit-button';
-import { formatMoney, toDecimalString } from '@/lib/money';
+import type { Cents, CurrencyCode } from '@/lib/money';
+import { formatMoney, parseMoney, toDecimalString } from '@/lib/money';
+import type { PaymentBadgeCode } from '@/lib/payment-status';
+import { balanceCentsOf, PAYMENT_LABELS, paymentStatusOf } from '@/lib/payment-status';
 import { deleteExpense, reverseLedgerEntry } from '@/server/actions/finance';
 import { deleteProduct, setProductStatus } from '@/server/actions/products';
-import { cancelPurchaseOrder, setPurchaseOrderStatus } from '@/server/actions/purchase-orders';
+import {
+  cancelPurchaseOrder,
+  recordPurchaseOrderPayment,
+  setPurchaseOrderStatus,
+} from '@/server/actions/purchase-orders';
 import {
   deleteCategory,
   deleteCustomer,
   deleteSupplier,
   removeMember,
 } from '@/server/actions/reference';
-import { confirmSale, voidSale } from '@/server/actions/sales';
+import { confirmSale, recordSalePayment, voidSale } from '@/server/actions/sales';
 import type { Option } from '@/server/queries/pickers';
 
 /**
@@ -126,19 +133,35 @@ export function SaleActions({
   id,
   number,
   status,
+  totalCents = 0,
+  paidCents = 0,
+  currency = 'USD',
+  paymentStatus,
 }: {
   id: string;
   number: string;
   status: 'draft' | 'confirmed' | 'void';
+  /** Only needed for a confirmed sale — the balance decides whether offering a
+   *  payment makes sense. A draft being confirmed goes through `ConfirmSheet`
+   *  instead, which asks about the money itself (F-4). */
+  totalCents?: Cents;
+  paidCents?: Cents;
+  currency?: CurrencyCode;
+  /** Pass it in when the caller already displays the badge, so the menu does
+   *  not offer something the screen has just said is settled. */
+  paymentStatus?: PaymentBadgeCode | null;
 }) {
   const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   const confirmAction = useAction(confirmSale, {
     onSuccess({ data }) {
       toast.success(`${data?.number} confirmed`, {
-        description: 'Stock moved, cost of goods booked and the receipt posted.',
+        description: 'Stock moved and cost of goods booked.',
       });
+      setConfirming(false);
       router.refresh();
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not confirm'),
@@ -157,16 +180,46 @@ export function SaleActions({
 
   if (status === 'void') return null;
 
+  const balance = balanceCentsOf(totalCents, paidCents);
+  const unpaid =
+    status === 'confirmed' &&
+    (paymentStatus ? paymentStatus !== 'paid' : balance > 0) &&
+    balance > 0;
+
   return (
     <>
       <Menu>
+        {unpaid ? <Item onSelect={() => setPaying(true)}>Record payment</Item> : null}
         {status === 'draft' ? (
-          <Item onSelect={() => confirmAction.execute({ id })}>Confirm sale</Item>
+          <Item onSelect={() => setConfirming(true)}>Confirm sale</Item>
         ) : null}
         <Item danger onSelect={() => setVoiding(true)}>
           Void sale
         </Item>
       </Menu>
+
+      {status === 'draft' ? (
+        <ConfirmSheet
+          open={confirming}
+          onOpenChange={setConfirming}
+          number={number}
+          pending={confirmAction.isPending}
+          onSubmit={(paidInFull, paidNowCents) =>
+            confirmAction.execute({ id, paidInFull, paidNowCents: String(paidNowCents) })
+          }
+        />
+      ) : null}
+
+      {unpaid ? (
+        <RecordPaymentSheet
+          open={paying}
+          onOpenChange={setPaying}
+          saleId={id}
+          number={number}
+          currency={currency}
+          balanceCents={balance}
+        />
+      ) : null}
 
       <ReasonSheet
         open={voiding}
@@ -183,19 +236,287 @@ export function SaleActions({
   );
 }
 
+/**
+ * Confirming a draft, and deciding what happened to the money (F-4).
+ *
+ * The old behaviour was implicit: confirming always posted the whole receipt.
+ * That was right when every sale was cash and wrong the moment credit sales
+ * existed, because a receipt for money that never arrived inflates cash and
+ * hides a receivable. So the sheet asks the question outright, with "paid in
+ * full" as the default to keep the common path one click.
+ */
+function ConfirmSheet({
+  open,
+  onOpenChange,
+  number,
+  pending,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  number: string;
+  pending: boolean;
+  onSubmit: (paidInFull: boolean, paidNowCents: Cents) => void;
+}) {
+  const [paidInFull, setPaidInFull] = useState(true);
+  const [deposit, setDeposit] = useState('');
+  const formId = useId();
+
+  let depositCents: Cents = 0;
+  try {
+    depositCents = parseMoney(deposit || '0');
+  } catch {
+    depositCents = 0;
+  }
+  if (!Number.isFinite(depositCents) || depositCents < 0) depositCents = 0;
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Confirm ${number}`}
+      description="Confirming moves stock and books the cost of goods. What it does with the cash depends on the answer below."
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <SubmitButton
+            form={formId}
+            variant="primary"
+            pending={pending}
+            disabled={!paidInFull && depositCents <= 0}
+          >
+            {paidInFull ? 'Confirm sale' : 'Confirm on credit'}
+          </SubmitButton>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(paidInFull, paidInFull ? 0 : depositCents);
+        }}
+      >
+        <SheetSection title="Payment">
+          <div className="flex flex-col gap-2">
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-control border border-line bg-inset p-3 transition-colors hover:border-line-strong has-[:checked]:border-accent-border has-[:checked]:bg-accent-muted/40">
+              <input
+                type="radio"
+                name="paid-in-full"
+                checked={paidInFull}
+                onChange={() => setPaidInFull(true)}
+                className="mt-0.5 accent-accent"
+              />
+              <span>
+                <span className="block text-[13px] text-ink">Paid in full now</span>
+                <span className="mt-0.5 block text-[11px] text-ink-4 leading-relaxed">
+                  Posts one receipt for the whole amount to the cash ledger.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-control border border-line bg-inset p-3 transition-colors hover:border-line-strong has-[:checked]:border-accent-border has-[:checked]:bg-accent-muted/40">
+              <input
+                type="radio"
+                name="paid-in-full"
+                checked={!paidInFull}
+                onChange={() => setPaidInFull(false)}
+                className="mt-0.5 accent-accent"
+              />
+              <span>
+                <span className="block text-[13px] text-ink">Money comes later</span>
+                <span className="mt-0.5 block text-[11px] text-ink-4 leading-relaxed">
+                  Nothing posts until each payment arrives. The balance then reads as owed — and
+                  overdue after 30 days.
+                </span>
+              </span>
+            </label>
+          </div>
+          {!paidInFull ? (
+            <Field
+              label="Deposit taken now"
+              htmlFor={`${formId}-deposit`}
+              hint="Optional — leave empty if nothing arrived yet"
+            >
+              <Input
+                id={`${formId}-deposit`}
+                numeric
+                inputMode="decimal"
+                placeholder="0.00"
+                value={deposit}
+                onChange={(event) => setDeposit(event.target.value)}
+              />
+            </Field>
+          ) : null}
+        </SheetSection>
+      </form>
+    </Sheet>
+  );
+}
+
+/**
+ * Money arriving against a sale that is already confirmed (F-4).
+ *
+ * The balance is prefilled because the overwhelmingly common case is settling
+ * it in one go; partial payments mean clearing the field and typing what was
+ * actually handed over. Overpaying is refused server-side, so this only needs
+ * to show the number plainly.
+ */
+export function RecordPaymentSheet({
+  open,
+  onOpenChange,
+  saleId,
+  number,
+  currency,
+  balanceCents,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  saleId: string;
+  number: string;
+  currency: CurrencyCode;
+  balanceCents: Cents;
+}) {
+  const router = useRouter();
+  const [amount, setAmount] = useState(toDecimalString(balanceCents, currency));
+  const [method, setMethod] = useState('cash');
+  const [receivedAt, setReceivedAt] = useState('');
+  const [notes, setNotes] = useState('');
+  const formId = useId();
+
+  let parsed: Cents = 0;
+  try {
+    parsed = parseMoney(amount || '0');
+  } catch {
+    parsed = 0;
+  }
+  if (!Number.isFinite(parsed) || parsed < 0) parsed = 0;
+
+  const payAction = useAction(recordSalePayment, {
+    onSuccess({ data }) {
+      if (!data) return;
+      toast.success(
+        `${formatMoney(data.amountCents, data.currency)} recorded on ${data.number}`,
+        {
+          description:
+            data.paymentStatus === 'paid'
+              ? 'That settles the sale. Its receipt is in the cash ledger.'
+              : `${PAYMENT_LABELS[data.paymentStatus]} — ${formatMoney(data.balanceCents, data.currency)} still owed.`,
+        },
+      );
+      onOpenChange(false);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not record the payment');
+    },
+  });
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Payment on ${number}`}
+      description={`Outstanding balance ${formatMoney(balanceCents, currency)}. Each payment posts its own receipt to the cash ledger, dated the day the money arrived.`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <SubmitButton
+            form={formId}
+            variant="primary"
+            pending={payAction.isPending}
+            disabled={parsed <= 0}
+          >
+            Record payment
+          </SubmitButton>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          payAction.execute({
+            saleId,
+            amountCents: String(parsed),
+            paymentMethod: method as 'cash',
+            receivedAt: receivedAt || undefined,
+            notes: notes || undefined,
+          });
+        }}
+      >
+        <SheetSection title="Payment">
+          <Field label={`Amount (${currency})`} htmlFor={`${formId}-amount`} required>
+            <Input
+              id={`${formId}-amount`}
+              numeric
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              required
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Method" htmlFor={`${formId}-method`}>
+              <Select
+                id={`${formId}-method`}
+                value={method}
+                onChange={(event) => setMethod(event.target.value)}
+              >
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="card">Card</option>
+                <option value="other">Other</option>
+              </Select>
+            </Field>
+            <Field label="Date received" htmlFor={`${formId}-date`} hint="Empty means today">
+              <Input
+                id={`${formId}-date`}
+                type="date"
+                value={receivedAt}
+                onChange={(event) => setReceivedAt(event.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Note" htmlFor={`${formId}-notes`} hint="Optional">
+            <Input
+              id={`${formId}-notes`}
+              placeholder="Reference, who brought it…"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </Field>
+        </SheetSection>
+      </form>
+    </Sheet>
+  );
+}
+
 /* ── Purchase orders ─────────────────────────────────────────────────────── */
 
 export function PurchaseOrderActions({
   id,
   number,
   status,
+  currency = 'USD',
+  balanceCents = 0,
 }: {
   id: string;
   number: string;
   status: 'draft' | 'ordered' | 'shipped' | 'received' | 'cancelled';
+  /** Orders are always USD today; the prop keeps the sheet honest if that changes. */
+  currency?: CurrencyCode;
+  /** Outstanding amount (landed − paid). Only meaningful once received. */
+  balanceCents?: Cents;
 }) {
   const router = useRouter();
   const [cancelling, setCancelling] = useState(false);
+  const [paying, setPaying] = useState(false);
+
+  const unpaid = status === 'received' && balanceCents > 0;
 
   const statusAction = useAction(setPurchaseOrderStatus, {
     onSuccess({ data }) {
@@ -219,6 +540,7 @@ export function PurchaseOrderActions({
   return (
     <>
       <Menu>
+        {unpaid ? <Item onSelect={() => setPaying(true)}>Record payment</Item> : null}
         {status === 'ordered' ? (
           <Item onSelect={() => statusAction.execute({ id, status: 'shipped' })}>
             Mark shipped
@@ -233,6 +555,17 @@ export function PurchaseOrderActions({
           Cancel order
         </Item>
       </Menu>
+
+      {unpaid ? (
+        <SupplierPaymentSheet
+          open={paying}
+          onOpenChange={setPaying}
+          orderId={id}
+          number={number}
+          currency={currency}
+          balanceCents={balanceCents}
+        />
+      ) : null}
 
       <ReasonSheet
         open={cancelling}
@@ -250,6 +583,139 @@ export function PurchaseOrderActions({
         onSubmit={(reason) => cancelAction.execute({ id, reason: reason || undefined })}
       />
     </>
+  );
+}
+
+/** Pays part or all of what a purchase order still owes the supplier (F-9).
+ *  Prefilled with the full balance, because that is the common case. Each
+ *  payment posts its own expense to the cash ledger under its own identity —
+ *  cancelling the order later must not erase money that actually left. */
+function SupplierPaymentSheet({
+  open,
+  onOpenChange,
+  orderId,
+  number,
+  currency,
+  balanceCents,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  orderId: string;
+  number: string;
+  currency: CurrencyCode;
+  balanceCents: Cents;
+}) {
+  const router = useRouter();
+  const [amount, setAmount] = useState(toDecimalString(balanceCents, currency));
+  const [method, setMethod] = useState('card');
+  const [paidAt, setPaidAt] = useState('');
+  const [notes, setNotes] = useState('');
+  const formId = useId();
+
+  let parsed: Cents = 0;
+  try {
+    parsed = parseMoney(amount || '0');
+  } catch {
+    parsed = 0;
+  }
+  if (!Number.isFinite(parsed) || parsed < 0) parsed = 0;
+
+  const payAction = useAction(recordPurchaseOrderPayment, {
+    onSuccess({ data }) {
+      if (!data) return;
+      toast.success(`${formatMoney(data.amountCents, currency)} recorded on ${data.number}`, {
+        description:
+          data.balanceCents > 0
+            ? `${PAYMENT_LABELS[paymentStatusOf(data.landedCents, data.paidCents)]} — ${formatMoney(data.balanceCents, currency)} still owed.`
+            : 'That settles the order. Its payments are in the cash ledger.',
+      });
+      onOpenChange(false);
+      router.refresh();
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? 'Could not record the payment');
+    },
+  });
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Payment on ${number}`}
+      description={`Outstanding balance ${formatMoney(balanceCents, currency)}. Each payment posts its own expense to the cash ledger, dated the day the money left — cancelling the order cannot erase them.`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <SubmitButton
+            form={formId}
+            variant="primary"
+            pending={payAction.isPending}
+            disabled={parsed <= 0}
+          >
+            Record payment
+          </SubmitButton>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          payAction.execute({
+            orderId,
+            amountCents: String(parsed),
+            paymentMethod: method as 'cash',
+            paidAt: paidAt || undefined,
+            notes: notes || undefined,
+          });
+        }}
+      >
+        <SheetSection title="Payment">
+          <Field label={`Amount (${currency})`} htmlFor={`${formId}-amount`} required>
+            <Input
+              id={`${formId}-amount`}
+              numeric
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              required
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Method" htmlFor={`${formId}-method`}>
+              <Select
+                id={`${formId}-method`}
+                value={method}
+                onChange={(event) => setMethod(event.target.value)}
+              >
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank transfer</option>
+                <option value="card">Card</option>
+                <option value="other">Other</option>
+              </Select>
+            </Field>
+            <Field label="Date paid" htmlFor={`${formId}-date`} hint="Empty means today">
+              <Input
+                id={`${formId}-date`}
+                type="date"
+                value={paidAt}
+                onChange={(event) => setPaidAt(event.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Note" htmlFor={`${formId}-notes`} hint="Optional">
+            <Input
+              id={`${formId}-notes`}
+              placeholder="TT reference, invoice number…"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </Field>
+        </SheetSection>
+      </form>
+    </Sheet>
   );
 }
 

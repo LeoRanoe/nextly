@@ -312,6 +312,20 @@ export const updateSettings = ownerAction
     await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(settings).limit(1);
 
+      const identity = {
+        legalName: input.legalName ?? null,
+        addressLine: input.addressLine ?? null,
+        city: input.city ?? null,
+        phone: input.phone ?? null,
+        whatsapp: input.whatsapp ?? null,
+        email: input.email ?? null,
+        taxId: input.taxId ?? null,
+        logoUrl: input.logoUrl ?? null,
+        invoiceFooter: input.invoiceFooter ?? null,
+        instagram: input.instagram ?? null,
+        openingHours: input.openingHours ?? null,
+      };
+
       if (existing) {
         await tx
           .update(settings)
@@ -319,6 +333,7 @@ export const updateSettings = ownerAction
             businessName: input.businessName,
             displayCurrency: input.displayCurrency,
             lowStockThreshold: input.lowStockThreshold,
+            ...identity,
           })
           .where(eq(settings.id, existing.id));
       } else {
@@ -326,6 +341,7 @@ export const updateSettings = ownerAction
           businessName: input.businessName,
           displayCurrency: input.displayCurrency,
           lowStockThreshold: input.lowStockThreshold,
+          ...identity,
         });
       }
 

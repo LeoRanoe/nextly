@@ -32,7 +32,7 @@ export type Tx = Parameters<Parameters<typeof database.transaction>[0]>[0];
 type DocumentKind = (typeof documentKind.enumValues)[number];
 type LedgerCategory = (typeof ledgerCategory.enumValues)[number];
 type MovementKind = (typeof movementKind.enumValues)[number];
-type PaymentMethod = (typeof paymentMethod.enumValues)[number];
+export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
 
 /* ── Document numbering ──────────────────────────────────────────────────── */
 
@@ -169,8 +169,8 @@ export type LedgerPosting = {
 };
 
 export async function postLedgerEntry(tx: Tx, posting: LedgerPosting): Promise<void> {
-  if (posting.amountCents < 0) {
-    throw new Error('Ledger amounts are always positive; direction carries the sign.');
+  if (posting.amountCents <= 0) {
+    throw new Error('Ledger amounts must be greater than zero; direction carries the sign.');
   }
 
   await tx.insert(ledgerEntries).values({

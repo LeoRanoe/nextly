@@ -1,9 +1,10 @@
-import { Receipt } from 'lucide-react';
+import { AlertTriangle, Receipt } from 'lucide-react';
 import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { SaleActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportButton } from '@/components/patterns/export-button';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -31,11 +32,21 @@ import {
 } from '@/components/ui/table';
 import { formatDate } from '@/lib/format';
 import { parseListParams, type RawSearchParams, saleQuerySchema } from '@/lib/list-params';
+import { PAYMENT_LABELS, type PaymentBadgeCode } from '@/lib/payment-status';
 import { listSales } from '@/server/queries/lists';
 
 export const metadata: Metadata = { title: 'Sales' };
 
 const STATUS_TONE = { draft: 'neutral', confirmed: 'positive', void: 'negative' } as const;
+/** Money badges sit beside the status because they answer a different question:
+ *  did the sale happen vs. did the cash arrive. Overdue is the only one that
+ *  demands attention, so it is the only one in full colour. */
+const PAYMENT_TONE: Record<PaymentBadgeCode, 'positive' | 'warning' | 'info' | 'negative'> = {
+  paid: 'positive',
+  partly: 'info',
+  unpaid: 'warning',
+  overdue: 'negative',
+};
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'confirmed', label: 'Confirmed' },
@@ -62,6 +73,7 @@ export default function SalesPage({
         <ListToolbar>
           <ListSearch placeholder="Search by number or customer" />
           <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
+          <ExportButton entity="sales" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-14', 'w-36', 'w-20']} />}>
           <SalesTable searchParams={searchParams} />
@@ -197,9 +209,15 @@ async function SalesTable({ searchParams }: { searchParams: Promise<RawSearchPar
                   </TD>
                   <TD className="text-ink-2">{row.customerName ?? '—'}</TD>
                   <TD>
-                    <Badge tone={STATUS_TONE[row.status]}>
-                      {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                    </Badge>
+                    {row.paymentStatus ? (
+                      <Badge tone={PAYMENT_TONE[row.paymentStatus]}>
+                        {PAYMENT_LABELS[row.paymentStatus]}
+                      </Badge>
+                    ) : (
+                      <Badge tone={STATUS_TONE[row.status]}>
+                        {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                      </Badge>
+                    )}
                   </TD>
                   <TD numeric className="text-ink-3">
                     {row.unitCount}
@@ -214,12 +232,29 @@ async function SalesTable({ searchParams }: { searchParams: Promise<RawSearchPar
                     <Money cents={row.grossCents} size="sm" tone="flow" />
                   </TD>
                   <TD numeric>
-                    <Percent
-                      value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
-                    />
+                    <span className="inline-flex items-center gap-1">
+                      <Percent
+                        value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
+                        className={row.shortfall > 0 ? 'text-warning' : undefined}
+                      />
+                      {row.shortfall > 0 ? (
+                        <span
+                          title={`${row.shortfall} unit${row.shortfall === 1 ? '' : 's'} had no stock; cost of goods is understated`}
+                        >
+                          <AlertTriangle className="size-3 text-warning" />
+                        </span>
+                      ) : null}
+                    </span>
                   </TD>
                   <TD className="text-right">
-                    <SaleActions id={row.id} number={row.number} status={row.status} />
+                    <SaleActions
+                      id={row.id}
+                      number={row.number}
+                      status={row.status}
+                      totalCents={row.totalCents}
+                      paidCents={row.paidCents}
+                      paymentStatus={row.paymentStatus}
+                    />
                   </TD>
                 </TR>
               ))}
@@ -264,8 +299,17 @@ async function SalesTable({ searchParams }: { searchParams: Promise<RawSearchPar
                     {row.customerName ?? '—'} · {formatDate(row.soldAt)}
                   </span>
                 </span>
-                <Badge tone={STATUS_TONE[row.status]} className="shrink-0">
-                  {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                <Badge
+                  tone={
+                    row.paymentStatus
+                      ? PAYMENT_TONE[row.paymentStatus]
+                      : STATUS_TONE[row.status]
+                  }
+                  className="shrink-0"
+                >
+                  {row.paymentStatus
+                    ? PAYMENT_LABELS[row.paymentStatus]
+                    : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
                 </Badge>
               </MobileRowHeader>
               <MobileRowMeta>
@@ -284,7 +328,14 @@ async function SalesTable({ searchParams }: { searchParams: Promise<RawSearchPar
               </MobileRowMeta>
             </Link>
             <div className="flex justify-end pt-0.5">
-              <SaleActions id={row.id} number={row.number} status={row.status} />
+              <SaleActions
+                id={row.id}
+                number={row.number}
+                status={row.status}
+                totalCents={row.totalCents}
+                paidCents={row.paidCents}
+                paymentStatus={row.paymentStatus}
+              />
             </div>
           </MobileRow>
         ))}

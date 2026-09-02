@@ -60,8 +60,9 @@ async function Explanation() {
           <span className="tabular text-ink-2">{user.email}</span>
         </>
       ) : null}
-      , but that address has not been invited to Nextly. An owner can add it from Settings, and
-      this page will then let you straight through.
+      , but that address has no member record in Nextly. Accounts are provisioned in Supabase
+      and matched by email, so an owner must add this address to the team; this page will then
+      let you straight through.
     </p>
   );
 }

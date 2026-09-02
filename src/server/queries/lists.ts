@@ -10,6 +10,7 @@ import type {
   StockQuery,
 } from '@/lib/list-params';
 import type { Cents } from '@/lib/money';
+import { type PaymentBadgeCode, paymentBadgeOf } from '@/lib/payment-status';
 import { db } from '../db/client';
 import { clampPage, clampPerPage, type Page, toPage } from './paginate';
 import { bool, maybe, num, text } from './row';
@@ -70,6 +71,13 @@ export async function listProducts(
     conditions.push(sql`(p.name ILIKE ${term} OR p.code ILIKE ${term})`);
   }
   if (query.status) conditions.push(sql`p.status = ${query.status}::product_status`);
+  if (query.catalog) {
+    conditions.push(
+      query.catalog === 'published'
+        ? sql`p.catalog_published = true`
+        : sql`p.catalog_published = false`,
+    );
+  }
   const where = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
 
   const orderBy = PRODUCT_SORT[query.sort] ?? PRODUCT_SORT.name;
@@ -293,6 +301,13 @@ export type SaleRow = {
   cogsCents: Cents;
   grossCents: Cents;
   paymentMethod: string;
+  shortfall: number;
+  /** Money received against the sale, in its own currency (F-4). */
+  totalCents: Cents;
+  paidCents: Cents;
+  /** Derived from those two plus the sale's age — never stored. Draft and void
+   *  sales are not owed, so they get no badge. */
+  paymentStatus: PaymentBadgeCode | null;
 };
 
 /** `ORDER BY` from a whitelist, never interpolated user input — an unknown
@@ -329,11 +344,24 @@ export async function listSales(query: SaleQuery = {} as SaleQuery): Promise<Pag
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
       s.id, s.number, s.sold_at::text, s.status::text, s.currency::text,
+      s.total_cents::text,
       s.total_usd_cents::text, s.cogs_cents::text, s.gross_profit_cents::text,
       s.payment_method::text, c.name AS customer_name,
       (SELECT COUNT(*) FROM sale_items i WHERE i.sale_id = s.id)::text AS item_count,
       COALESCE((SELECT SUM(i.quantity) FROM sale_items i WHERE i.sale_id = s.id), 0)::text
         AS unit_count,
+      COALESCE((SELECT SUM(i.shortfall) FROM sale_items i WHERE i.sale_id = s.id), 0)::text
+        AS shortfall,
+      (
+        COALESCE((SELECT SUM(p.amount_cents) FROM sale_payments p WHERE p.sale_id = s.id), 0)
+        + COALESCE((
+            SELECT SUM(CASE WHEN l.direction = 'in' THEN l.amount_cents ELSE -l.amount_cents END)
+              FROM ledger_entries l
+             WHERE l.source_kind = 'sale'
+               AND l.source_id = s.id
+               AND l.category = 'sales_receipt'
+          ), 0)
+      )::text AS paid_cents,
       COUNT(*) OVER()::text AS total_count
     FROM sales s
     LEFT JOIN customers c ON c.id = s.customer_id
@@ -345,20 +373,32 @@ export async function listSales(query: SaleQuery = {} as SaleQuery): Promise<Pag
   const total = num(rows[0]?.total_count);
 
   return toPage(
-    rows.map((row) => ({
-      id: text(row.id),
-      number: text(row.number),
-      soldAt: text(row.sold_at),
-      customerName: maybe(row.customer_name),
-      status: text(row.status) as SaleRow['status'],
-      currency: text(row.currency),
-      itemCount: num(row.item_count),
-      unitCount: num(row.unit_count),
-      totalUsdCents: num(row.total_usd_cents),
-      cogsCents: num(row.cogs_cents),
-      grossCents: num(row.gross_profit_cents),
-      paymentMethod: text(row.payment_method),
-    })),
+    rows.map((row) => {
+      const totalCents = num(row.total_cents);
+      const paidCents = num(row.paid_cents);
+      const status = text(row.status) as SaleRow['status'];
+      return {
+        id: text(row.id),
+        number: text(row.number),
+        soldAt: text(row.sold_at),
+        customerName: maybe(row.customer_name),
+        status,
+        currency: text(row.currency),
+        itemCount: num(row.item_count),
+        unitCount: num(row.unit_count),
+        totalUsdCents: num(row.total_usd_cents),
+        cogsCents: num(row.cogs_cents),
+        grossCents: num(row.gross_profit_cents),
+        paymentMethod: text(row.payment_method),
+        shortfall: num(row.shortfall),
+        totalCents,
+        paidCents,
+        paymentStatus:
+          status === 'confirmed'
+            ? paymentBadgeOf(totalCents, paidCents, new Date(text(row.sold_at)))
+            : null,
+      };
+    }),
     total,
     page,
     perPage,
@@ -380,6 +420,10 @@ export type PurchaseOrderRow = {
   totalCents: Cents;
   /** True when a received order still has un-costed freight and fees. */
   unallocated: boolean;
+  /** What the goods actually cost landed, once received (0 before that). */
+  landedCents: Cents;
+  /** Money paid to the supplier (F-9). Derived from purchase_order_payments. */
+  paidCents: Cents;
 };
 
 // `total` recomputes the same sum the SELECT list builds, rather than
@@ -430,6 +474,19 @@ export async function listPurchaseOrders(
              + p.shipping_cents + p.shipping_tax_cents) > 0
         AND COALESCE((SELECT SUM(i.overhead_cents) FROM purchase_order_items i
                        WHERE i.purchase_order_id = p.id), 0) = 0)::text AS unallocated,
+      COALESCE((SELECT SUM(i.landed_cost_cents) FROM purchase_order_items i
+                 WHERE i.purchase_order_id = p.id), 0)::text AS landed_cents,
+      (
+        COALESCE((SELECT SUM(pp.amount_cents) FROM purchase_order_payments pp
+                   WHERE pp.purchase_order_id = p.id), 0)
+        + COALESCE((
+            SELECT SUM(CASE WHEN l.direction = 'out' THEN l.amount_cents ELSE -l.amount_cents END)
+              FROM ledger_entries l
+             WHERE l.source_kind = 'purchase_order'
+               AND l.source_id = p.id
+               AND l.category = 'purchase'
+          ), 0)
+      )::text AS paid_cents,
       COUNT(*) OVER()::text AS total_count
     FROM purchase_orders p
     LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -458,6 +515,8 @@ export async function listPurchaseOrders(
         overheadCents,
         totalCents: goodsCents + overheadCents,
         unallocated: bool(row.unallocated),
+        landedCents: num(row.landed_cents),
+        paidCents: num(row.paid_cents),
       };
     }),
     total,

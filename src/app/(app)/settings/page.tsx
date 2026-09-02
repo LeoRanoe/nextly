@@ -1,11 +1,12 @@
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
+import Link from 'next/link';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { RateSheet, SettingsSheet } from '@/components/forms/finance-sheets';
-import { MemberSheet } from '@/components/forms/reference-sheets';
 import { MemberActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   MobileList,
   MobileRow,
@@ -50,12 +51,7 @@ export default async function SettingsPage() {
         <Surface className="overflow-hidden">
           <SurfaceHeader
             title="Team"
-            hint="Access is a member row, not a sign-up"
-            action={
-              <Suspense fallback={null}>
-                <MemberSheet />
-              </Suspense>
-            }
+            hint="Accounts are provisioned in Supabase. Contact the owner."
           />
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <MembersTable />
@@ -75,6 +71,23 @@ export default async function SettingsPage() {
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <BusinessSettings />
           </Suspense>
+        </Surface>
+
+        <Surface className="overflow-hidden">
+          <SurfaceHeader
+            title="Data & backup"
+            hint="Every list can be exported from its own toolbar with the filters you have applied."
+          />
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <p className="text-[13px] text-ink-3">
+              Quick backup — all tables in one CSV. Not a substitute for a real database dump.
+            </p>
+            <Button asChild variant="secondary" size="sm" className="shrink-0">
+              <Link href={'/api/export?entity=backup' as Route} download>
+                Download backup
+              </Link>
+            </Button>
+          </div>
         </Surface>
       </div>
     </>
@@ -228,9 +241,16 @@ async function BusinessSettings() {
   if (!settings) {
     return <p className="px-4 py-8 text-center text-[13px] text-ink-4">Not configured.</p>;
   }
+  const address = [settings.addressLine, settings.city].filter(Boolean).join(', ');
   return (
     <dl className="divide-y divide-line-subtle">
       <Row label="Business name" value={settings.businessName} />
+      {settings.legalName ? <Row label="Legal name" value={settings.legalName} /> : null}
+      {address ? <Row label="Address" value={address} /> : null}
+      {settings.phone ? <Row label="Phone" value={settings.phone} /> : null}
+      {settings.whatsapp ? <Row label="WhatsApp" value={settings.whatsapp} /> : null}
+      {settings.email ? <Row label="Email" value={settings.email} /> : null}
+      {settings.taxId ? <Row label="Tax / BTW" value={settings.taxId} /> : null}
       <Row label="Books currency" value={settings.baseCurrency} />
       <Row label="Display currency" value={settings.displayCurrency} />
       <Row label="Low stock at" value={`${settings.lowStockThreshold} units or fewer`} />
@@ -260,6 +280,17 @@ async function SettingsAction() {
         businessName: settings?.businessName ?? 'Nextly',
         displayCurrency: settings?.displayCurrency ?? 'SRD',
         lowStockThreshold: settings?.lowStockThreshold ?? 5,
+        legalName: settings?.legalName ?? '',
+        addressLine: settings?.addressLine ?? '',
+        city: settings?.city ?? '',
+        phone: settings?.phone ?? '',
+        whatsapp: settings?.whatsapp ?? '',
+        email: settings?.email ?? '',
+        taxId: settings?.taxId ?? '',
+        logoUrl: settings?.logoUrl ?? '',
+        invoiceFooter: settings?.invoiceFooter ?? '',
+        instagram: settings?.instagram ?? '',
+        openingHours: settings?.openingHours ?? '',
       }}
     />
   );

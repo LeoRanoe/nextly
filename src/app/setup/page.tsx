@@ -18,7 +18,7 @@ export default function SetupPage() {
 
   return (
     <div className="grid min-h-dvh place-items-center px-6 py-12">
-      <div className="w-full max-w-[520px]">
+      <main className="w-full max-w-[520px]">
         <Wordmark />
 
         <div className="mt-8 flex size-9 items-center justify-center rounded-control bg-warning-muted text-warning">
@@ -83,7 +83,7 @@ export default function SetupPage() {
           Full instructions, including deployment, are in{' '}
           <span className="tabular">docs/05-operations/environments.md</span>.
         </p>
-      </div>
+      </main>
     </div>
   );
 }

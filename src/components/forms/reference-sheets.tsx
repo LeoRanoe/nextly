@@ -14,7 +14,6 @@ import {
   createCategory,
   createCustomer,
   createSupplier,
-  inviteMember,
   updateCategory,
   updateCustomer,
   updateMember,
@@ -511,43 +510,29 @@ export type MemberValues = {
   isPrincipal: boolean;
 };
 
+/** Edit-only by design: accounts are provisioned in Supabase, never invited
+ *  from this app (two owners, per the audit). */
 export function MemberSheet({
   initial,
   open: openProp,
   onOpenChange: onOpenChangeProp,
 }: {
-  initial?: MemberValues;
+  initial: MemberValues;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-} = {}) {
+}) {
   const router = useRouter();
-  const urlSheet = useUrlSheet('invite');
+  const urlSheet = useUrlSheet('member-sheet-controlled');
   const open = openProp ?? urlSheet[0];
   const setOpen = onOpenChangeProp ?? urlSheet[1];
-  const isEdit = Boolean(initial);
   const formId = useId();
 
-  const [fullName, setFullName] = useState(initial?.fullName ?? '');
-  const [email, setEmail] = useState(initial?.email ?? '');
-  const [role, setRole] = useState<'owner' | 'staff' | 'viewer'>(initial?.role ?? 'staff');
-  const [isPrincipal, setIsPrincipal] = useState(initial?.isPrincipal ?? false);
+  const [fullName, setFullName] = useState(initial.fullName);
+  const [email, setEmail] = useState(initial.email);
+  const [role, setRole] = useState<'owner' | 'staff' | 'viewer'>(initial.role);
+  const [isPrincipal, setIsPrincipal] = useState(initial.isPrincipal);
 
-  // Two hook calls, always both — see the comment in CustomerSheet above.
-  const createHook = useAction(inviteMember, {
-    onSuccess({ data }) {
-      toast.success(`${data?.fullName} invited`, {
-        description: `They can sign in at any time with ${data?.email}.`,
-      });
-      setOpen(false);
-      setFullName('');
-      setEmail('');
-      router.refresh();
-    },
-    onError({ error }) {
-      toast.error(error.serverError ?? 'Could not send the invitation');
-    },
-  });
-  const updateHook = useAction(updateMember, {
+  const { execute, isPending } = useAction(updateMember, {
     onSuccess({ data }) {
       toast.success(`${data?.fullName} updated`);
       setOpen(false);
@@ -557,93 +542,84 @@ export function MemberSheet({
       toast.error(error.serverError ?? 'Could not update the member');
     },
   });
-  const { execute, isPending } = isEdit ? updateHook : createHook;
 
   return (
-    <>
-      {initial === undefined ? <Trigger label="Invite" onClick={() => setOpen(true)} /> : null}
-      <FormSheet
-        open={open}
-        onOpenChange={setOpen}
-        title={isEdit ? 'Edit team member' : 'Invite someone'}
-        description={
-          isEdit
-            ? undefined
-            : 'Creating the record is the invitation. Nothing is emailed: they sign in with this address at the normal sign-in page, and their first sign-in claims the invitation.'
-        }
-        formId={formId}
-        pending={isPending}
-        submitLabel={isEdit ? 'Save changes' : 'Invite'}
+    <FormSheet
+      open={open}
+      onOpenChange={setOpen}
+      title="Edit team member"
+      formId={formId}
+      pending={isPending}
+      submitLabel="Save changes"
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          execute({
+            id: initial.id,
+            fullName,
+            email,
+            role,
+            isPrincipal,
+          });
+        }}
       >
-        <form
-          id={formId}
-          onSubmit={(event) => {
-            event.preventDefault();
-            execute({
-              ...(isEdit ? { id: initial?.id as string } : {}),
-              fullName,
-              email,
-              role,
-              isPrincipal,
-            } as never);
-          }}
-        >
-          <SheetSection title="Person">
-            <Field label="Full name" htmlFor="m-name" required>
-              <Input
-                id="m-name"
-                value={fullName}
-                required
-                onChange={(event) => setFullName(event.target.value)}
-              />
-            </Field>
-            <Field
-              label="Email"
-              htmlFor="m-email"
-              hint="Must match what they sign in with"
+        <SheetSection title="Person">
+          <Field label="Full name" htmlFor="m-name" required>
+            <Input
+              id="m-name"
+              value={fullName}
               required
+              onChange={(event) => setFullName(event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Email"
+            htmlFor="m-email"
+            hint="Must match what they sign in with"
+            required
+          >
+            <Input
+              id="m-email"
+              type="email"
+              value={email}
+              required
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </Field>
+        </SheetSection>
+
+        <SheetSection title="Access">
+          <Field label="Role" htmlFor="m-role">
+            <Select
+              id="m-role"
+              value={role}
+              onChange={(event) => setRole(event.target.value as typeof role)}
             >
-              <Input
-                id="m-email"
-                type="email"
-                value={email}
-                required
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </Field>
-          </SheetSection>
+              <option value="viewer">Viewer — read only</option>
+              <option value="staff">Staff — record sales and orders</option>
+              <option value="owner">Owner — everything, including the team</option>
+            </Select>
+          </Field>
 
-          <SheetSection title="Access">
-            <Field label="Role" htmlFor="m-role">
-              <Select
-                id="m-role"
-                value={role}
-                onChange={(event) => setRole(event.target.value as typeof role)}
-              >
-                <option value="viewer">Viewer — read only</option>
-                <option value="staff">Staff — record sales and orders</option>
-                <option value="owner">Owner — everything, including the team</option>
-              </Select>
-            </Field>
-
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-control border border-line bg-inset p-3">
-              <input
-                type="checkbox"
-                checked={isPrincipal}
-                onChange={(event) => setIsPrincipal(event.target.checked)}
-                className="mt-0.5 size-4 shrink-0 accent-[var(--nx-accent)]"
-              />
-              <span>
-                <span className="block text-[13px] text-ink">Holds capital</span>
-                <span className="mt-0.5 block text-[11px] text-ink-4 leading-relaxed">
-                  They appear in the equity split and can be named on owner contributions and
-                  draws. Separate from their role.
-                </span>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-control border border-line bg-inset p-3">
+            <input
+              type="checkbox"
+              checked={isPrincipal}
+              onChange={(event) => setIsPrincipal(event.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-[var(--nx-accent)]"
+            />
+            <span>
+              <span className="block text-[13px] text-ink">Holds capital</span>
+              <span className="mt-0.5 block text-[11px] text-ink-4 leading-relaxed">
+                They appear in the equity split and can be named on owner contributions and
+                draws. Separate from their role.
               </span>
-            </label>
-          </SheetSection>
-        </form>
-      </FormSheet>
-    </>
+            </span>
+          </label>
+        </SheetSection>
+      </form>
+    </FormSheet>
   );
 }

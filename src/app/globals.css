@@ -165,3 +165,57 @@
       inset 0 1px 0 0 var(--nx-highlight);
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Print. The invoice route is the only thing meant to reach paper, so on print
+   we force a light document regardless of the on-screen theme (nobody wants a
+   black receipt), drop the screen-only action bar and shadows, and let the
+   article fill the page. Kept out of @layer base so it wins over utilities.
+   ────────────────────────────────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* biome-ignore-start lint/complexity/noImportantStyles: a print stylesheet
+     has to beat the theme tokens and Tailwind utilities that are live on screen,
+     and there is no selector specific enough to do that without !important. */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .invoice {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* The generic `*` border rule paints hairlines everywhere; keep only the
+     table separators and section rules that carry meaning on a receipt. */
+  .invoice * {
+    color: #000 !important;
+  }
+
+  .invoice thead tr,
+  .invoice tbody tr,
+  .invoice header,
+  .invoice section,
+  .invoice footer {
+    border-color: #bbb !important;
+  }
+
+  .invoice img {
+    filter: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  /* biome-ignore-end lint/complexity/noImportantStyles: end print overrides */
+}

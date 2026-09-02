@@ -11,10 +11,52 @@ import {
   products,
   productVariants,
   purchaseOrderItems,
+  quoteRequests,
   saleItems,
 } from '../db/schema';
 import { lockValuation, logActivity, postStockMovement } from '../services/posting';
 import { ActionError, ownerAction, writeAction } from './client';
+
+type ProductStatus = 'draft' | 'active' | 'archived';
+
+/** Publishing is a public promise, so enforce the minimum page quality at the
+ * server boundary instead of trusting the checkbox in the admin form. */
+async function assertCatalogPublishable(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  productId: string,
+  status: ProductStatus,
+): Promise<void> {
+  if (status !== 'active') {
+    throw new ActionError('Only active products can be published to the catalog.');
+  }
+
+  const [row] = await tx.execute<{
+    summary: string | null;
+    has_image: string;
+    has_variant: string;
+  }>(sql`
+    SELECT p.summary,
+           EXISTS (SELECT 1 FROM product_images i WHERE i.product_id = p.id)::text AS has_image,
+           EXISTS (
+             SELECT 1 FROM product_variants v
+              WHERE v.product_id = p.id AND v.is_active AND v.list_price_cents > 0
+           )::text AS has_variant
+      FROM products p
+     WHERE p.id = ${productId}
+     LIMIT 1
+  `);
+
+  if (!row) throw new ActionError('That product no longer exists.');
+  if (!row.summary?.trim()) {
+    throw new ActionError('Add a summary before publishing this product.');
+  }
+  if (row.has_image !== 'true') {
+    throw new ActionError('Add a product image before publishing it.');
+  }
+  if (row.has_variant !== 'true') {
+    throw new ActionError('Add an active variant with a price before publishing it.');
+  }
+}
 
 export const createProduct = writeAction
   .metadata({ action: 'created', entity: 'product' })
@@ -33,6 +75,7 @@ export const createProduct = writeAction
           summary: input.summary ?? null,
           description: input.description ?? null,
           status: input.status,
+          warrantyMonths: input.warrantyMonths,
           catalogPublished: input.catalogPublished,
           catalogPublishedAt: input.catalogPublished ? new Date() : null,
           notes: input.notes ?? null,
@@ -53,6 +96,10 @@ export const createProduct = writeAction
           position: index + 1,
         })),
       );
+
+      if (input.catalogPublished) {
+        await assertCatalogPublishable(tx, product.id, input.status);
+      }
 
       await logActivity(tx, {
         memberId: ctx.member.id,
@@ -100,6 +147,7 @@ export const updateProduct = writeAction
           summary: input.summary ?? null,
           description: input.description ?? null,
           status: input.status,
+          warrantyMonths: input.warrantyMonths,
           catalogPublished: input.catalogPublished,
           catalogPublishedAt: input.catalogPublished
             ? (existing.catalogPublishedAt ?? new Date())
@@ -112,6 +160,19 @@ export const updateProduct = writeAction
 
       for (const [index, variant] of input.variants.entries()) {
         if (variant.id) {
+          const [existingVariant] = await tx
+            .select({ id: productVariants.id })
+            .from(productVariants)
+            .where(
+              and(eq(productVariants.id, variant.id), eq(productVariants.productId, input.id)),
+            )
+            .limit(1);
+          if (!existingVariant) {
+            throw new ActionError(
+              'One of the selected variants does not belong to this product.',
+            );
+          }
+
           await tx
             .update(productVariants)
             .set({
@@ -123,7 +184,9 @@ export const updateProduct = writeAction
               isDefault: index === 0,
               position: index + 1,
             })
-            .where(eq(productVariants.id, variant.id));
+            .where(
+              and(eq(productVariants.id, variant.id), eq(productVariants.productId, input.id)),
+            );
           keptIds.push(variant.id);
         } else {
           const [created] = await tx
@@ -179,6 +242,10 @@ export const updateProduct = writeAction
         }
       }
 
+      if (input.catalogPublished) {
+        await assertCatalogPublishable(tx, input.id, input.status);
+      }
+
       await logActivity(tx, {
         memberId: ctx.member.id,
         action: 'updated product',
@@ -195,11 +262,15 @@ export const updateProduct = writeAction
 export const setProductStatus = writeAction
   .metadata({ action: 'updated', entity: 'product' })
   .inputSchema(
-    z.object({
-      id: uuid,
-      status: z.enum(['draft', 'active', 'archived']).optional(),
-      catalogPublished: z.boolean().optional(),
-    }),
+    z
+      .object({
+        id: uuid,
+        status: z.enum(['draft', 'active', 'archived']).optional(),
+        catalogPublished: z.boolean().optional(),
+      })
+      .refine((input) => input.status !== undefined || input.catalogPublished !== undefined, {
+        message: 'Choose a product status or catalog visibility change.',
+      }),
   )
   .action(async ({ parsedInput: input, ctx }) => {
     const name = await db.transaction(async (tx) => {
@@ -210,6 +281,10 @@ export const setProductStatus = writeAction
         .limit(1);
 
       if (!product) throw new ActionError('That product no longer exists.');
+
+      if (input.catalogPublished === true) {
+        await assertCatalogPublishable(tx, input.id, input.status ?? product.status);
+      }
 
       await tx
         .update(products)
@@ -362,8 +437,17 @@ export const deleteProduct = ownerAction
           .from(purchaseOrderItems)
           .where(inArray(purchaseOrderItems.variantId, ids))
           .limit(1);
+        // A quote request names the product itself, so it is history of its
+        // own even when nothing was ever sold — and the FK is RESTRICT for
+        // exactly that reason. Without this check the visitor's question
+        // would take the product down with it via a raw constraint error.
+        const [quoted] = await tx
+          .select({ id: quoteRequests.id })
+          .from(quoteRequests)
+          .where(eq(quoteRequests.productId, input.id))
+          .limit(1);
 
-        if (movement || sold || ordered) {
+        if (movement || sold || ordered || quoted) {
           throw new ActionError(
             'This product has stock or trading history. Archive it instead of deleting it.',
           );

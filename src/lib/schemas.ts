@@ -47,8 +47,22 @@ export const dateInput = z
   .trim()
   .min(1, 'Pick a date')
   .transform((value, ctx) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+      ctx.addIssue({ code: 'custom', message: 'Not a valid date' });
+      return z.NEVER;
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
     const parsed = new Date(`${value}T00:00:00.000Z`);
-    if (Number.isNaN(parsed.getTime())) {
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() + 1 !== month ||
+      parsed.getUTCDate() !== day
+    ) {
       ctx.addIssue({ code: 'custom', message: 'Not a valid date' });
       return z.NEVER;
     }
@@ -110,6 +124,9 @@ export const productSchema = z.object({
   summary: optionalText,
   description: optionalText,
   status: z.enum(['draft', 'active', 'archived']),
+  /** F-6: months of cover from the day of sale. 0 means no warranty; the
+   *  upper bound only stops a typo becoming a century. */
+  warrantyMonths: z.coerce.number().int().min(0).max(600).default(0),
   catalogPublished: z.boolean(),
   notes: optionalText,
   variants: z.array(variantSchema).min(1, 'A product needs at least one variant'),
@@ -174,29 +191,119 @@ export const purchaseOrderSchema = z.object({
 export const receivePurchaseOrderSchema = z.object({
   id: uuid,
   receivedAt: dateInput,
-  /** Post the payment to the cash ledger at the same time. Usually yes; off
+  /** Record the payment as a purchase_order_payment (F-9). Usually yes; off
    *  when the payment was already recorded by hand. */
   postPayment: z.boolean().default(true),
   paymentMethod,
 });
 
-/* ── Sales ───────────────────────────────────────────────────────────────── */
-
-export const saleItemSchema = z.object({
-  variantId: uuid,
-  quantity,
-  unitPriceCents: moneyInput,
-});
-
-export const saleSchema = z.object({
-  customerId: optionalUuid,
-  soldAt: dateInput,
-  currency,
+/** Money paid to a supplier against a purchase order (F-9). Mirrors
+ *  salePaymentSchema: amounts are always entered by hand, so unlike receiving
+ *  the whole order in one go there is no default to prefill. */
+export const purchaseOrderPaymentSchema = z.object({
+  orderId: uuid,
+  amountCents: positiveMoney,
+  paidAt: z
+    .union([dateInput, z.literal('')])
+    .transform((value) => (value === '' ? undefined : value))
+    .optional(),
   paymentMethod,
   notes: optionalText,
-  /** Draft records the intent without moving stock, cash or margin. */
-  confirm: z.boolean().default(true),
-  items: z.array(saleItemSchema).min(1, 'Add at least one item'),
+});
+
+/* ── Sales ───────────────────────────────────────────────────────────────── */
+
+/**
+ * Serial numbers captured on a sale line (F-6).
+ *
+ * A serial is whatever the manufacturer printed — 8 to 30 characters would be
+ * presumptuous, so only the obvious nonsense is rejected. The client sends an
+ * array; blank entries are dropped here rather than rejected, because the
+ * input is a newline-separated textarea and a trailing Enter is normal
+ * typing, not a mistake worth an error toast. Duplicates within a line are
+ * folded away for the same reason.
+ */
+const serialList = z
+  .array(z.string().trim().min(1).max(64))
+  .default([])
+  .transform((serials) => [...new Set(serials)]);
+
+export const saleItemSchema = z
+  .object({
+    variantId: uuid,
+    quantity,
+    unitPriceCents: moneyInput,
+    serials: serialList,
+  })
+  .refine((item) => item.serials.length <= item.quantity, {
+    message: 'More serial numbers than units',
+    path: ['serials'],
+  });
+
+/**
+ * A document-level discount (F-2).
+ *
+ * Stored in the currency of the sale and kept separate from the line prices,
+ * so a haggle does not erase what the product normally sells for. The reason
+ * is optional free text — "rounded down", "bundle", "damaged box" are all
+ * real and none deserve an enum someone has to maintain.
+ */
+export const saleSchema = z
+  .object({
+    customerId: optionalUuid,
+    soldAt: dateInput.refine((date) => date <= new Date(), {
+      message: 'A sale cannot be dated in the future',
+    }),
+    currency,
+    paymentMethod,
+    notes: optionalText,
+    discountCents: moneyInput.default(0),
+    discountReason: optionalText,
+    /** Draft records the intent without moving stock, cash or margin. */
+    confirm: z.boolean().default(true),
+    /** On a confirmed sale, whether the money arrived with it (the default —
+     *  today's behaviour) or is expected later. "Later" posts no receipt: the
+     *  balance sits as receivable until each payment banks its own. See F-4. */
+    paidInFull: z.boolean().default(true),
+    /** With `paidInFull: false`, part of the total may still have been paid on
+     *  the spot (a deposit). It is recorded as a payment rather than skipped —
+     *  the money is in hand and the ledger must say so. Clamped to the total
+     *  by the action; never trusted to be well-formed here because the total
+     *  is computed from the items, not typed. */
+    paidNowCents: moneyInput.default(0),
+    items: z.array(saleItemSchema).min(1, 'Add at least one item'),
+  })
+  .refine((sale) => sale.discountCents >= 0, {
+    message: 'A discount cannot be negative — raise the unit price instead',
+    path: ['discountCents'],
+  })
+  .refine(
+    (sale) =>
+      sale.discountCents <=
+      sale.items.reduce((total, item) => total + item.unitPriceCents * item.quantity, 0),
+    {
+      message: 'The discount cannot exceed the total of the items',
+      path: ['discountCents'],
+    },
+  )
+  .refine((sale) => sale.paidNowCents === 0 || !sale.paidInFull, {
+    message: 'A deposit only makes sense when the rest is paid later',
+    path: ['paidNowCents'],
+  });
+
+/** Money received against a confirmed sale (F-4). */
+export const salePaymentSchema = z.object({
+  saleId: uuid,
+  amountCents: positiveMoney,
+  /** Optional: payments are banked on the day they arrive. An empty date input
+   *  means "now", so it is folded to undefined here rather than reaching the
+   *  database as a string. */
+  receivedAt: z
+    .union([dateInput, z.literal('')])
+    .transform((value) => (value === '' ? undefined : value))
+    .optional(),
+  paymentMethod,
+  notes: optionalText,
 });
 
 /* ── Finance ─────────────────────────────────────────────────────────────── */
@@ -249,6 +356,22 @@ export const settingsSchema = z.object({
   businessName: shortText,
   displayCurrency: currency,
   lowStockThreshold: z.coerce.number().int().min(0).max(10_000),
+  // Business identity (F-3). Optional free text — an invoice prints whatever
+  // is filled in. `whatsapp` is stored as typed; the click-to-chat link strips
+  // non-digits at render time so a spaced or dashed number still works.
+  legalName: optionalText,
+  addressLine: optionalText,
+  city: optionalText,
+  phone: optionalText,
+  whatsapp: optionalText,
+  email: optionalText,
+  taxId: optionalText,
+  logoUrl: optionalText,
+  invoiceFooter: optionalText,
+  // Storefront footer (P0-10). Free text so the business can phrase hours and
+  // handle however it likes; the footer only renders what is filled in.
+  instagram: optionalText,
+  openingHours: optionalText,
 });
 
 export const memberSchema = z.object({
@@ -258,11 +381,59 @@ export const memberSchema = z.object({
   isPrincipal: z.boolean().default(false),
 });
 
+/* ── Quote requests (F-5) ────────────────────────────────────────────────── */
+
+/** Submitted by a signed-out visitor from a product page. Deliberately
+ *  strict-but-simple: name and a way to reach them required, free text capped
+ *  so a bot cannot store an essay, quantity sane. Nothing here touches money —
+ *  a request is a question, not an order. */
+export const quoteRequestSchema = z.object({
+  name: z.string().trim().min(1, 'Tell us who is asking').max(120),
+  /** Phone or email, as typed. Not validated either way: the storefront asks
+   *  for one field and a visitor answering with a WhatsApp number must not be
+   *  rejected for it. */
+  contact: z.string().trim().min(1, 'Give us a phone number or email').max(200),
+  productId: optionalUuid,
+  quantity: z.coerce.number().int().min(1).max(9_999).default(1),
+  details: z
+    .string()
+    .trim()
+    .max(2_000)
+    .optional()
+    .transform((value) => (value === '' ? undefined : value)),
+});
+
+const quoteRequestStatuses = ['new', 'contacted', 'converted', 'declined'] as const;
+
+export type QuoteRequestStatus = (typeof quoteRequestStatuses)[number];
+
+/** An owner/staff moving a request along its pipeline. `converted` is set only
+ *  by the convert action itself — the list offers the other three. */
+export const quoteRequestStatusSchema = z.object({
+  id: uuid,
+  status: z.enum(['new', 'contacted', 'declined']),
+});
+
+/** Turning a request into a draft sale (F-5). The visitor asked about a
+ *  product; an owner decides which colourway was actually quoted and at what
+ *  price, and those two choices are the only things this form needs — the
+ *  quantity carries over from the request because that is what was asked for. */
+export const convertQuoteRequestSchema = z.object({
+  id: uuid,
+  variantId: uuid,
+  unitPriceCents: positiveMoney,
+});
+
+export type QuoteRequestInput = z.input<typeof quoteRequestSchema>;
+export type ConvertQuoteRequestInput = z.input<typeof convertQuoteRequestSchema>;
+
 /* ── Types ───────────────────────────────────────────────────────────────── */
 
 export type ProductInput = z.input<typeof productSchema>;
 export type SaleInput = z.input<typeof saleSchema>;
+export type SalePaymentInput = z.input<typeof salePaymentSchema>;
 export type PurchaseOrderInput = z.input<typeof purchaseOrderSchema>;
+export type PurchaseOrderPaymentInput = z.input<typeof purchaseOrderPaymentSchema>;
 export type ExpenseInput = z.input<typeof expenseSchema>;
 export type LedgerEntryInput = z.input<typeof ledgerEntrySchema>;
 export type CustomerInput = z.input<typeof customerSchema>;

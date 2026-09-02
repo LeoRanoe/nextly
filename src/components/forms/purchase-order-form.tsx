@@ -286,94 +286,122 @@ export function PurchaseOrderForm({
           <SurfaceHeader
             title="Items"
             hint="Enter the line total for the goods, before shipping"
-            action={
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => setLines((current) => [...current, newLine()])}
-              >
-                <Plus className="size-3.5" /> Add line
-              </Button>
-            }
           />
           <div className="divide-y divide-line-subtle">
-            {lines.map((line, index) => (
-              <div key={line.key} className="grid gap-2 p-4 sm:grid-cols-[1fr_88px_120px_32px]">
-                <Field label={index === 0 ? 'Product' : ''} htmlFor={`variant-${line.key}`}>
-                  <Combobox
-                    id={`variant-${line.key}`}
-                    options={variantOptions}
-                    value={line.variantId}
-                    onChange={(value) =>
-                      setLines((current) =>
-                        current.map((candidate) =>
-                          candidate.key === line.key
-                            ? { ...candidate, variantId: value }
-                            : candidate,
-                        ),
-                      )
-                    }
-                    placeholder="Choose a product"
-                    searchPlaceholder="Search by name or SKU"
-                  />
-                </Field>
+            {lines.map((line, index) => {
+              let lineTotal = 0;
+              try {
+                lineTotal = parseMoney(line.subtotal || '0');
+              } catch {
+                lineTotal = 0;
+              }
 
-                <Field label={index === 0 ? 'Qty' : ''} htmlFor={`qty-${line.key}`}>
-                  <Input
-                    id={`qty-${line.key}`}
-                    numeric
-                    inputMode="numeric"
-                    value={line.quantity}
-                    onChange={(event) =>
-                      setLines((current) =>
-                        current.map((candidate) =>
-                          candidate.key === line.key
-                            ? { ...candidate, quantity: event.target.value }
-                            : candidate,
-                        ),
-                      )
-                    }
-                  />
-                </Field>
+              return (
+                <div
+                  key={line.key}
+                  className="grid gap-2 p-4 sm:grid-cols-[24px_1fr_72px_100px_100px_32px]"
+                >
+                  {index === 0 ? (
+                    <span className="hidden text-[11px] text-ink-4 uppercase tracking-[0.06em] sm:block" />
+                  ) : null}
+                  <span className="hidden self-center tabular text-[12px] text-ink-4 sm:block">
+                    {index + 1}
+                  </span>
+                  <Field label={index === 0 ? 'Product' : ''} htmlFor={`variant-${line.key}`}>
+                    <Combobox
+                      id={`variant-${line.key}`}
+                      options={variantOptions}
+                      value={line.variantId}
+                      onChange={(value) =>
+                        setLines((current) =>
+                          current.map((candidate) =>
+                            candidate.key === line.key
+                              ? { ...candidate, variantId: value }
+                              : candidate,
+                          ),
+                        )
+                      }
+                      placeholder="Choose a product"
+                      searchPlaceholder="Search by name or SKU"
+                    />
+                  </Field>
 
-                <Field label={index === 0 ? 'Goods (USD)' : ''} htmlFor={`sub-${line.key}`}>
-                  <Input
-                    id={`sub-${line.key}`}
-                    numeric
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={line.subtotal}
-                    onChange={(event) =>
-                      setLines((current) =>
-                        current.map((candidate) =>
-                          candidate.key === line.key
-                            ? { ...candidate, subtotal: event.target.value }
-                            : candidate,
-                        ),
-                      )
-                    }
-                  />
-                </Field>
+                  <Field label={index === 0 ? 'Qty' : ''} htmlFor={`qty-${line.key}`}>
+                    <Input
+                      id={`qty-${line.key}`}
+                      numeric
+                      inputMode="numeric"
+                      value={line.quantity}
+                      onChange={(event) =>
+                        setLines((current) =>
+                          current.map((candidate) =>
+                            candidate.key === line.key
+                              ? { ...candidate, quantity: event.target.value }
+                              : candidate,
+                          ),
+                        )
+                      }
+                    />
+                  </Field>
 
-                <div className={cn('flex', index === 0 ? 'items-end pb-0.5' : 'items-center')}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Remove line"
-                    disabled={lines.length === 1}
-                    onClick={() =>
-                      setLines((current) =>
-                        current.filter((candidate) => candidate.key !== line.key),
-                      )
-                    }
+                  <Field label={index === 0 ? 'Goods (USD)' : ''} htmlFor={`sub-${line.key}`}>
+                    <Input
+                      id={`sub-${line.key}`}
+                      numeric
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={line.subtotal}
+                      onChange={(event) =>
+                        setLines((current) =>
+                          current.map((candidate) =>
+                            candidate.key === line.key
+                              ? { ...candidate, subtotal: event.target.value }
+                              : candidate,
+                          ),
+                        )
+                      }
+                    />
+                  </Field>
+
+                  <div className={index === 0 ? 'pt-0.5' : ''}>
+                    <span className="hidden self-center tabular text-right text-[13px] text-ink-2 sm:block">
+                      {line.variantId && lineTotal > 0 ? formatMoney(lineTotal) : '—'}
+                    </span>
+                  </div>
+
+                  <div
+                    className={cn('flex', index === 0 ? 'items-end pb-0.5' : 'items-center')}
                   >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove line"
+                      disabled={lines.length === 1}
+                      onClick={() =>
+                        setLines((current) =>
+                          current.filter((candidate) => candidate.key !== line.key),
+                        )
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between border-line-subtle border-t px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() => setLines((current) => [...current, newLine()])}
+              className="flex w-full items-center justify-center gap-1.5 rounded-control border border-dashed border-line py-2 text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2"
+            >
+              <Plus className="size-3.5" /> Add another product
+            </button>
+            <span className="hidden shrink-0 pl-4 tabular text-[11px] text-ink-4 sm:block">
+              {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+            </span>
           </div>
         </Surface>
 

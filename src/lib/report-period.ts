@@ -6,10 +6,11 @@
  * that quietly drifts if it is computed twice.
  */
 
-export type PeriodPreset = 'month' | 'last90' | 'year' | 'all';
+export type PeriodPreset = 'month' | 'lastmonth' | 'last90' | 'year' | 'all';
 
 export const PERIOD_PRESETS: Record<PeriodPreset, string> = {
   month: 'This month',
+  lastmonth: 'Last month',
   last90: 'Last 90 days',
   year: 'This year',
   all: 'All time',
@@ -31,11 +32,18 @@ export function periodRange(
   switch (preset) {
     case 'month':
       return { from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), to };
+    case 'lastmonth': {
+      const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      return {
+        from: lastMonth,
+        to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      };
+    }
     case 'last90':
       return { from: new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000), to };
     case 'year':
       return { from: new Date(Date.UTC(now.getUTCFullYear(), 0, 1)), to };
     case 'all':
-      return { from: new Date(Date.UTC(2000, 0, 1)), to };
+      return { from: new Date(Date.UTC(2000, 0, 1)), to: new Date(Date.UTC(9999, 0, 1)) };
   }
 }

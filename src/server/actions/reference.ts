@@ -356,53 +356,6 @@ export const deleteSupplier = ownerAction
     return { name };
   });
 
-/**
- * Invite someone.
- *
- * Creating the row *is* the invitation: it exists before that person has an
- * auth account, and their first sign-in claims it by email. Nothing is emailed
- * from here — they use the ordinary sign-in form.
- */
-export const inviteMember = ownerAction
-  .metadata({ action: 'invited', entity: 'member' })
-  .inputSchema(memberSchema)
-  .action(async ({ parsedInput: input, ctx }) => {
-    const result = await db.transaction(async (tx) => {
-      const email = input.email.toLowerCase();
-
-      const [existing] = await tx
-        .select()
-        .from(members)
-        .where(sql`lower(${members.email}) = ${email}`)
-        .limit(1);
-
-      if (existing) throw new ActionError('That email already has access.');
-
-      const [member] = await tx
-        .insert(members)
-        .values({
-          email,
-          fullName: input.fullName,
-          role: input.role,
-          isPrincipal: input.isPrincipal,
-        })
-        .returning();
-
-      if (!member) throw new ActionError('Could not create the invitation.');
-
-      await logActivity(tx, {
-        memberId: ctx.member.id,
-        action: `invited ${input.role}`,
-        entityType: 'member',
-        entityId: member.id,
-        entityLabel: input.fullName,
-      });
-
-      return { id: member.id, email, fullName: input.fullName };
-    });
-    return result;
-  });
-
 export const updateMember = ownerAction
   .metadata({ action: 'updated', entity: 'member' })
   .inputSchema(memberSchema.extend({ id: uuid }))

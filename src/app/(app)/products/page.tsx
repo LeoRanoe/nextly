@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ProductActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportButton } from '@/components/patterns/export-button';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,11 @@ const STATUS_OPTIONS = [
   { value: 'archived', label: 'Archived' },
 ];
 
+const CATALOG_OPTIONS = [
+  { value: 'published', label: 'Published' },
+  { value: 'draft', label: 'Draft' },
+];
+
 export default function ProductsPage({
   searchParams,
 }: {
@@ -61,6 +67,8 @@ export default function ProductsPage({
         <ListToolbar>
           <ListSearch placeholder="Search by name or code" />
           <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
+          <ListFilter param="catalog" label="Catalog" options={CATALOG_OPTIONS} />
+          <ExportButton entity="products" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-44', 'w-24', 'w-16']} />}>
           <ProductsTable searchParams={searchParams} />
@@ -73,7 +81,7 @@ export default function ProductsPage({
 async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   const raw = await searchParams;
   const query = parseListParams(productQuerySchema, raw);
-  const hasFilters = Boolean(query.q || query.status);
+  const hasFilters = Boolean(query.q || query.status || query.catalog);
   const result = await listProducts(query);
 
   if (result.total === 0 && !hasFilters) {
@@ -276,6 +284,7 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
 function buildHref(query: {
   q?: string;
   status?: string;
+  catalog?: string;
   sort?: string;
   dir?: string;
   page?: number;
@@ -283,6 +292,7 @@ function buildHref(query: {
   const params = new URLSearchParams();
   if (query.q) params.set('q', query.q);
   if (query.status) params.set('status', query.status);
+  if (query.catalog) params.set('catalog', query.catalog);
   if (query.sort) params.set('sort', query.sort);
   if (query.dir) params.set('dir', query.dir);
   if (query.page && query.page > 1) params.set('page', String(query.page));

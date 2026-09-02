@@ -8,6 +8,7 @@ import { ProfitAndLossReport } from '@/components/reports/profit-and-loss';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isPeriodPreset, type PeriodPreset } from '@/lib/report-period';
 import type { ProductMarginSort } from '@/server/queries/reports';
+import { getFxExposure } from '@/server/queries/reports';
 
 export const metadata: Metadata = { title: 'Reports' };
 
@@ -30,7 +31,7 @@ export default function ReportsPage({ searchParams }: { searchParams: SearchPara
           <PnlSection searchParams={searchParams} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-[340px] rounded-card" />}>
-          <FxExposureReport />
+          <FxSection />
         </Suspense>
       </div>
       <div className="mt-4">
@@ -42,15 +43,20 @@ export default function ReportsPage({ searchParams }: { searchParams: SearchPara
   );
 }
 
+async function FxSection() {
+  const exposure = await getFxExposure();
+  return <FxExposureReport exposure={exposure} />;
+}
+
 async function PnlSection({ searchParams }: { searchParams: SearchParams }) {
   const { period } = await searchParams;
-  const preset: PeriodPreset = isPeriodPreset(period) ? period : 'month';
+  const preset: PeriodPreset = isPeriodPreset(period) ? period : 'all';
   return <ProfitAndLossReport preset={preset} />;
 }
 
 async function MarginSection({ searchParams }: { searchParams: SearchParams }) {
   const { period, marginSort } = await searchParams;
-  const preset: PeriodPreset = isPeriodPreset(period) ? period : 'month';
+  const preset: PeriodPreset = isPeriodPreset(period) ? period : 'all';
   const sort: ProductMarginSort =
     marginSort === 'revenue' || marginSort === 'units' ? marginSort : 'gross';
   return <MarginByProduct sort={sort} period={preset} />;

@@ -1,20 +1,98 @@
 'use server';
 
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { allocateOverhead, totalOverhead } from '@/lib/costing';
-import { purchaseOrderSchema, receivePurchaseOrderSchema, uuid } from '@/lib/schemas';
+import type { RateMicros } from '@/lib/fx';
+import type { Cents, CurrencyCode } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
+import {
+  purchaseOrderPaymentSchema,
+  purchaseOrderSchema,
+  receivePurchaseOrderSchema,
+  uuid,
+} from '@/lib/schemas';
 import { db } from '../db/client';
-import { purchaseOrderItems, purchaseOrders } from '../db/schema';
+import { purchaseOrderItems, purchaseOrderPayments, purchaseOrders } from '../db/schema';
 import {
   clearDocumentPostings,
   logActivity,
   nextDocumentNumber,
+  type PaymentMethod as PaymentMethodName,
   postLedgerEntry,
   postStockMovement,
+  type Tx,
 } from '../services/posting';
 import { rateForRecord } from '../services/rates';
 import { ActionError, writeAction } from './client';
+
+/**
+ * Record money paid to a supplier and post its own ledger entry (F-9).
+ *
+ * The buy-side mirror of `insertPayment` in sales.ts. The ledger entry is
+ * tagged with the *payment's* id, not the order's: `clearDocumentPostings`
+ * matches on source_id, so cancelling an order clears whatever it posted
+ * directly while payments for money that actually left survive. The payment
+ * row and its entry are created together, so derived `paid` can never
+ * disagree with banked cash.
+ */
+async function insertPayment(
+  tx: Tx,
+  input: {
+    orderId: string;
+    number: string;
+    amountCents: Cents;
+    currency: CurrencyCode;
+    rateMicros: RateMicros;
+    method: PaymentMethodName;
+    paidAt: Date;
+    memberId: string;
+    notes?: string | null;
+  },
+): Promise<{ id: string }> {
+  if (input.amountCents <= 0) throw new ActionError('A payment must be more than zero.');
+
+  const [payment] = await tx
+    .insert(purchaseOrderPayments)
+    .values({
+      purchaseOrderId: input.orderId,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      fxRateMicros: input.rateMicros,
+      method: input.method,
+      paidAt: input.paidAt,
+      notes: input.notes ?? null,
+      memberId: input.memberId,
+      createdById: input.memberId,
+    })
+    .returning();
+
+  if (!payment) throw new ActionError('Could not record the payment.');
+
+  await postLedgerEntry(tx, {
+    direction: 'out',
+    category: 'purchase',
+    description: `${input.number} · payment`,
+    currency: input.currency,
+    rateMicros: input.rateMicros,
+    amountCents: input.amountCents,
+    paymentMethod: input.method,
+    occurredAt: input.paidAt,
+    memberId: input.memberId,
+    sourceKind: 'purchase_order',
+    sourceId: payment.id,
+  });
+
+  return { id: payment.id };
+}
+
+/** What has been paid on an order so far, in the currency of the order. */
+async function paidOnOrder(tx: Tx, orderId: string): Promise<Cents> {
+  const [row] = await tx.execute<{ paid: string }>(
+    sql`SELECT COALESCE(SUM(amount_cents), 0)::text AS paid FROM purchase_order_payments WHERE purchase_order_id = ${orderId}`,
+  );
+  return Number(row?.paid ?? 0);
+}
 
 export const createPurchaseOrder = writeAction
   .metadata({ action: 'created', entity: 'purchase order' })
@@ -247,18 +325,15 @@ export const receivePurchaseOrder = writeAction
         .where(eq(purchaseOrders.id, order.id));
 
       if (input.postPayment) {
-        await postLedgerEntry(tx, {
-          direction: 'out',
-          category: 'purchase',
-          description: order.number,
+        await insertPayment(tx, {
+          orderId: order.id,
+          number: order.number,
+          amountCents: landedTotalCents,
           currency: order.currency,
           rateMicros: order.fxRateMicros,
-          amountCents: landedTotalCents,
-          paymentMethod: input.paymentMethod,
-          occurredAt: input.receivedAt,
+          method: input.paymentMethod,
+          paidAt: input.receivedAt,
           memberId: ctx.member.id,
-          sourceKind: 'purchase_order',
-          sourceId: order.id,
         });
       }
 
@@ -278,6 +353,88 @@ export const receivePurchaseOrder = writeAction
       };
     });
 
+    return result;
+  });
+
+/**
+ * Record a payment to a supplier against an order (F-9).
+ *
+ * Receiving an order can pay it in full in one go; this covers every other
+ * shape the money takes — a deposit when the order is placed, the balance on
+ * delivery, paying one of two invoices. Each payment posts its own ledger
+ * entry tagged with the payment's id, so "how much do we still owe?" has an
+ * answer without anyone reconciling the ledger by eye.
+ *
+ * Overpaying is refused rather than rounded down, exactly as on the sell side:
+ * an extra cent in the ledger that matches no invoice is the drift this system
+ * exists to prevent.
+ */
+export const recordPurchaseOrderPayment = writeAction
+  .metadata({ action: 'recorded', entity: 'purchase order payment' })
+  .inputSchema(purchaseOrderPaymentSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const [order] = await tx
+        .select()
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.id, input.orderId))
+        .limit(1);
+
+      if (!order) throw new ActionError('That purchase order no longer exists.');
+      if (order.status === 'cancelled') {
+        throw new ActionError('A cancelled order cannot be paid — raise a new one instead.');
+      }
+
+      const [totals] = await tx.execute<{ landed: string }>(
+        sql`SELECT COALESCE(SUM(landed_cost_cents), 0)::text AS landed FROM purchase_order_items WHERE purchase_order_id = ${order.id}`,
+      );
+      const landedCents = Number(totals?.landed ?? 0);
+      if (landedCents <= 0) {
+        throw new ActionError(
+          'This order has no landed cost yet — receive it before paying the balance.',
+        );
+      }
+
+      const alreadyPaid = await paidOnOrder(tx, order.id);
+      const balance = landedCents - alreadyPaid;
+      if (balance <= 0) throw new ActionError('That order is already paid in full.');
+      if (input.amountCents > balance) {
+        throw new ActionError(
+          `That is more than the outstanding balance (${formatMoney(balance, order.currency)}).`,
+        );
+      }
+
+      await insertPayment(tx, {
+        orderId: order.id,
+        number: order.number,
+        amountCents: input.amountCents,
+        currency: order.currency,
+        rateMicros: order.fxRateMicros,
+        method: input.paymentMethod,
+        paidAt: input.paidAt ?? new Date(),
+        memberId: ctx.member.id,
+        notes: input.notes ?? null,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'paid supplier',
+        entityType: 'purchase_order',
+        entityId: order.id,
+        entityLabel: order.number,
+        diff: {
+          paid_cents: { from: alreadyPaid, to: alreadyPaid + input.amountCents },
+        },
+      });
+
+      return {
+        number: order.number,
+        amountCents: input.amountCents,
+        landedCents,
+        paidCents: alreadyPaid + input.amountCents,
+        balanceCents: balance - input.amountCents,
+      };
+    });
     return result;
   });
 
@@ -319,6 +476,12 @@ export const setPurchaseOrderStatus = writeAction
 /**
  * Cancel an order, undoing its stock and cash postings if it had been received.
  * The document itself is kept, for the same reason a voided sale is.
+ *
+ * Payments recorded under F-9 deliberately survive cancellation: their ledger
+ * entries are tagged with the payment's id, so `clearDocumentPostings` — which
+ * matches on the order's id — leaves them in the cash history. Money that
+ * actually left the bank does not un-leave because an order was cancelled;
+ * getting it back is a refund, which is its own entry.
  */
 export const cancelPurchaseOrder = writeAction
   .metadata({ action: 'cancelled', entity: 'purchase order' })

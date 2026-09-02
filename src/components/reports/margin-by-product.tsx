@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Money, Percent } from '@/components/ui/money';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, THSort, TR } from '@/components/ui/table';
-import type { PeriodPreset } from '@/lib/report-period';
+import { type PeriodPreset, periodRange } from '@/lib/report-period';
 import { listProductMargins, type ProductMarginSort } from '@/server/queries/reports';
 
 export async function MarginByProduct({
@@ -11,11 +11,10 @@ export async function MarginByProduct({
   period,
 }: {
   sort: ProductMarginSort;
-  /** Carried into each sort link so clicking a column doesn't reset the
-   *  period selector back to its default. */
+  /** The report page's period preset. This table now honours it — P1-2. */
   period: PeriodPreset;
 }) {
-  const rows = await listProductMargins(sort);
+  const rows = await listProductMargins(sort, periodRange(period));
 
   const sortHref = (target: ProductMarginSort): Route =>
     `/reports?period=${period}&marginSort=${target}` as Route;
@@ -24,10 +23,16 @@ export async function MarginByProduct({
     <Surface className="overflow-hidden">
       <SurfaceHeader
         title="Margin by product"
-        hint="Lifetime — this view has no date scope, unlike the report above"
+        hint={
+          period === 'all'
+            ? 'All time, net of returns'
+            : 'Within the selected period, net of returns'
+        }
       />
       {rows.length === 0 ? (
-        <p className="px-4 py-10 text-center text-[13px] text-ink-4">No confirmed sales yet.</p>
+        <p className="px-4 py-10 text-center text-[13px] text-ink-4">
+          No confirmed sales in this period.
+        </p>
       ) : (
         <TableWrap>
           <Table>

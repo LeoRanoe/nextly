@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { StockAdjustSheet } from '@/components/forms/finance-sheets';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportButton } from '@/components/patterns/export-button';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +52,7 @@ export default function InventoryPage({
       <Surface className="overflow-hidden">
         <ListToolbar>
           <ListSearch placeholder="Search by product, variant or SKU" />
+          <ExportButton entity="stock" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={4} widths={['w-48', 'w-28', 'w-16']} />}>
           <StockTable searchParams={searchParams} />

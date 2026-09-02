@@ -20,8 +20,6 @@ const CATEGORIES = [
   { value: 'owner_draw', label: 'Owner draw', direction: 'out' },
   { value: 'sales_receipt', label: 'Sales receipt', direction: 'in' },
   { value: 'purchase', label: 'Stock purchase', direction: 'out' },
-  { value: 'shipping', label: 'Shipping', direction: 'out' },
-  { value: 'operating', label: 'Operating cost', direction: 'out' },
   { value: 'refund', label: 'Refund', direction: 'out' },
   { value: 'other', label: 'Other', direction: 'in' },
 ] as const;
@@ -34,18 +32,39 @@ const CATEGORIES = [
  * stays overridable for the exceptions, but the default removes a decision
  * that is usually already made.
  */
-export function LedgerSheet({ principals }: { principals: Option[] }) {
+export function LedgerSheet({
+  principals,
+  lockedCategory,
+  defaultMemberId,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+}: {
+  principals: Option[];
+  lockedCategory?: string;
+  defaultMemberId?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useUrlSheet('new');
+  const isControlled = controlledOnOpenChange !== undefined;
+  const urlSheet = useUrlSheet(isControlled ? 'ledger-sheet-controlled' : 'new');
+  const [internalOpen, setInternalOpen] = useState(false);
 
-  const [category, setCategory] = useState<string>('owner_contribution');
-  const [direction, setDirection] = useState<'in' | 'out'>('in');
+  const open = isControlled ? (controlledOpen ?? internalOpen) : urlSheet[0];
+  const setOpen = isControlled ? (controlledOnOpenChange ?? setInternalOpen) : urlSheet[1];
+
+  const initialCategory = lockedCategory ?? 'owner_contribution';
+  const initialDirection =
+    CATEGORIES.find((c) => c.value === initialCategory)?.direction ?? 'in';
+
+  const [category] = useState<string>(initialCategory);
+  const [direction, setDirection] = useState<'in' | 'out'>(initialDirection);
   const [description, setDescription] = useState('');
   const [occurredAt, setOccurredAt] = useState(today());
   const [currency, setCurrency] = useState<'USD' | 'SRD'>('USD');
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [memberId, setMemberId] = useState<string | null>(null);
+  const [memberId, setMemberId] = useState<string | null>(defaultMemberId ?? null);
   const [notes, setNotes] = useState('');
 
   const needsOwner = category === 'owner_contribution' || category === 'owner_draw';
@@ -66,15 +85,17 @@ export function LedgerSheet({ principals }: { principals: Option[] }) {
 
   return (
     <>
-      <Button variant="primary" onClick={() => setOpen(true)}>
-        <Plus className="size-4" /> Record movement
-      </Button>
+      {!controlledOnOpenChange ? (
+        <Button variant="primary" onClick={() => setOpen(true)}>
+          <Plus className="size-4" /> Record movement
+        </Button>
+      ) : null}
 
       <Sheet
         open={open}
         onOpenChange={setOpen}
         title="Record a cash movement"
-        description="For money that no document already accounts for. Payments for purchase orders and receipts from sales post themselves."
+        description="For capital, draws and corrections. Running costs like shipping, tools or ads go in Expenses so they reach the profit and loss."
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -104,24 +125,28 @@ export function LedgerSheet({ principals }: { principals: Option[] }) {
           }}
         >
           <SheetSection title="What happened">
-            <Field label="Category" htmlFor="category" required>
-              <Select
-                id="category"
-                value={category}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setCategory(next);
-                  const match = CATEGORIES.find((entry) => entry.value === next);
-                  if (match) setDirection(match.direction);
-                }}
-              >
-                {CATEGORIES.map((entry) => (
-                  <option key={entry.value} value={entry.value}>
-                    {entry.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {lockedCategory ? (
+              <input type="hidden" name="category" value={category} />
+            ) : (
+              <Field label="Category" htmlFor="category" required>
+                <Select
+                  id="category"
+                  value={category}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    const match = CATEGORIES.find((entry) => entry.value === next);
+                    if (match) setDirection(match.direction);
+                  }}
+                  disabled={Boolean(lockedCategory)}
+                >
+                  {CATEGORIES.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
 
             <Field
               label="Direction"
