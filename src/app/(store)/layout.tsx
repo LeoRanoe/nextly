@@ -30,6 +30,13 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+// Settings are live database data used by the storefront footer. With a
+// production database configured, leaving this segment as an instant route
+// makes Next.js reject the uncached read during prerendering. The catalog grid
+// remains streamed where it is wrapped in Suspense; this flag only makes the
+// shared store shell wait for its live settings read.
+export const instant = false;
+
 /** An Instagram handle or full URL → a profile URL. */
 function instagramUrl(raw: string): string {
   const trimmed = raw.trim();
