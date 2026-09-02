@@ -73,14 +73,16 @@ export function CommandPalette() {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'flex h-8 w-full max-w-[280px] items-center gap-2 rounded-control border border-line bg-inset px-2.5',
+          'flex h-8 w-full max-w-[280px] min-w-0 items-center justify-center gap-2 rounded-control border border-line bg-inset px-2.5 sm:justify-start',
           'text-[13px] text-ink-4 transition-colors hover:border-line-strong hover:text-ink-3',
           'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
         )}
       >
         <Search className="size-3.5 shrink-0" />
-        <span className="flex-1 text-left">Search or jump to</span>
-        <kbd className="tabular rounded-[4px] border border-line bg-raised px-1.5 py-0.5 text-[10px] text-ink-4">
+        <span className="hidden min-w-0 flex-1 truncate text-left sm:inline">
+          Search or jump to
+        </span>
+        <kbd className="tabular hidden rounded-[4px] border border-line bg-raised px-1.5 py-0.5 text-[10px] text-ink-4 sm:inline">
           ⌘K
         </kbd>
       </button>
