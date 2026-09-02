@@ -27,6 +27,6 @@ setup('authenticate', async ({ page }) => {
   await page.locator('#password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/dashboard');
   await page.context().storageState({ path: 'tests/e2e/.auth/state.json' });
 });
