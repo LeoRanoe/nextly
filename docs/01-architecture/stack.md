@@ -86,14 +86,18 @@ explicitly marked `'use cache'`. See
 ```
 src/
   app/
-    (app)/            authenticated dashboard; instant = false
+    (app)/            authenticated dashboard, rooted at /dashboard; instant = false
+    (store)/           the storefront at / and /p/[slug]; partial prerender (ADR-0010)
     login/  no-access/  auth/   public, partially prerendered
     design-system/    living style documentation, 404 in production
+    api/blob/upload/   authorises client-side Vercel Blob uploads
+    robots.ts  sitemap.ts       scoped to the storefront only
   components/
-    ui/               primitives: Button, Surface, Money, Table, Pagination, AlertDialog
+    ui/               primitives: Button, Surface, Money, Table, Pagination, AlertDialog, MobileList
     patterns/         compositions: PageHeader, EmptyState, ListToolbar
     forms/            create/edit sheets and pages, one per entity
     reports/          P&L, margin-by-product, FX exposure
+    store/            the storefront's own compositions (ProductCard, CatalogSort)
     shell/            Sidebar, Topbar, CommandPalette, Wordmark
     charts/           server-rendered SVG
     overview/         one file per dashboard widget

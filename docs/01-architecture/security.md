@@ -149,7 +149,7 @@ lines — a variant with no history is a typo, not a record.
 absolute path before redirecting:
 
 ```ts
-const next = requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/';
+const next = requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
 ```
 
 Without the `//` check, `//evil.example` is a protocol-relative URL and the

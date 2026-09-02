@@ -23,10 +23,10 @@ exactly how the first Vercel deploy failed.
 
 | Route | Mode | Why |
 |---|---|---|
-| `/login`, `/setup`, `/design-system` | **Static** | No data at all. |
-| `/auth/error`, `/no-access`, the five `[id]` detail routes (`products`, `sales`, `purchase-orders`, `customers`, `suppliers`) | **Partial prerender** | Static shell paints instantly; only the part reading `searchParams` or the session streams in. |
-| `/auth/callback` | Dynamic | A route handler that exchanges a code. |
-| Everything under `(app)` | **Dynamic** (`instant = false`) | Explained below. |
+| `/login`, `/setup`, `/design-system`, `/robots.txt` | **Static** | No data at all. |
+| `/`, `/p/[slug]`, `/auth/error`, `/no-access`, the five `[id]` detail routes (`products`, `sales`, `purchase-orders`, `customers`, `suppliers`) | **Partial prerender** | Static shell paints instantly; only the part reading `searchParams`, `params` or the session streams in. See [ADR-0010](../adr/0010-storefront-at-root.md) for why the storefront is `/` rather than a path under `(app)`. |
+| `/auth/callback`, `/sitemap.xml` | Dynamic | A route handler that exchanges a code; a database read with no Suspense boundary to defer behind, so `connection()` marks it dynamic explicitly instead. |
+| Everything under `(app)` (rooted at `/dashboard`, not `/`) | **Dynamic** (`instant = false`) | Explained below. |
 
 ### Why the dashboard is dynamic
 
