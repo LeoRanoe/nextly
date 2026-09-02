@@ -2,10 +2,11 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { ChevronDown, LogOut, Menu as MenuIcon, Settings } from 'lucide-react';
+import { ChevronDown, LogOut, Menu as MenuIcon, Settings, Store } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Item, Label, Menu, Separator } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
 import { createClient } from '@/lib/supabase/client';
@@ -53,6 +54,12 @@ export function Topbar({ member }: { member: TopbarMember }) {
       <div className="flex-1">
         <CommandPalette />
       </div>
+
+      <Button asChild variant="ghost" size="sm">
+        <Link href="/" target="_blank" rel="noopener noreferrer">
+          <Store className="size-4" /> <span className="hidden sm:inline">View catalog</span>
+        </Link>
+      </Button>
 
       <ThemeToggle />
 

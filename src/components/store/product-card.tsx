@@ -27,7 +27,7 @@ export function ProductCard({
 
   return (
     <Link
-      href={`/catalog/${product.slug}` as Route}
+      href={`/p/${product.slug}` as Route}
       className="group flex flex-col overflow-hidden rounded-card border border-line-subtle bg-raised shadow-[var(--nx-shadow-raised),inset_0_1px_0_0_var(--nx-highlight)] transition-colors hover:border-line"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-inset">

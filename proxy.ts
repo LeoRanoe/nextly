@@ -24,9 +24,10 @@ const PUBLIC_PATHS = [
   '/login',
   '/auth/callback',
   '/auth/error',
-  // The storefront. It reads only published products and never a cost
-  // figure, so it renders for signed-out visitors on purpose.
-  '/catalog',
+  // A storefront product page. It reads only published products and never a
+  // cost figure, so it renders for signed-out visitors on purpose. The
+  // storefront's own index is `/` itself, matched exactly below.
+  '/p/',
   // Living design documentation. The page itself 404s in production.
   '/design-system',
   // Reachable before any credentials exist; it redirects away once they do.
@@ -75,7 +76,9 @@ export default async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  // The storefront is the site's home page — `/` on its own, exactly, not as
+  // a prefix, or every path would match it.
+  const isPublic = pathname === '/' || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -86,7 +89,7 @@ export default async function proxy(request: NextRequest) {
 
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/dashboard';
     url.search = '';
     return NextResponse.redirect(url);
   }

@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get('code');
   const requested = searchParams.get('next');
-  const next = requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/';
+  const next =
+    requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
 
   if (!code) {
     return NextResponse.redirect(new URL('/auth/error?reason=missing-code', origin));

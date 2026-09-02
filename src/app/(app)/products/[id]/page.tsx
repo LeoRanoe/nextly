@@ -48,7 +48,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
       {product.catalogPublished ? (
         <div className="flex justify-end">
           <Button asChild variant="ghost" size="sm">
-            <Link href={`/catalog/${product.slug}` as Route} target="_blank">
+            <Link href={`/p/${product.slug}` as Route} target="_blank">
               <ExternalLink className="size-3.5" /> View in catalog
             </Link>
           </Button>

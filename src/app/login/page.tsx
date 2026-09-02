@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { Wordmark } from '@/components/shell/wordmark';
+import { Skeleton } from '@/components/ui/skeleton';
 import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
@@ -54,9 +56,27 @@ export default function LoginPage() {
           <p className="mt-1 mb-6 text-[13px] text-ink-3">
             Use your Nextly email and password to continue.
           </p>
-          <LoginForm />
+          <Suspense fallback={<LoginFormSkeleton />}>
+            <LoginForm />
+          </Suspense>
         </div>
       </main>
+    </div>
+  );
+}
+
+function LoginFormSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="space-y-1.5">
+        <Skeleton className="h-[11px] w-20" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+      <div className="space-y-1.5">
+        <Skeleton className="h-[11px] w-20" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+      <Skeleton className="mt-1 h-9 w-full" />
     </div>
   );
 }

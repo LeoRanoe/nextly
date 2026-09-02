@@ -38,7 +38,7 @@ export const NAVIGATION: NavGroup[] = [
     label: 'Overview',
     items: [
       {
-        href: '/',
+        href: '/dashboard',
         label: 'Overview',
         Icon: LayoutDashboard,
         keywords: ['dashboard', 'home', 'kpi', 'summary'],
