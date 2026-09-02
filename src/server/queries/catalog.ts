@@ -34,6 +34,7 @@ export type CatalogListItem = {
   slug: string;
   summary: string | null;
   categoryName: string | null;
+  categorySlug: string | null;
   /** Units on hand across the product's active variants. */
   onHand: number;
   minPriceCents: Cents;
@@ -41,28 +42,44 @@ export type CatalogListItem = {
   image: CatalogImage | null;
 };
 
-export async function listCatalogProducts(): Promise<CatalogListItem[]> {
+export type CatalogSort = 'newest' | 'name' | 'price-asc' | 'price-desc';
+
+// Ordered by the `price` LATERAL's own numeric columns, qualified — never by
+// the outer SELECT list's same-named aliases, which are cast to `::text` for
+// transport and would sort "100" before "20" if ORDER BY resolved to them
+// instead. Qualifying with `price.` is what keeps it resolving to the
+// LATERAL's native bigint rather than the outer alias.
+const CATALOG_SORT_CLAUSES: Record<CatalogSort, ReturnType<typeof sql>> = {
+  newest: sql`p.created_at DESC, p.name ASC`,
+  name: sql`p.name ASC`,
+  'price-asc': sql`price.min_price ASC NULLS LAST, p.name ASC`,
+  'price-desc': sql`price.max_price DESC NULLS LAST, p.name ASC`,
+};
+
+export async function listCatalogProducts(
+  params: { q?: string; category?: string; sort?: CatalogSort } = {},
+): Promise<CatalogListItem[]> {
   if (!isDatabaseConfigured()) return [];
+
+  // Normalised to `null`, never `undefined`: postgres.js rejects an
+  // `undefined` bind parameter outright, and `null` is what "no filter"
+  // means to the `IS NULL OR ...` clauses below anyway.
+  const category = params.category?.trim() || null;
+  const likeQuery = params.q?.trim() ? `%${params.q.trim()}%` : null;
+  const order = CATALOG_SORT_CLAUSES[params.sort ?? 'newest'];
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      p.id, p.name, p.slug, p.summary, c.name AS category_name,
+      p.id, p.name, p.slug, p.summary,
+      c.name AS category_name, c.slug AS category_slug,
       COALESCE((
         SELECT SUM(s.on_hand)
           FROM product_variants v
           JOIN v_stock_levels s ON s.variant_id = v.id
          WHERE v.product_id = p.id AND v.is_active
       ), 0)::text AS on_hand,
-      COALESCE((
-        SELECT MIN(v.list_price_cents)
-          FROM product_variants v
-         WHERE v.product_id = p.id AND v.is_active
-      ), 0)::text AS min_price,
-      COALESCE((
-        SELECT MAX(v.list_price_cents)
-          FROM product_variants v
-         WHERE v.product_id = p.id AND v.is_active
-      ), 0)::text AS max_price,
+      COALESCE(price.min_price, 0)::text AS min_price,
+      COALESCE(price.max_price, 0)::text AS max_price,
       img.url AS image_url, img.width::text AS image_width,
       img.height::text AS image_height, img.alt AS image_alt,
       img.blur_data_url AS image_blur
@@ -75,8 +92,15 @@ export async function listCatalogProducts(): Promise<CatalogListItem[]> {
        ORDER BY i.is_primary DESC, i.position
        LIMIT 1
     ) img ON true
+    LEFT JOIN LATERAL (
+      SELECT MIN(v.list_price_cents) AS min_price, MAX(v.list_price_cents) AS max_price
+        FROM product_variants v
+       WHERE v.product_id = p.id AND v.is_active
+    ) price ON true
     WHERE p.catalog_published AND p.status = 'active'
-    ORDER BY p.name
+      AND (${category}::text IS NULL OR c.slug = ${category})
+      AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery})
+    ORDER BY ${order}
   `);
 
   return rows.map((row) => ({
@@ -85,6 +109,7 @@ export async function listCatalogProducts(): Promise<CatalogListItem[]> {
     slug: text(row.slug),
     summary: maybe(row.summary),
     categoryName: maybe(row.category_name),
+    categorySlug: maybe(row.category_slug),
     onHand: num(row.on_hand),
     minPriceCents: num(row.min_price),
     maxPriceCents: num(row.max_price),
@@ -100,6 +125,29 @@ export async function listCatalogProducts(): Promise<CatalogListItem[]> {
   }));
 }
 
+export type CatalogCategory = { slug: string; name: string; count: number };
+
+/** Only categories with at least one published, active product — a filter
+ *  chip that leads to a wall of nothing is worse than one fewer chip. */
+export async function listCatalogCategories(): Promise<CatalogCategory[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const rows = await db.execute<Record<string, string>>(sql`
+    SELECT c.slug, c.name, COUNT(*)::text AS count
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+     WHERE p.catalog_published AND p.status = 'active'
+     GROUP BY c.slug, c.name, c.position
+     ORDER BY c.position, c.name
+  `);
+
+  return rows.map((row) => ({
+    slug: text(row.slug),
+    name: text(row.name),
+    count: num(row.count),
+  }));
+}
+
 export type CatalogProduct = {
   id: string;
   code: string;
@@ -111,6 +159,7 @@ export type CatalogProduct = {
   seoTitle: string | null;
   seoDescription: string | null;
   categoryName: string | null;
+  categorySlug: string | null;
   variants: {
     id: string;
     name: string;
@@ -126,7 +175,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT
       p.id, p.code, p.name, p.slug, p.summary, p.description, p.specs::text,
-      p.seo_title, p.seo_description, c.name AS category_name
+      p.seo_title, p.seo_description, c.name AS category_name, c.slug AS category_slug
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     WHERE p.slug = ${slug} AND p.catalog_published AND p.status = 'active'
@@ -171,6 +220,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
     seoTitle: maybe(row.seo_title),
     seoDescription: maybe(row.seo_description),
     categoryName: maybe(row.category_name),
+    categorySlug: maybe(row.category_slug),
     variants: variants.map((variant) => ({
       id: text(variant.id),
       name: text(variant.name),

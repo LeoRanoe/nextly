@@ -9,6 +9,13 @@ import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
@@ -118,115 +125,172 @@ async function OrdersTable({ searchParams }: { searchParams: Promise<RawSearchPa
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <TH className="w-[88px]">Number</TH>
-              <THSort
-                href={buildHref({
-                  ...query,
-                  sort: 'supplier',
-                  dir: nextDir('supplier'),
-                  page: 1,
-                })}
-                active={query.sort === 'supplier'}
-                dir={query.dir}
-              >
-                Supplier
-              </THSort>
-              <TH>Status</TH>
-              <THSort
-                href={buildHref({
-                  ...query,
-                  sort: 'ordered',
-                  dir: nextDir('ordered'),
-                  page: 1,
-                })}
-                active={query.sort === 'ordered'}
-                dir={query.dir}
-              >
-                Ordered
-              </THSort>
-              <TH className="w-[92px]">Received</TH>
-              <TH numeric>Units</TH>
-              <TH numeric>Goods</TH>
-              <TH numeric>Freight &amp; fees</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'total', dir: nextDir('total'), page: 1 })}
-                active={query.sort === 'total'}
-                dir={query.dir}
-                numeric
-              >
-                Landed total
-              </THSort>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="tabular whitespace-nowrap text-ink">
-                  <Link
-                    href={`/purchase-orders/${row.id}` as Route}
-                    className="hover:text-accent hover:underline"
-                  >
-                    {row.number}
-                  </Link>
-                </TD>
-                <TD className="whitespace-nowrap text-ink-2">{row.supplierName ?? '—'}</TD>
-                <TD>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Badge tone={STATUS_TONE[row.status]}>
-                      {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                    </Badge>
-                    {row.unallocated ? (
-                      <Badge
-                        tone="negative"
-                        title="Freight and fees were never costed into the goods"
-                      >
-                        Uncosted
-                      </Badge>
-                    ) : null}
-                  </span>
-                </TD>
-                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                  {formatDate(row.orderedAt)}
-                </TD>
-                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                  {formatDate(row.receivedAt)}
-                </TD>
-                <TD numeric className="text-ink-3">
-                  {row.unitCount}
-                </TD>
-                <TD numeric className="text-ink-3">
-                  <Money cents={row.goodsCents} size="sm" tone="muted" />
-                </TD>
-                <TD numeric>
-                  <Money cents={row.overheadCents} size="sm" tone="muted" />
-                </TD>
-                <TD numeric>
-                  <Money cents={row.totalCents} size="sm" />
-                </TD>
-                <TD className="text-right">
-                  <span className="inline-flex items-center gap-1">
-                    {row.status === 'ordered' || row.status === 'shipped' ? (
-                      <ReceiveOrderSheet
-                        orderId={row.id}
-                        orderNumber={row.number}
-                        goodsCents={row.goodsCents}
-                        overheadCents={row.overheadCents}
-                        unitCount={row.unitCount}
-                      />
-                    ) : null}
-                    <PurchaseOrderActions id={row.id} number={row.number} status={row.status} />
-                  </span>
-                </TD>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <TH className="w-[88px]">Number</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'supplier',
+                    dir: nextDir('supplier'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'supplier'}
+                  dir={query.dir}
+                >
+                  Supplier
+                </THSort>
+                <TH>Status</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'ordered',
+                    dir: nextDir('ordered'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'ordered'}
+                  dir={query.dir}
+                >
+                  Ordered
+                </THSort>
+                <TH className="w-[92px]">Received</TH>
+                <TH numeric>Units</TH>
+                <TH numeric>Goods</TH>
+                <TH numeric>Freight &amp; fees</TH>
+                <THSort
+                  href={buildHref({ ...query, sort: 'total', dir: nextDir('total'), page: 1 })}
+                  active={query.sort === 'total'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Landed total
+                </THSort>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
-      </TableWrap>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="tabular whitespace-nowrap text-ink">
+                    <Link
+                      href={`/purchase-orders/${row.id}` as Route}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {row.number}
+                    </Link>
+                  </TD>
+                  <TD className="whitespace-nowrap text-ink-2">{row.supplierName ?? '—'}</TD>
+                  <TD>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Badge tone={STATUS_TONE[row.status]}>
+                        {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                      </Badge>
+                      {row.unallocated ? (
+                        <Badge
+                          tone="negative"
+                          title="Freight and fees were never costed into the goods"
+                        >
+                          Uncosted
+                        </Badge>
+                      ) : null}
+                    </span>
+                  </TD>
+                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                    {formatDate(row.orderedAt)}
+                  </TD>
+                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                    {formatDate(row.receivedAt)}
+                  </TD>
+                  <TD numeric className="text-ink-3">
+                    {row.unitCount}
+                  </TD>
+                  <TD numeric className="text-ink-3">
+                    <Money cents={row.goodsCents} size="sm" tone="muted" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.overheadCents} size="sm" tone="muted" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.totalCents} size="sm" />
+                  </TD>
+                  <TD className="text-right">
+                    <span className="inline-flex items-center gap-1">
+                      {row.status === 'ordered' || row.status === 'shipped' ? (
+                        <ReceiveOrderSheet
+                          orderId={row.id}
+                          orderNumber={row.number}
+                          goodsCents={row.goodsCents}
+                          overheadCents={row.overheadCents}
+                          unitCount={row.unitCount}
+                        />
+                      ) : null}
+                      <PurchaseOrderActions
+                        id={row.id}
+                        number={row.number}
+                        status={row.status}
+                      />
+                    </span>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id} interactive={false}>
+            <Link
+              href={`/purchase-orders/${row.id}` as Route}
+              className="flex flex-col gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <MobileRowHeader>
+                <span className="min-w-0">
+                  <span className="tabular block text-[13px] text-ink">{row.number}</span>
+                  <span className="block truncate text-[12px] text-ink-3">
+                    {row.supplierName ?? '—'}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <Badge tone={STATUS_TONE[row.status]}>
+                    {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                  </Badge>
+                  {row.unallocated ? <Badge tone="negative">Uncosted</Badge> : null}
+                </span>
+              </MobileRowHeader>
+              <MobileRowMeta>
+                <MobileRowMetaItem label="Ordered">
+                  {formatDate(row.orderedAt)}
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Received">
+                  {formatDate(row.receivedAt)}
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Units">{row.unitCount}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Landed total">
+                  <Money cents={row.totalCents} size="sm" />
+                </MobileRowMetaItem>
+              </MobileRowMeta>
+            </Link>
+            <div className="flex items-center justify-end gap-1 pt-0.5">
+              {row.status === 'ordered' || row.status === 'shipped' ? (
+                <ReceiveOrderSheet
+                  orderId={row.id}
+                  orderNumber={row.number}
+                  goodsCents={row.goodsCents}
+                  overheadCents={row.overheadCents}
+                  unitCount={row.unitCount}
+                />
+              ) : null}
+              <PurchaseOrderActions id={row.id} number={row.number} status={row.status} />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

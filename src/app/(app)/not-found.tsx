@@ -26,7 +26,7 @@ export default function AppNotFound() {
       </p>
       <div className="mt-4">
         <Button asChild variant="primary" size="sm">
-          <Link href="/">Back to Overview</Link>
+          <Link href="/dashboard">Back to Overview</Link>
         </Button>
       </div>
     </Surface>

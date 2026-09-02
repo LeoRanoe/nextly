@@ -49,11 +49,12 @@ Three things changed substantively in the move, all documented in
    the only sale from 29.1% to 46.3%.
 3. The exchange rate became a dated series, so history stops moving.
 
-## What comes next
+## The public catalog
 
-The public catalog exists: `/catalog` and `/catalog/[slug]` read these same
+The catalog is the site's home page — `/` and `/p/[slug]`, not `/dashboard`
+— see [ADR-0010](../adr/0010-storefront-at-root.md). It reads these same
 product rows — `slug`, `summary`, `description`, `specs`, `seo_title`,
-`catalog_published` — behind the published filter, with ledger-derived
-availability and no cost figure anywhere. Buying from the site, rather than
-browsing it, is the open question; see the
-[roadmap](roadmap.md).
+`catalog_published` — behind the published filter and its own search,
+category and sort, with ledger-derived availability and no cost figure
+anywhere. Buying from the site, rather than browsing it, is the open
+question; see the [roadmap](roadmap.md).

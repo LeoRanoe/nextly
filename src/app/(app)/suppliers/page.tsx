@@ -9,6 +9,13 @@ import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -89,89 +96,131 @@ async function SuppliersTable({ searchParams }: { searchParams: Promise<RawSearc
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <THSort
-                href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
-                active={query.sort === 'name'}
-                dir={query.dir}
-              >
-                Supplier
-              </THSort>
-              <TH>Kind</TH>
-              <THSort
-                href={buildHref({
-                  ...query,
-                  sort: 'products',
-                  dir: nextDir('products'),
-                  page: 1,
-                })}
-                active={query.sort === 'products'}
-                dir={query.dir}
-                numeric
-              >
-                Products
-              </THSort>
-              <THSort
-                href={buildHref({ ...query, sort: 'orders', dir: nextDir('orders'), page: 1 })}
-                active={query.sort === 'orders'}
-                dir={query.dir}
-                numeric
-              >
-                Orders
-              </THSort>
-              <THSort
-                href={buildHref({ ...query, sort: 'spend', dir: nextDir('spend'), page: 1 })}
-                active={query.sort === 'spend'}
-                dir={query.dir}
-                numeric
-              >
-                Landed spend
-              </THSort>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="text-ink">
-                  <Link
-                    href={`/suppliers/${row.id}` as Route}
-                    className="hover:text-accent hover:underline"
-                  >
-                    {row.name}
-                  </Link>
-                </TD>
-                <TD>
-                  <Badge>{humanise(row.kind)}</Badge>
-                </TD>
-                <TD numeric className="text-ink-3">
-                  {row.productCount}
-                </TD>
-                <TD numeric className="text-ink-3">
-                  {row.orderCount}
-                </TD>
-                <TD numeric>
-                  <Money cents={row.spendCents} size="sm" />
-                </TD>
-                <TD className="text-right">
-                  <SupplierActions
-                    id={row.id}
-                    name={row.name}
-                    kind={row.kind}
-                    website={row.website}
-                    notes={row.notes}
-                    productCount={row.productCount}
-                    orderCount={row.orderCount}
-                  />
-                </TD>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <THSort
+                  href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
+                  active={query.sort === 'name'}
+                  dir={query.dir}
+                >
+                  Supplier
+                </THSort>
+                <TH>Kind</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'products',
+                    dir: nextDir('products'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'products'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Products
+                </THSort>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'orders',
+                    dir: nextDir('orders'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'orders'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Orders
+                </THSort>
+                <THSort
+                  href={buildHref({ ...query, sort: 'spend', dir: nextDir('spend'), page: 1 })}
+                  active={query.sort === 'spend'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Landed spend
+                </THSort>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
-      </TableWrap>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="text-ink">
+                    <Link
+                      href={`/suppliers/${row.id}` as Route}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {row.name}
+                    </Link>
+                  </TD>
+                  <TD>
+                    <Badge>{humanise(row.kind)}</Badge>
+                  </TD>
+                  <TD numeric className="text-ink-3">
+                    {row.productCount}
+                  </TD>
+                  <TD numeric className="text-ink-3">
+                    {row.orderCount}
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.spendCents} size="sm" />
+                  </TD>
+                  <TD className="text-right">
+                    <SupplierActions
+                      id={row.id}
+                      name={row.name}
+                      kind={row.kind}
+                      website={row.website}
+                      notes={row.notes}
+                      productCount={row.productCount}
+                      orderCount={row.orderCount}
+                    />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id}>
+            <Link
+              href={`/suppliers/${row.id}` as Route}
+              className="flex flex-col gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <MobileRowHeader>
+                <span className="text-[13px] text-ink">{row.name}</span>
+                <Badge className="shrink-0">{humanise(row.kind)}</Badge>
+              </MobileRowHeader>
+              <MobileRowMeta>
+                <MobileRowMetaItem label="Products">{row.productCount}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Orders">{row.orderCount}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Landed spend">
+                  <Money cents={row.spendCents} size="sm" />
+                </MobileRowMetaItem>
+              </MobileRowMeta>
+            </Link>
+            <div className="flex justify-end pt-0.5">
+              <SupplierActions
+                id={row.id}
+                name={row.name}
+                kind={row.kind}
+                website={row.website}
+                notes={row.notes}
+                productCount={row.productCount}
+                orderCount={row.orderCount}
+              />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

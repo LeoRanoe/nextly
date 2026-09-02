@@ -9,6 +9,13 @@ import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
@@ -110,78 +117,125 @@ async function ExpensesTable({ searchParams }: { searchParams: Promise<RawSearch
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <THSort
-                href={buildHref({ ...query, sort: 'date', dir: nextDir('date'), page: 1 })}
-                active={query.sort === 'date'}
-                dir={query.dir}
-              >
-                Date
-              </THSort>
-              <TH>Description</TH>
-              <TH>Category</TH>
-              <TH>Method</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'amount', dir: nextDir('amount'), page: 1 })}
-                active={query.sort === 'amount'}
-                dir={query.dir}
-                numeric
-              >
-                Amount
-              </THSort>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                  {formatDate(row.occurredAt)}
-                </TD>
-                <TD className="text-ink">{row.description}</TD>
-                <TD>
-                  <Badge>{row.categoryName ?? 'Uncategorised'}</Badge>
-                </TD>
-                <TD className="whitespace-nowrap text-[12px] text-ink-4">
-                  {humanise(row.paymentMethod)}
-                </TD>
-                <TD numeric>
-                  <Money cents={row.amountUsdCents} size="sm" />
-                </TD>
-                <TD className="text-right">
-                  <ExpenseActions
-                    id={row.id}
-                    description={row.description}
-                    categoryId={row.categoryId}
-                    occurredDate={row.occurredDate}
-                    currency={row.currency as 'USD' | 'SRD'}
-                    amountCents={row.amountCents}
-                    amountUsdCents={row.amountUsdCents}
-                    paymentMethod={row.paymentMethod}
-                    notes={row.notes}
-                    hasLedgerEntry={row.hasLedgerEntry}
-                    categories={categories}
-                  />
-                </TD>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <THSort
+                  href={buildHref({ ...query, sort: 'date', dir: nextDir('date'), page: 1 })}
+                  active={query.sort === 'date'}
+                  dir={query.dir}
+                >
+                  Date
+                </THSort>
+                <TH>Description</TH>
+                <TH>Category</TH>
+                <TH>Method</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'amount',
+                    dir: nextDir('amount'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'amount'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Amount
+                </THSort>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-          <tfoot className="border-line-subtle border-t bg-inset/60">
-            <tr>
-              <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
-                {result.rows.length} expenses, this page
-              </td>
-              <td className="h-9 px-3 text-right">
-                <Money cents={pageTotal} size="sm" />
-              </td>
-              <td />
-            </tr>
-          </tfoot>
-        </Table>
-      </TableWrap>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                    {formatDate(row.occurredAt)}
+                  </TD>
+                  <TD className="text-ink">{row.description}</TD>
+                  <TD>
+                    <Badge>{row.categoryName ?? 'Uncategorised'}</Badge>
+                  </TD>
+                  <TD className="whitespace-nowrap text-[12px] text-ink-4">
+                    {humanise(row.paymentMethod)}
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.amountUsdCents} size="sm" />
+                  </TD>
+                  <TD className="text-right">
+                    <ExpenseActions
+                      id={row.id}
+                      description={row.description}
+                      categoryId={row.categoryId}
+                      occurredDate={row.occurredDate}
+                      currency={row.currency as 'USD' | 'SRD'}
+                      amountCents={row.amountCents}
+                      amountUsdCents={row.amountUsdCents}
+                      paymentMethod={row.paymentMethod}
+                      notes={row.notes}
+                      hasLedgerEntry={row.hasLedgerEntry}
+                      categories={categories}
+                    />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+            <tfoot className="border-line-subtle border-t bg-inset/60">
+              <tr>
+                <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
+                  {result.rows.length} expenses, this page
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={pageTotal} size="sm" />
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id} interactive={false}>
+            <MobileRowHeader>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] text-ink">{row.description}</span>
+                <span className="block text-[12px] text-ink-3">
+                  {formatDate(row.occurredAt)}
+                </span>
+              </span>
+              <Money cents={row.amountUsdCents} size="sm" className="shrink-0" />
+            </MobileRowHeader>
+            <MobileRowMeta>
+              <MobileRowMetaItem label="Category">
+                {row.categoryName ?? 'Uncategorised'}
+              </MobileRowMetaItem>
+              <MobileRowMetaItem label="Method">
+                {humanise(row.paymentMethod)}
+              </MobileRowMetaItem>
+            </MobileRowMeta>
+            <div className="flex justify-end pt-0.5">
+              <ExpenseActions
+                id={row.id}
+                description={row.description}
+                categoryId={row.categoryId}
+                occurredDate={row.occurredDate}
+                currency={row.currency as 'USD' | 'SRD'}
+                amountCents={row.amountCents}
+                amountUsdCents={row.amountUsdCents}
+                paymentMethod={row.paymentMethod}
+                notes={row.notes}
+                hasLedgerEntry={row.hasLedgerEntry}
+                categories={categories}
+              />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

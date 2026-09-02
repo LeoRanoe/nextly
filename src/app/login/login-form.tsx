@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -14,6 +14,7 @@ type State = { status: 'idle' | 'signingIn'; error?: string };
  */
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('nextly@admin.com');
   const [password, setPassword] = useState('');
   const [state, setState] = useState<State>({ status: 'idle' });
@@ -45,7 +46,12 @@ export function LoginForm() {
       return;
     }
 
-    router.replace('/');
+    // Same open-redirect guard as /auth/callback: a same-origin absolute
+    // path, or nowhere anyone asked to go.
+    const requested = searchParams.get('next');
+    const next =
+      requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
+    router.replace(next as Parameters<typeof router.replace>[0]);
   }
 
   return (

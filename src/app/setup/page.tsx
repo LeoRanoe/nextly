@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: 'Setup' };
  * trace, and better than a sign-in form that could never succeed.
  */
 export default function SetupPage() {
-  if (isDatabaseConfigured()) redirect('/');
+  if (isDatabaseConfigured()) redirect('/dashboard');
 
   return (
     <div className="grid min-h-dvh place-items-center px-6 py-12">

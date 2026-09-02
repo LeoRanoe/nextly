@@ -24,7 +24,7 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
       <header className="border-line-subtle border-b">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 lg:px-6">
           <Link
-            href="/catalog"
+            href="/"
             className="inline-flex rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <Wordmark />

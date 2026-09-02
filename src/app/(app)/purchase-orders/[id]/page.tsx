@@ -8,6 +8,13 @@ import { PurchaseOrderActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
@@ -185,73 +192,112 @@ async function Loader({
 
         <Surface className="overflow-hidden">
           <SurfaceHeader title="Items" />
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR className="hover:bg-transparent">
-                  <TH>Product</TH>
-                  <TH>SKU</TH>
-                  <TH numeric>Ordered</TH>
-                  <TH numeric>Received</TH>
-                  <TH numeric>Subtotal</TH>
-                  <TH numeric>Overhead</TH>
-                  <TH numeric>Landed</TH>
-                  <TH numeric>Per unit</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {order.items.map((item) => (
-                  <TR key={item.id}>
-                    <TD className="whitespace-nowrap text-ink">
+          <div className="hidden lg:block">
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR className="hover:bg-transparent">
+                    <TH>Product</TH>
+                    <TH>SKU</TH>
+                    <TH numeric>Ordered</TH>
+                    <TH numeric>Received</TH>
+                    <TH numeric>Subtotal</TH>
+                    <TH numeric>Overhead</TH>
+                    <TH numeric>Landed</TH>
+                    <TH numeric>Per unit</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {order.items.map((item) => (
+                    <TR key={item.id}>
+                      <TD className="whitespace-nowrap text-ink">
+                        {item.productName}
+                        <span className="text-ink-4"> · {item.variantName}</span>
+                      </TD>
+                      <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                        {item.sku}
+                      </TD>
+                      <TD numeric className="text-ink-3">
+                        {item.quantity}
+                      </TD>
+                      <TD numeric className="text-ink-3">
+                        {item.quantityReceived}
+                      </TD>
+                      <TD numeric>
+                        <Money cents={item.subtotalCents} size="sm" tone="muted" />
+                      </TD>
+                      <TD numeric>
+                        <Money cents={item.overheadCents} size="sm" tone="muted" />
+                      </TD>
+                      <TD numeric>
+                        <Money cents={item.landedCostCents} size="sm" />
+                      </TD>
+                      <TD numeric className="text-ink-3">
+                        {item.quantity > 0
+                          ? `$${(item.landedCostCents / item.quantity / 100).toFixed(4)}`
+                          : '—'}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+                <tfoot className="border-line-subtle border-t bg-inset/60">
+                  <tr>
+                    <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
+                      {order.receivedAt
+                        ? 'Foots exactly to the order total'
+                        : 'Not yet received — overhead not allocated'}
+                    </td>
+                    <td className="h-9 px-3 text-right">
+                      <Money cents={goodsCents} size="sm" tone="muted" />
+                    </td>
+                    <td className="h-9 px-3 text-right">
+                      <Money cents={overheadTotal} size="sm" tone="muted" />
+                    </td>
+                    <td className="h-9 px-3 text-right" colSpan={2}>
+                      <Money cents={landedTotal} size="sm" />
+                    </td>
+                  </tr>
+                </tfoot>
+              </Table>
+            </TableWrap>
+          </div>
+
+          <MobileList>
+            {order.items.map((item) => (
+              <MobileRow key={item.id} interactive={false}>
+                <MobileRowHeader>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] text-ink">
                       {item.productName}
                       <span className="text-ink-4"> · {item.variantName}</span>
-                    </TD>
-                    <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                      {item.sku}
-                    </TD>
-                    <TD numeric className="text-ink-3">
-                      {item.quantity}
-                    </TD>
-                    <TD numeric className="text-ink-3">
-                      {item.quantityReceived}
-                    </TD>
-                    <TD numeric>
-                      <Money cents={item.subtotalCents} size="sm" tone="muted" />
-                    </TD>
-                    <TD numeric>
-                      <Money cents={item.overheadCents} size="sm" tone="muted" />
-                    </TD>
-                    <TD numeric>
-                      <Money cents={item.landedCostCents} size="sm" />
-                    </TD>
-                    <TD numeric className="text-ink-3">
-                      {item.quantity > 0
-                        ? `$${(item.landedCostCents / item.quantity / 100).toFixed(4)}`
-                        : '—'}
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-              <tfoot className="border-line-subtle border-t bg-inset/60">
-                <tr>
-                  <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
-                    {order.receivedAt
-                      ? 'Foots exactly to the order total'
-                      : 'Not yet received — overhead not allocated'}
-                  </td>
-                  <td className="h-9 px-3 text-right">
-                    <Money cents={goodsCents} size="sm" tone="muted" />
-                  </td>
-                  <td className="h-9 px-3 text-right">
-                    <Money cents={overheadTotal} size="sm" tone="muted" />
-                  </td>
-                  <td className="h-9 px-3 text-right" colSpan={2}>
-                    <Money cents={landedTotal} size="sm" />
-                  </td>
-                </tr>
-              </tfoot>
-            </Table>
-          </TableWrap>
+                    </span>
+                    <span className="tabular block text-[11px] text-ink-4">{item.sku}</span>
+                  </span>
+                  <Money cents={item.landedCostCents} size="sm" className="shrink-0" />
+                </MobileRowHeader>
+                <MobileRowMeta>
+                  <MobileRowMetaItem label="Ordered">{item.quantity}</MobileRowMetaItem>
+                  <MobileRowMetaItem label="Received">
+                    {item.quantityReceived}
+                  </MobileRowMetaItem>
+                  <MobileRowMetaItem label="Subtotal">
+                    <Money cents={item.subtotalCents} size="sm" tone="muted" />
+                  </MobileRowMetaItem>
+                  <MobileRowMetaItem label="Per unit">
+                    {item.quantity > 0
+                      ? `$${(item.landedCostCents / item.quantity / 100).toFixed(4)}`
+                      : '—'}
+                  </MobileRowMetaItem>
+                </MobileRowMeta>
+              </MobileRow>
+            ))}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 text-[12px] text-ink-3">
+              <span>
+                {order.receivedAt ? 'Foots exactly to the order total' : 'Not yet received'}
+              </span>
+              <Money cents={landedTotal} size="sm" />
+            </div>
+          </MobileList>
         </Surface>
       </div>
 

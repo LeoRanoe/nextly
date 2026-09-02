@@ -6,6 +6,13 @@ import { SupplierActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
@@ -79,7 +86,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
         ) : null}
       </Surface>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="Products" value={String(supplier.productCount)} />
         <Stat label="Orders" value={String(supplier.orderCount)} />
         <Stat label="Landed spend" money={supplier.spendCents} />
@@ -115,43 +122,76 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
               No purchase orders yet.
             </p>
           ) : (
-            <TableWrap>
-              <Table>
-                <THead>
-                  <TR className="hover:bg-transparent">
-                    <TH>Number</TH>
-                    <TH>Ordered</TH>
-                    <TH>Status</TH>
-                    <TH numeric>Landed</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {supplier.purchaseOrders.map((order) => (
-                    <TR key={order.id}>
-                      <TD className="tabular whitespace-nowrap text-ink">
-                        <Link
-                          href={`/purchase-orders/${order.id}` as Route}
-                          className="hover:text-accent hover:underline"
+            <>
+              <div className="hidden lg:block">
+                <TableWrap>
+                  <Table>
+                    <THead>
+                      <TR className="hover:bg-transparent">
+                        <TH>Number</TH>
+                        <TH>Ordered</TH>
+                        <TH>Status</TH>
+                        <TH numeric>Landed</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {supplier.purchaseOrders.map((order) => (
+                        <TR key={order.id}>
+                          <TD className="tabular whitespace-nowrap text-ink">
+                            <Link
+                              href={`/purchase-orders/${order.id}` as Route}
+                              className="hover:text-accent hover:underline"
+                            >
+                              {order.number}
+                            </Link>
+                          </TD>
+                          <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                            {formatDate(order.orderedAt)}
+                          </TD>
+                          <TD>
+                            <Badge tone={STATUS_TONE[order.status as keyof typeof STATUS_TONE]}>
+                              {humanise(order.status)}
+                            </Badge>
+                          </TD>
+                          <TD numeric>
+                            <Money cents={order.totalCents} size="sm" />
+                          </TD>
+                        </TR>
+                      ))}
+                    </TBody>
+                  </Table>
+                </TableWrap>
+              </div>
+
+              <MobileList>
+                {supplier.purchaseOrders.map((order) => (
+                  <MobileRow key={order.id}>
+                    <Link
+                      href={`/purchase-orders/${order.id}` as Route}
+                      className="flex flex-col gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
+                      <MobileRowHeader>
+                        <span className="tabular text-[13px] text-ink">{order.number}</span>
+                        <Badge
+                          tone={STATUS_TONE[order.status as keyof typeof STATUS_TONE]}
+                          className="shrink-0"
                         >
-                          {order.number}
-                        </Link>
-                      </TD>
-                      <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                        {formatDate(order.orderedAt)}
-                      </TD>
-                      <TD>
-                        <Badge tone={STATUS_TONE[order.status as keyof typeof STATUS_TONE]}>
                           {humanise(order.status)}
                         </Badge>
-                      </TD>
-                      <TD numeric>
-                        <Money cents={order.totalCents} size="sm" />
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </TableWrap>
+                      </MobileRowHeader>
+                      <MobileRowMeta>
+                        <MobileRowMetaItem label="Ordered">
+                          {formatDate(order.orderedAt)}
+                        </MobileRowMetaItem>
+                        <MobileRowMetaItem label="Landed">
+                          <Money cents={order.totalCents} size="sm" />
+                        </MobileRowMetaItem>
+                      </MobileRowMeta>
+                    </Link>
+                  </MobileRow>
+                ))}
+              </MobileList>
+            </>
           )}
         </Surface>
       </div>

@@ -6,6 +6,13 @@ import { CustomerActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
@@ -79,7 +86,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
         ) : null}
       </Surface>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="Orders" value={String(customer.orderCount)} />
         <Stat label="Lifetime spend" money={customer.spentCents} />
         <Stat label="Gross earned" money={customer.grossCents} tone="flow" />
@@ -90,47 +97,87 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
         {customer.sales.length === 0 ? (
           <p className="px-4 py-8 text-center text-[13px] text-ink-4">No sales yet.</p>
         ) : (
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR className="hover:bg-transparent">
-                  <TH>Number</TH>
-                  <TH>Date</TH>
-                  <TH>Status</TH>
-                  <TH numeric>Revenue</TH>
-                  <TH numeric>Gross</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {customer.sales.map((sale) => (
-                  <TR key={sale.id}>
-                    <TD className="tabular whitespace-nowrap text-ink">
-                      <Link
-                        href={`/sales/${sale.id}` as Route}
-                        className="hover:text-accent hover:underline"
+          <>
+            <div className="hidden lg:block">
+              <TableWrap>
+                <Table>
+                  <THead>
+                    <TR className="hover:bg-transparent">
+                      <TH>Number</TH>
+                      <TH>Date</TH>
+                      <TH>Status</TH>
+                      <TH numeric>Revenue</TH>
+                      <TH numeric>Gross</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {customer.sales.map((sale) => (
+                      <TR key={sale.id}>
+                        <TD className="tabular whitespace-nowrap text-ink">
+                          <Link
+                            href={`/sales/${sale.id}` as Route}
+                            className="hover:text-accent hover:underline"
+                          >
+                            {sale.number}
+                          </Link>
+                        </TD>
+                        <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                          {formatDate(sale.soldAt)}
+                        </TD>
+                        <TD>
+                          <Badge tone={STATUS_TONE[sale.status as keyof typeof STATUS_TONE]}>
+                            {humanise(sale.status)}
+                          </Badge>
+                        </TD>
+                        <TD numeric>
+                          <Money cents={sale.totalUsdCents} size="sm" />
+                        </TD>
+                        <TD numeric>
+                          <Money cents={sale.grossProfitCents} size="sm" tone="flow" />
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </TableWrap>
+            </div>
+
+            <MobileList>
+              {customer.sales.map((sale) => (
+                <MobileRow key={sale.id}>
+                  <Link
+                    href={`/sales/${sale.id}` as Route}
+                    className="flex flex-col gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <MobileRowHeader>
+                      <span className="min-w-0">
+                        <span className="tabular block text-[13px] text-ink">
+                          {sale.number}
+                        </span>
+                        <span className="block text-[12px] text-ink-3">
+                          {formatDate(sale.soldAt)}
+                        </span>
+                      </span>
+                      <Badge
+                        tone={STATUS_TONE[sale.status as keyof typeof STATUS_TONE]}
+                        className="shrink-0"
                       >
-                        {sale.number}
-                      </Link>
-                    </TD>
-                    <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                      {formatDate(sale.soldAt)}
-                    </TD>
-                    <TD>
-                      <Badge tone={STATUS_TONE[sale.status as keyof typeof STATUS_TONE]}>
                         {humanise(sale.status)}
                       </Badge>
-                    </TD>
-                    <TD numeric>
-                      <Money cents={sale.totalUsdCents} size="sm" />
-                    </TD>
-                    <TD numeric>
-                      <Money cents={sale.grossProfitCents} size="sm" tone="flow" />
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </TableWrap>
+                    </MobileRowHeader>
+                    <MobileRowMeta>
+                      <MobileRowMetaItem label="Revenue">
+                        <Money cents={sale.totalUsdCents} size="sm" />
+                      </MobileRowMetaItem>
+                      <MobileRowMetaItem label="Gross">
+                        <Money cents={sale.grossProfitCents} size="sm" tone="flow" />
+                      </MobileRowMetaItem>
+                    </MobileRowMeta>
+                  </Link>
+                </MobileRow>
+              ))}
+            </MobileList>
+          </>
         )}
       </Surface>
     </div>

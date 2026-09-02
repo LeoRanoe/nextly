@@ -2,6 +2,13 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { OwnerEquity } from '@/components/overview/owner-equity';
 import { PageHeader } from '@/components/patterns/page-header';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
@@ -58,52 +65,80 @@ async function EquityTable() {
   );
 
   return (
-    <TableWrap>
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH>Owner</TH>
-            <TH numeric>Contributed</TH>
-            <TH numeric>Drawn</TH>
-            <TH numeric>Net capital</TH>
-            <TH numeric>Share</TH>
-          </TR>
-        </THead>
-        <TBody>
-          {owners.map((owner) => (
-            <TR key={owner.memberId}>
-              <TD className="text-ink">{owner.fullName}</TD>
-              <TD numeric>
-                <Money cents={owner.contributedCents} size="sm" />
-              </TD>
-              <TD numeric>
-                <Money cents={owner.drawnCents} size="sm" tone="muted" />
-              </TD>
-              <TD numeric>
-                <Money cents={owner.netCents} size="sm" />
-              </TD>
-              <TD numeric className="text-ink-2">
+    <>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <TH>Owner</TH>
+                <TH numeric>Contributed</TH>
+                <TH numeric>Drawn</TH>
+                <TH numeric>Net capital</TH>
+                <TH numeric>Share</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {owners.map((owner) => (
+                <TR key={owner.memberId}>
+                  <TD className="text-ink">{owner.fullName}</TD>
+                  <TD numeric>
+                    <Money cents={owner.contributedCents} size="sm" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={owner.drawnCents} size="sm" tone="muted" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={owner.netCents} size="sm" />
+                  </TD>
+                  <TD numeric className="text-ink-2">
+                    {formatPercent(owner.share, 2)}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+            <tfoot className="border-line-subtle border-t bg-inset/60">
+              <tr>
+                <td className="h-9 px-3 text-[12px] text-ink-3">Total</td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={totals.contributed} size="sm" />
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={totals.drawn} size="sm" tone="muted" />
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={totals.net} size="sm" />
+                </td>
+                <td className="tabular h-9 px-3 text-right text-[12px] text-ink-3">100.00%</td>
+              </tr>
+            </tfoot>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {owners.map((owner) => (
+          <MobileRow key={owner.memberId} interactive={false}>
+            <MobileRowHeader>
+              <span className="text-[13px] text-ink">{owner.fullName}</span>
+              <span className="tabular shrink-0 text-[12px] text-ink-2">
                 {formatPercent(owner.share, 2)}
-              </TD>
-            </TR>
-          ))}
-        </TBody>
-        <tfoot className="border-line-subtle border-t bg-inset/60">
-          <tr>
-            <td className="h-9 px-3 text-[12px] text-ink-3">Total</td>
-            <td className="h-9 px-3 text-right">
-              <Money cents={totals.contributed} size="sm" />
-            </td>
-            <td className="h-9 px-3 text-right">
-              <Money cents={totals.drawn} size="sm" tone="muted" />
-            </td>
-            <td className="h-9 px-3 text-right">
-              <Money cents={totals.net} size="sm" />
-            </td>
-            <td className="tabular h-9 px-3 text-right text-[12px] text-ink-3">100.00%</td>
-          </tr>
-        </tfoot>
-      </Table>
-    </TableWrap>
+              </span>
+            </MobileRowHeader>
+            <MobileRowMeta>
+              <MobileRowMetaItem label="Contributed">
+                <Money cents={owner.contributedCents} size="sm" />
+              </MobileRowMetaItem>
+              <MobileRowMetaItem label="Drawn">
+                <Money cents={owner.drawnCents} size="sm" tone="muted" />
+              </MobileRowMetaItem>
+              <MobileRowMetaItem label="Net capital">
+                <Money cents={owner.netCents} size="sm" />
+              </MobileRowMetaItem>
+            </MobileRowMeta>
+          </MobileRow>
+        ))}
+      </MobileList>
+    </>
   );
 }

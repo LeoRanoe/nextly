@@ -6,6 +6,13 @@ import { MemberSheet } from '@/components/forms/reference-sheets';
 import { MemberActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
@@ -121,53 +128,98 @@ async function RatesTable() {
 async function MembersTable() {
   const rows = await listMembers();
   return (
-    <TableWrap>
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH>Name</TH>
-            <TH>Email</TH>
-            <TH>Role</TH>
-            <TH>Status</TH>
-            <TH />
-          </TR>
-        </THead>
-        <TBody>
-          {rows.map((row) => (
-            <TR key={row.id}>
-              <TD className="text-ink">
-                {row.fullName}
-                {row.isPrincipal ? (
-                  <Badge tone="accent" className="ml-2">
-                    Principal
-                  </Badge>
-                ) : null}
-              </TD>
-              <TD className="tabular text-[12px] text-ink-3">{row.email}</TD>
-              <TD>
-                <Badge>{humanise(row.role)}</Badge>
-              </TD>
-              <TD>
-                {row.hasSignedIn ? (
-                  <Badge tone="positive">Active</Badge>
-                ) : (
-                  <Badge tone="warning">Invited</Badge>
-                )}
-              </TD>
-              <TD className="text-right">
-                <MemberActions
-                  id={row.id}
-                  fullName={row.fullName}
-                  email={row.email}
-                  role={row.role}
-                  isPrincipal={row.isPrincipal}
-                />
-              </TD>
-            </TR>
-          ))}
-        </TBody>
-      </Table>
-    </TableWrap>
+    <>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <TH>Name</TH>
+                <TH>Email</TH>
+                <TH>Role</TH>
+                <TH>Status</TH>
+                <TH />
+              </TR>
+            </THead>
+            <TBody>
+              {rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="text-ink">
+                    {row.fullName}
+                    {row.isPrincipal ? (
+                      <Badge tone="accent" className="ml-2">
+                        Principal
+                      </Badge>
+                    ) : null}
+                  </TD>
+                  <TD className="tabular text-[12px] text-ink-3">{row.email}</TD>
+                  <TD>
+                    <Badge>{humanise(row.role)}</Badge>
+                  </TD>
+                  <TD>
+                    {row.hasSignedIn ? (
+                      <Badge tone="positive">Active</Badge>
+                    ) : (
+                      <Badge tone="warning">Invited</Badge>
+                    )}
+                  </TD>
+                  <TD className="text-right">
+                    <MemberActions
+                      id={row.id}
+                      fullName={row.fullName}
+                      email={row.email}
+                      role={row.role}
+                      isPrincipal={row.isPrincipal}
+                    />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {rows.map((row) => (
+          <MobileRow key={row.id} interactive={false}>
+            <MobileRowHeader>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] text-ink">
+                  {row.fullName}
+                  {row.isPrincipal ? (
+                    <Badge tone="accent" className="ml-1.5">
+                      Principal
+                    </Badge>
+                  ) : null}
+                </span>
+                <span className="tabular block truncate text-[11px] text-ink-4">
+                  {row.email}
+                </span>
+              </span>
+              <MemberActions
+                id={row.id}
+                fullName={row.fullName}
+                email={row.email}
+                role={row.role}
+                isPrincipal={row.isPrincipal}
+              />
+            </MobileRowHeader>
+            <MobileRowMeta className="grid-cols-1">
+              <MobileRowMetaItem label="Role">
+                <span className="flex items-center gap-1.5">
+                  <Badge>{humanise(row.role)}</Badge>
+                  {row.hasSignedIn ? (
+                    <Badge tone="positive">Active</Badge>
+                  ) : (
+                    <Badge tone="warning">Invited</Badge>
+                  )}
+                </span>
+              </MobileRowMetaItem>
+            </MobileRowMeta>
+          </MobileRow>
+        ))}
+      </MobileList>
+    </>
   );
 }
 

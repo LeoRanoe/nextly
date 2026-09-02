@@ -9,6 +9,13 @@ import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
@@ -115,56 +122,92 @@ async function LedgerTable({ searchParams }: { searchParams: Promise<RawSearchPa
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <THSort
-                href={buildHref({ ...query, dir: nextDir, page: 1 })}
-                active
-                dir={query.dir}
-              >
-                Date
-              </THSort>
-              <TH>Description</TH>
-              <TH>Category</TH>
-              <TH>Owner</TH>
-              <TH>Method</TH>
-              <TH numeric>Amount</TH>
-              <TH numeric>Balance</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                  {formatDate(row.occurredAt)}
-                </TD>
-                <TD className="text-ink">{row.description}</TD>
-                <TD>
-                  <Badge tone={CATEGORY_TONE[row.category] ?? 'neutral'}>
-                    {humanise(row.category)}
-                  </Badge>
-                </TD>
-                <TD className="whitespace-nowrap text-ink-3">{row.memberName ?? '—'}</TD>
-                <TD className="whitespace-nowrap text-[12px] text-ink-4">
-                  {humanise(row.paymentMethod)}
-                </TD>
-                <TD numeric>
-                  <Money cents={row.netCents} tone="flow" size="sm" signed />
-                </TD>
-                <TD numeric className="text-ink-2">
-                  <Money cents={row.balanceCents} size="sm" tone="muted" />
-                </TD>
-                <TD className="text-right">
-                  <LedgerActions id={row.id} description={row.description} />
-                </TD>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <THSort
+                  href={buildHref({ ...query, dir: nextDir, page: 1 })}
+                  active
+                  dir={query.dir}
+                >
+                  Date
+                </THSort>
+                <TH>Description</TH>
+                <TH>Category</TH>
+                <TH>Owner</TH>
+                <TH>Method</TH>
+                <TH numeric>Amount</TH>
+                <TH numeric>Balance</TH>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
-      </TableWrap>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                    {formatDate(row.occurredAt)}
+                  </TD>
+                  <TD className="text-ink">{row.description}</TD>
+                  <TD>
+                    <Badge tone={CATEGORY_TONE[row.category] ?? 'neutral'}>
+                      {humanise(row.category)}
+                    </Badge>
+                  </TD>
+                  <TD className="whitespace-nowrap text-ink-3">{row.memberName ?? '—'}</TD>
+                  <TD className="whitespace-nowrap text-[12px] text-ink-4">
+                    {humanise(row.paymentMethod)}
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.netCents} tone="flow" size="sm" signed />
+                  </TD>
+                  <TD numeric className="text-ink-2">
+                    <Money cents={row.balanceCents} size="sm" tone="muted" />
+                  </TD>
+                  <TD className="text-right">
+                    <LedgerActions id={row.id} description={row.description} />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id} interactive={false}>
+            <MobileRowHeader>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] text-ink">{row.description}</span>
+                <span className="block text-[12px] text-ink-3">
+                  {formatDate(row.occurredAt)}
+                </span>
+              </span>
+              <Money cents={row.netCents} tone="flow" size="sm" signed className="shrink-0" />
+            </MobileRowHeader>
+            <MobileRowMeta>
+              <MobileRowMetaItem label="Category">
+                <Badge tone={CATEGORY_TONE[row.category] ?? 'neutral'}>
+                  {humanise(row.category)}
+                </Badge>
+              </MobileRowMetaItem>
+              <MobileRowMetaItem label="Owner">{row.memberName ?? '—'}</MobileRowMetaItem>
+              <MobileRowMetaItem label="Method">
+                {humanise(row.paymentMethod)}
+              </MobileRowMetaItem>
+              <MobileRowMetaItem label="Balance">
+                <Money cents={row.balanceCents} size="sm" tone="muted" />
+              </MobileRowMetaItem>
+            </MobileRowMeta>
+            <div className="flex justify-end pt-0.5">
+              <LedgerActions id={row.id} description={row.description} />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

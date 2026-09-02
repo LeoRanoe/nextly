@@ -33,7 +33,7 @@ export function Sidebar({
     >
       <div className="px-2">
         <Link
-          href="/"
+          href="/dashboard"
           className="inline-flex rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <Wordmark />

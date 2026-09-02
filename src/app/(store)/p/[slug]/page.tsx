@@ -57,13 +57,22 @@ async function Loader({ params }: { params: Params }) {
         aria-label="Breadcrumb"
         className="mb-5 flex items-center gap-1.5 text-[12px] text-ink-4"
       >
-        <Link href="/catalog" className="rounded-control transition-colors hover:text-accent">
+        <Link href="/" className="rounded-control transition-colors hover:text-accent">
           Catalog
         </Link>
         {product.categoryName ? (
           <>
             <span aria-hidden="true">/</span>
-            <span className="text-ink-3">{product.categoryName}</span>
+            {product.categorySlug ? (
+              <Link
+                href={`/?category=${product.categorySlug}`}
+                className="rounded-control text-ink-3 transition-colors hover:text-accent"
+              >
+                {product.categoryName}
+              </Link>
+            ) : (
+              <span className="text-ink-3">{product.categoryName}</span>
+            )}
           </>
         ) : null}
       </nav>
