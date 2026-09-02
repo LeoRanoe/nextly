@@ -8,6 +8,13 @@ import { EmptyState } from '@/components/patterns/empty-state';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Pagination } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
@@ -26,7 +33,7 @@ export default function CategoriesPage({
     <>
       <PageHeader
         title="Categories"
-        description="How products are grouped, in the dashboard today and on the public catalog later."
+        description="How products are grouped — here, and as the filter chips on the public catalog."
         action={
           <Suspense fallback={null}>
             <CategorySheet />
@@ -56,7 +63,7 @@ async function CategoriesTable({ searchParams }: { searchParams: Promise<RawSear
       <EmptyState
         Icon={Tags}
         title="No categories yet"
-        description="Categories group products here and, later, on the public catalog. A product can go without one."
+        description="Categories group products here and on the public catalog. A product can go without one."
         action={
           <Suspense fallback={null}>
             <CategorySheet />
@@ -86,55 +93,82 @@ async function CategoriesTable({ searchParams }: { searchParams: Promise<RawSear
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <THSort
-                href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
-                active={query.sort === 'name'}
-                dir={query.dir}
-              >
-                Name
-              </THSort>
-              <TH>Slug</TH>
-              <THSort
-                href={buildHref({
-                  ...query,
-                  sort: 'products',
-                  dir: nextDir('products'),
-                  page: 1,
-                })}
-                active={query.sort === 'products'}
-                dir={query.dir}
-                numeric
-              >
-                Products
-              </THSort>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="text-ink">{row.name}</TD>
-                <TD className="tabular text-[12px] text-ink-3">{row.slug}</TD>
-                <TD numeric className="text-ink-2">
-                  {row.productCount}
-                </TD>
-                <TD className="text-right">
-                  <CategoryActions
-                    id={row.id}
-                    name={row.name}
-                    slug={row.slug}
-                    productCount={row.productCount}
-                  />
-                </TD>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <THSort
+                  href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
+                  active={query.sort === 'name'}
+                  dir={query.dir}
+                >
+                  Name
+                </THSort>
+                <TH>Slug</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'products',
+                    dir: nextDir('products'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'products'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Products
+                </THSort>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
-      </TableWrap>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="text-ink">{row.name}</TD>
+                  <TD className="tabular text-[12px] text-ink-3">{row.slug}</TD>
+                  <TD numeric className="text-ink-2">
+                    {row.productCount}
+                  </TD>
+                  <TD className="text-right">
+                    <CategoryActions
+                      id={row.id}
+                      name={row.name}
+                      slug={row.slug}
+                      productCount={row.productCount}
+                    />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id} interactive={false}>
+            <MobileRowHeader>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] text-ink">{row.name}</span>
+                <span className="tabular block text-[11px] text-ink-4">{row.slug}</span>
+              </span>
+              <MobileRowMeta className="w-auto shrink-0 grid-cols-1 text-right">
+                <MobileRowMetaItem label="Products">{row.productCount}</MobileRowMetaItem>
+              </MobileRowMeta>
+            </MobileRowHeader>
+            <div className="flex justify-end pt-0.5">
+              <CategoryActions
+                id={row.id}
+                name={row.name}
+                slug={row.slug}
+                productCount={row.productCount}
+              />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

@@ -8,6 +8,13 @@ import { EmptyState } from '@/components/patterns/empty-state';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
@@ -92,85 +99,135 @@ async function CustomersTable({ searchParams }: { searchParams: Promise<RawSearc
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <TH className="w-[70px]">Code</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
-                active={query.sort === 'name'}
-                dir={query.dir}
-              >
-                Name
-              </THSort>
-              <TH>Contact</TH>
-              <TH>City</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'orders', dir: nextDir('orders'), page: 1 })}
-                active={query.sort === 'orders'}
-                dir={query.dir}
-                numeric
-              >
-                Orders
-              </THSort>
-              <THSort
-                href={buildHref({ ...query, sort: 'spent', dir: nextDir('spent'), page: 1 })}
-                active={query.sort === 'spent'}
-                dir={query.dir}
-                numeric
-              >
-                Spent
-              </THSort>
-              <TH numeric>Gross earned</TH>
-              <TH>Last order</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="tabular whitespace-nowrap text-ink-3">{row.code}</TD>
-                <TD className="text-ink">
-                  <Link
-                    href={`/customers/${row.id}` as Route}
-                    className="hover:text-accent hover:underline"
-                  >
-                    {row.name}
-                  </Link>
-                </TD>
-                <TD className="whitespace-nowrap text-[12px] text-ink-3">
-                  {row.phone ?? row.email ?? '—'}
-                </TD>
-                <TD className="whitespace-nowrap text-ink-3">{row.city ?? '—'}</TD>
-                <TD numeric className="text-ink-3">
-                  {row.orderCount}
-                </TD>
-                <TD numeric>
-                  <Money cents={row.spentCents} size="sm" />
-                </TD>
-                <TD numeric>
-                  <Money cents={row.grossCents} size="sm" tone="flow" />
-                </TD>
-                <TD className="whitespace-nowrap text-[12px] text-ink-4">
-                  {formatRelative(row.lastOrderAt)}
-                </TD>
-                <TD className="text-right">
-                  <CustomerActions
-                    id={row.id}
-                    name={row.name}
-                    phone={row.phone ?? ''}
-                    email={row.email ?? ''}
-                    addressLine={row.addressLine ?? ''}
-                    city={row.city ?? ''}
-                    notes={row.notes ?? ''}
-                  />
-                </TD>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <TH className="w-[70px]">Code</TH>
+                <THSort
+                  href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
+                  active={query.sort === 'name'}
+                  dir={query.dir}
+                >
+                  Name
+                </THSort>
+                <TH>Contact</TH>
+                <TH>City</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'orders',
+                    dir: nextDir('orders'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'orders'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Orders
+                </THSort>
+                <THSort
+                  href={buildHref({ ...query, sort: 'spent', dir: nextDir('spent'), page: 1 })}
+                  active={query.sort === 'spent'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Spent
+                </THSort>
+                <TH numeric>Gross earned</TH>
+                <TH>Last order</TH>
+                <TH />
               </TR>
-            ))}
-          </TBody>
-        </Table>
-      </TableWrap>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="tabular whitespace-nowrap text-ink-3">{row.code}</TD>
+                  <TD className="text-ink">
+                    <Link
+                      href={`/customers/${row.id}` as Route}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {row.name}
+                    </Link>
+                  </TD>
+                  <TD className="whitespace-nowrap text-[12px] text-ink-3">
+                    {row.phone ?? row.email ?? '—'}
+                  </TD>
+                  <TD className="whitespace-nowrap text-ink-3">{row.city ?? '—'}</TD>
+                  <TD numeric className="text-ink-3">
+                    {row.orderCount}
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.spentCents} size="sm" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.grossCents} size="sm" tone="flow" />
+                  </TD>
+                  <TD className="whitespace-nowrap text-[12px] text-ink-4">
+                    {formatRelative(row.lastOrderAt)}
+                  </TD>
+                  <TD className="text-right">
+                    <CustomerActions
+                      id={row.id}
+                      name={row.name}
+                      phone={row.phone ?? ''}
+                      email={row.email ?? ''}
+                      addressLine={row.addressLine ?? ''}
+                      city={row.city ?? ''}
+                      notes={row.notes ?? ''}
+                    />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id}>
+            <Link
+              href={`/customers/${row.id}` as Route}
+              className="flex flex-col gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <MobileRowHeader>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] text-ink">{row.name}</span>
+                  <span className="block truncate text-[12px] text-ink-3">
+                    {row.phone ?? row.email ?? '—'}
+                  </span>
+                </span>
+                <Money cents={row.spentCents} size="sm" className="shrink-0" />
+              </MobileRowHeader>
+              <MobileRowMeta>
+                <MobileRowMetaItem label="City">{row.city ?? '—'}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Orders">{row.orderCount}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Gross earned">
+                  <Money cents={row.grossCents} size="sm" tone="flow" />
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Last order">
+                  {formatRelative(row.lastOrderAt)}
+                </MobileRowMetaItem>
+              </MobileRowMeta>
+            </Link>
+            <div className="flex justify-end pt-0.5">
+              <CustomerActions
+                id={row.id}
+                name={row.name}
+                phone={row.phone ?? ''}
+                email={row.email ?? ''}
+                addressLine={row.addressLine ?? ''}
+                city={row.city ?? ''}
+                notes={row.notes ?? ''}
+              />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

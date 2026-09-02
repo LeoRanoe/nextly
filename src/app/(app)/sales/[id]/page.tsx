@@ -8,6 +8,13 @@ import { SaleForm } from '@/components/forms/sale-form';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money, Percent } from '@/components/ui/money';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
@@ -155,81 +162,135 @@ async function Loader({
 
       <Surface className="overflow-hidden">
         <SurfaceHeader title="Items" />
-        <TableWrap>
-          <Table>
-            <THead>
-              <TR className="hover:bg-transparent">
-                <TH>Product</TH>
-                <TH>SKU</TH>
-                <TH numeric>Qty</TH>
-                <TH numeric>Unit price</TH>
-                <TH numeric>Line total</TH>
-                <TH numeric>Cost</TH>
-                <TH numeric>Margin</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {sale.items.map((item) => {
-                const lineMargin =
-                  item.lineTotalUsdCents === 0
-                    ? 0
-                    : (item.lineTotalUsdCents - item.cogsCents) / item.lineTotalUsdCents;
-                return (
-                  <TR key={item.id}>
-                    <TD className="whitespace-nowrap text-ink">
+        <div className="hidden lg:block">
+          <TableWrap>
+            <Table>
+              <THead>
+                <TR className="hover:bg-transparent">
+                  <TH>Product</TH>
+                  <TH>SKU</TH>
+                  <TH numeric>Qty</TH>
+                  <TH numeric>Unit price</TH>
+                  <TH numeric>Line total</TH>
+                  <TH numeric>Cost</TH>
+                  <TH numeric>Margin</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {sale.items.map((item) => {
+                  const lineMargin =
+                    item.lineTotalUsdCents === 0
+                      ? 0
+                      : (item.lineTotalUsdCents - item.cogsCents) / item.lineTotalUsdCents;
+                  return (
+                    <TR key={item.id}>
+                      <TD className="whitespace-nowrap text-ink">
+                        {item.productName}
+                        <span className="text-ink-4"> · {item.variantName}</span>
+                        {item.shortfall > 0 ? (
+                          <Badge tone="warning" className="ml-2">
+                            {item.shortfall} oversold
+                          </Badge>
+                        ) : null}
+                        {item.quantityReturned > 0 ? (
+                          <Badge tone="info" className="ml-2">
+                            {item.quantityReturned} returned
+                          </Badge>
+                        ) : null}
+                      </TD>
+                      <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                        {item.sku}
+                      </TD>
+                      <TD numeric className="text-ink-3">
+                        {item.quantity}
+                      </TD>
+                      <TD numeric>
+                        <Money cents={item.unitPriceUsdCents} size="sm" tone="muted" />
+                      </TD>
+                      <TD numeric>
+                        <Money cents={item.lineTotalUsdCents} size="sm" />
+                      </TD>
+                      <TD numeric>
+                        <Money cents={item.cogsCents} size="sm" tone="muted" />
+                      </TD>
+                      <TD numeric>
+                        <Percent value={lineMargin} tone="flow" />
+                      </TD>
+                    </TR>
+                  );
+                })}
+              </TBody>
+              <tfoot className="border-line-subtle border-t bg-inset/60">
+                <tr>
+                  <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
+                    Totals
+                  </td>
+                  <td className="h-9 px-3 text-right">
+                    <Money cents={sale.totalUsdCents} size="sm" />
+                  </td>
+                  <td className="h-9 px-3 text-right">
+                    <Money cents={sale.cogsCents} size="sm" tone="muted" />
+                  </td>
+                  <td className="h-9 px-3 text-right">
+                    <Percent value={marginRate} tone="flow" />
+                  </td>
+                </tr>
+              </tfoot>
+            </Table>
+          </TableWrap>
+        </div>
+
+        <MobileList>
+          {sale.items.map((item) => {
+            const lineMargin =
+              item.lineTotalUsdCents === 0
+                ? 0
+                : (item.lineTotalUsdCents - item.cogsCents) / item.lineTotalUsdCents;
+            return (
+              <MobileRow key={item.id} interactive={false}>
+                <MobileRowHeader>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] text-ink">
                       {item.productName}
                       <span className="text-ink-4"> · {item.variantName}</span>
-                      {item.shortfall > 0 ? (
-                        <Badge tone="warning" className="ml-2">
-                          {item.shortfall} oversold
-                        </Badge>
-                      ) : null}
-                      {item.quantityReturned > 0 ? (
-                        <Badge tone="info" className="ml-2">
-                          {item.quantityReturned} returned
-                        </Badge>
-                      ) : null}
-                    </TD>
-                    <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                      {item.sku}
-                    </TD>
-                    <TD numeric className="text-ink-3">
-                      {item.quantity}
-                    </TD>
-                    <TD numeric>
-                      <Money cents={item.unitPriceUsdCents} size="sm" tone="muted" />
-                    </TD>
-                    <TD numeric>
-                      <Money cents={item.lineTotalUsdCents} size="sm" />
-                    </TD>
-                    <TD numeric>
-                      <Money cents={item.cogsCents} size="sm" tone="muted" />
-                    </TD>
-                    <TD numeric>
-                      <Percent value={lineMargin} tone="flow" />
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-            <tfoot className="border-line-subtle border-t bg-inset/60">
-              <tr>
-                <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
-                  Totals
-                </td>
-                <td className="h-9 px-3 text-right">
-                  <Money cents={sale.totalUsdCents} size="sm" />
-                </td>
-                <td className="h-9 px-3 text-right">
-                  <Money cents={sale.cogsCents} size="sm" tone="muted" />
-                </td>
-                <td className="h-9 px-3 text-right">
-                  <Percent value={marginRate} tone="flow" />
-                </td>
-              </tr>
-            </tfoot>
-          </Table>
-        </TableWrap>
+                    </span>
+                    <span className="tabular block text-[11px] text-ink-4">{item.sku}</span>
+                  </span>
+                  <Money cents={item.lineTotalUsdCents} size="sm" className="shrink-0" />
+                </MobileRowHeader>
+                {item.shortfall > 0 || item.quantityReturned > 0 ? (
+                  <span className="flex gap-1.5">
+                    {item.shortfall > 0 ? (
+                      <Badge tone="warning">{item.shortfall} oversold</Badge>
+                    ) : null}
+                    {item.quantityReturned > 0 ? (
+                      <Badge tone="info">{item.quantityReturned} returned</Badge>
+                    ) : null}
+                  </span>
+                ) : null}
+                <MobileRowMeta>
+                  <MobileRowMetaItem label="Qty">{item.quantity}</MobileRowMetaItem>
+                  <MobileRowMetaItem label="Unit price">
+                    <Money cents={item.unitPriceUsdCents} size="sm" tone="muted" />
+                  </MobileRowMetaItem>
+                  <MobileRowMetaItem label="Cost">
+                    <Money cents={item.cogsCents} size="sm" tone="muted" />
+                  </MobileRowMetaItem>
+                  <MobileRowMetaItem label="Margin">
+                    <Percent value={lineMargin} tone="flow" />
+                  </MobileRowMetaItem>
+                </MobileRowMeta>
+              </MobileRow>
+            );
+          })}
+          <div className="flex items-center justify-between gap-3 px-4 py-3 text-[12px] text-ink-3">
+            <span>Total</span>
+            <span className="flex items-center gap-3">
+              <Money cents={sale.totalUsdCents} size="sm" />
+              <Percent value={marginRate} tone="flow" />
+            </span>
+          </div>
+        </MobileList>
       </Surface>
 
       <div className="grid gap-4 lg:grid-cols-2">

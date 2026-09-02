@@ -8,6 +8,13 @@ import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
@@ -95,112 +102,166 @@ async function StockTable({ searchParams }: { searchParams: Promise<RawSearchPar
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <THSort
-                href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
-                active={query.sort === 'name'}
-                dir={query.dir}
-              >
-                Product
-              </THSort>
-              <TH>SKU</TH>
-              <TH>Category</TH>
-              <TH numeric>Received</TH>
-              <TH numeric>Sold</TH>
-              <TH numeric>Inbound</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'onHand', dir: nextDir('onHand'), page: 1 })}
-                active={query.sort === 'onHand'}
-                dir={query.dir}
-                numeric
-              >
-                On hand
-              </THSort>
-              <TH numeric>Unit cost</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'value', dir: nextDir('value'), page: 1 })}
-                active={query.sort === 'value'}
-                dir={query.dir}
-                numeric
-              >
-                Value
-              </THSort>
-              <TH>Last movement</TH>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => {
-              const low = row.onHand > 0 && row.onHand <= lowStockAt;
-              const negative = row.onHand < 0;
-              return (
-                <TR key={row.variantId}>
-                  <TD className="whitespace-nowrap text-ink">
-                    {row.productName}
-                    <span className="text-ink-4"> · {row.variantName}</span>
-                  </TD>
-                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                    {row.sku}
-                  </TD>
-                  <TD className="whitespace-nowrap text-ink-3">{row.categoryName ?? '—'}</TD>
-                  <TD numeric className="text-ink-3">
-                    {row.received}
-                  </TD>
-                  <TD numeric className="text-ink-3">
-                    {row.sold}
-                  </TD>
-                  <TD numeric className={row.inbound > 0 ? 'text-accent' : 'text-ink-4'}>
-                    {row.inbound || '—'}
-                  </TD>
-                  <TD numeric>
-                    <span className="inline-flex items-center gap-1.5">
-                      {negative ? (
-                        <Badge tone="negative">Below zero</Badge>
-                      ) : low ? (
-                        <Badge tone="warning">Low</Badge>
-                      ) : null}
-                      {row.onHand}
-                    </span>
-                  </TD>
-                  <TD numeric className="text-ink-3">
-                    {row.unitCostCents === null
-                      ? '—'
-                      : `$${(row.unitCostCents / 100).toFixed(4)}`}
-                  </TD>
-                  <TD numeric>{formatMoney(row.valueCents)}</TD>
-                  <TD className="whitespace-nowrap text-[12px] text-ink-4">
-                    {formatRelative(row.lastMovementAt)}
-                  </TD>
-                  <TD className="text-right">
-                    <StockAdjustSheet
-                      variantId={row.variantId}
-                      label={`${row.productName} · ${row.variantName}`}
-                      onHand={row.onHand}
-                    />
-                  </TD>
-                </TR>
-              );
-            })}
-          </TBody>
-          <tfoot className="border-line-subtle border-t bg-inset/60">
-            <tr>
-              <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={6}>
-                {result.rows.length} variants, this page
-              </td>
-              <td className="tabular h-9 px-3 text-right text-ink">{pageUnits}</td>
-              <td />
-              <td className="h-9 px-3 text-right">
-                <Money cents={pageValue} size="sm" />
-              </td>
-              <td />
-              <td />
-            </tr>
-          </tfoot>
-        </Table>
-      </TableWrap>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <THSort
+                  href={buildHref({ ...query, sort: 'name', dir: nextDir('name'), page: 1 })}
+                  active={query.sort === 'name'}
+                  dir={query.dir}
+                >
+                  Product
+                </THSort>
+                <TH>SKU</TH>
+                <TH>Category</TH>
+                <TH numeric>Received</TH>
+                <TH numeric>Sold</TH>
+                <TH numeric>Inbound</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'onHand',
+                    dir: nextDir('onHand'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'onHand'}
+                  dir={query.dir}
+                  numeric
+                >
+                  On hand
+                </THSort>
+                <TH numeric>Unit cost</TH>
+                <THSort
+                  href={buildHref({ ...query, sort: 'value', dir: nextDir('value'), page: 1 })}
+                  active={query.sort === 'value'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Value
+                </THSort>
+                <TH>Last movement</TH>
+                <TH />
+              </TR>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => {
+                const low = row.onHand > 0 && row.onHand <= lowStockAt;
+                const negative = row.onHand < 0;
+                return (
+                  <TR key={row.variantId}>
+                    <TD className="whitespace-nowrap text-ink">
+                      {row.productName}
+                      <span className="text-ink-4"> · {row.variantName}</span>
+                    </TD>
+                    <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                      {row.sku}
+                    </TD>
+                    <TD className="whitespace-nowrap text-ink-3">{row.categoryName ?? '—'}</TD>
+                    <TD numeric className="text-ink-3">
+                      {row.received}
+                    </TD>
+                    <TD numeric className="text-ink-3">
+                      {row.sold}
+                    </TD>
+                    <TD numeric className={row.inbound > 0 ? 'text-accent' : 'text-ink-4'}>
+                      {row.inbound || '—'}
+                    </TD>
+                    <TD numeric>
+                      <span className="inline-flex items-center gap-1.5">
+                        {negative ? (
+                          <Badge tone="negative">Below zero</Badge>
+                        ) : low ? (
+                          <Badge tone="warning">Low</Badge>
+                        ) : null}
+                        {row.onHand}
+                      </span>
+                    </TD>
+                    <TD numeric className="text-ink-3">
+                      {row.unitCostCents === null
+                        ? '—'
+                        : `$${(row.unitCostCents / 100).toFixed(4)}`}
+                    </TD>
+                    <TD numeric>{formatMoney(row.valueCents)}</TD>
+                    <TD className="whitespace-nowrap text-[12px] text-ink-4">
+                      {formatRelative(row.lastMovementAt)}
+                    </TD>
+                    <TD className="text-right">
+                      <StockAdjustSheet
+                        variantId={row.variantId}
+                        label={`${row.productName} · ${row.variantName}`}
+                        onHand={row.onHand}
+                      />
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+            <tfoot className="border-line-subtle border-t bg-inset/60">
+              <tr>
+                <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={6}>
+                  {result.rows.length} variants, this page
+                </td>
+                <td className="tabular h-9 px-3 text-right text-ink">{pageUnits}</td>
+                <td />
+                <td className="h-9 px-3 text-right">
+                  <Money cents={pageValue} size="sm" />
+                </td>
+                <td />
+                <td />
+              </tr>
+            </tfoot>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => {
+          const low = row.onHand > 0 && row.onHand <= lowStockAt;
+          const negative = row.onHand < 0;
+          return (
+            <MobileRow key={row.variantId} interactive={false}>
+              <MobileRowHeader>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] text-ink">
+                    {row.productName} <span className="text-ink-4">· {row.variantName}</span>
+                  </span>
+                  <span className="tabular block text-[11px] text-ink-4">{row.sku}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {negative ? (
+                    <Badge tone="negative">Below zero</Badge>
+                  ) : low ? (
+                    <Badge tone="warning">Low</Badge>
+                  ) : null}
+                  <span className="tabular text-[13px] text-ink">{row.onHand}</span>
+                </span>
+              </MobileRowHeader>
+              <MobileRowMeta>
+                <MobileRowMetaItem label="Category">
+                  {row.categoryName ?? '—'}
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Inbound">{row.inbound || '—'}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Value">
+                  {formatMoney(row.valueCents)}
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Last movement">
+                  {formatRelative(row.lastMovementAt)}
+                </MobileRowMetaItem>
+              </MobileRowMeta>
+              <div className="flex justify-end pt-0.5">
+                <StockAdjustSheet
+                  variantId={row.variantId}
+                  label={`${row.productName} · ${row.variantName}`}
+                  onHand={row.onHand}
+                />
+              </div>
+            </MobileRow>
+          );
+        })}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}

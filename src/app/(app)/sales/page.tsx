@@ -8,6 +8,13 @@ import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  MobileList,
+  MobileRow,
+  MobileRowHeader,
+  MobileRowMeta,
+  MobileRowMetaItem,
+} from '@/components/ui/mobile-list';
 import { Money, Percent } from '@/components/ui/money';
 import { Pagination } from '@/components/ui/pagination';
 import { Surface } from '@/components/ui/surface';
@@ -116,125 +123,173 @@ async function SalesTable({ searchParams }: { searchParams: Promise<RawSearchPar
 
   return (
     <>
-      <TableWrap>
-        <Table>
-          <THead>
-            <TR className="hover:bg-transparent">
-              <TH className="w-[70px]">Number</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'date', dir: nextDir('date'), page: 1 })}
-                active={query.sort === 'date'}
-                dir={query.dir}
-              >
-                Date
-              </THSort>
-              <THSort
-                href={buildHref({
-                  ...query,
-                  sort: 'customer',
-                  dir: nextDir('customer'),
-                  page: 1,
-                })}
-                active={query.sort === 'customer'}
-                dir={query.dir}
-              >
-                Customer
-              </THSort>
-              <TH>Status</TH>
-              <TH numeric>Units</TH>
-              <THSort
-                href={buildHref({
-                  ...query,
-                  sort: 'revenue',
-                  dir: nextDir('revenue'),
-                  page: 1,
-                })}
-                active={query.sort === 'revenue'}
-                dir={query.dir}
-                numeric
-              >
-                Revenue
-              </THSort>
-              <TH numeric>Cost</TH>
-              <TH numeric>Gross</TH>
-              <THSort
-                href={buildHref({ ...query, sort: 'margin', dir: nextDir('margin'), page: 1 })}
-                active={query.sort === 'margin'}
-                dir={query.dir}
-                numeric
-              >
-                Margin
-              </THSort>
-              <TH />
-            </TR>
-          </THead>
-          <TBody>
-            {result.rows.map((row) => (
-              <TR key={row.id}>
-                <TD className="tabular whitespace-nowrap text-ink">
-                  <Link
-                    href={`/sales/${row.id}` as Route}
-                    className="hover:text-accent hover:underline"
-                  >
-                    {row.number}
-                  </Link>
-                </TD>
-                <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                  {formatDate(row.soldAt)}
-                </TD>
-                <TD className="text-ink-2">{row.customerName ?? '—'}</TD>
-                <TD>
-                  <Badge tone={STATUS_TONE[row.status]}>
-                    {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                  </Badge>
-                </TD>
-                <TD numeric className="text-ink-3">
-                  {row.unitCount}
-                </TD>
-                <TD numeric>
+      <div className="hidden lg:block">
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR className="hover:bg-transparent">
+                <TH className="w-[70px]">Number</TH>
+                <THSort
+                  href={buildHref({ ...query, sort: 'date', dir: nextDir('date'), page: 1 })}
+                  active={query.sort === 'date'}
+                  dir={query.dir}
+                >
+                  Date
+                </THSort>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'customer',
+                    dir: nextDir('customer'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'customer'}
+                  dir={query.dir}
+                >
+                  Customer
+                </THSort>
+                <TH>Status</TH>
+                <TH numeric>Units</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'revenue',
+                    dir: nextDir('revenue'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'revenue'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Revenue
+                </THSort>
+                <TH numeric>Cost</TH>
+                <TH numeric>Gross</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'margin',
+                    dir: nextDir('margin'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'margin'}
+                  dir={query.dir}
+                  numeric
+                >
+                  Margin
+                </THSort>
+                <TH />
+              </TR>
+            </THead>
+            <TBody>
+              {result.rows.map((row) => (
+                <TR key={row.id}>
+                  <TD className="tabular whitespace-nowrap text-ink">
+                    <Link
+                      href={`/sales/${row.id}` as Route}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {row.number}
+                    </Link>
+                  </TD>
+                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
+                    {formatDate(row.soldAt)}
+                  </TD>
+                  <TD className="text-ink-2">{row.customerName ?? '—'}</TD>
+                  <TD>
+                    <Badge tone={STATUS_TONE[row.status]}>
+                      {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                    </Badge>
+                  </TD>
+                  <TD numeric className="text-ink-3">
+                    {row.unitCount}
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.totalUsdCents} size="sm" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.cogsCents} size="sm" tone="muted" />
+                  </TD>
+                  <TD numeric>
+                    <Money cents={row.grossCents} size="sm" tone="flow" />
+                  </TD>
+                  <TD numeric>
+                    <Percent
+                      value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
+                    />
+                  </TD>
+                  <TD className="text-right">
+                    <SaleActions id={row.id} number={row.number} status={row.status} />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+            <tfoot className="border-line-subtle border-t bg-inset/60">
+              <tr>
+                <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={5}>
+                  Confirmed, this page
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={pageTotals.revenue} size="sm" />
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={pageTotals.cogs} size="sm" tone="muted" />
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Money cents={pageTotals.gross} size="sm" tone="flow" />
+                </td>
+                <td className="h-9 px-3 text-right">
+                  <Percent
+                    value={pageTotals.revenue === 0 ? 0 : pageTotals.gross / pageTotals.revenue}
+                  />
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </Table>
+        </TableWrap>
+      </div>
+
+      <MobileList>
+        {result.rows.map((row) => (
+          <MobileRow key={row.id}>
+            <Link
+              href={`/sales/${row.id}` as Route}
+              className="flex flex-col gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <MobileRowHeader>
+                <span className="min-w-0">
+                  <span className="tabular block text-[13px] text-ink">{row.number}</span>
+                  <span className="block truncate text-[12px] text-ink-3">
+                    {row.customerName ?? '—'} · {formatDate(row.soldAt)}
+                  </span>
+                </span>
+                <Badge tone={STATUS_TONE[row.status]} className="shrink-0">
+                  {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                </Badge>
+              </MobileRowHeader>
+              <MobileRowMeta>
+                <MobileRowMetaItem label="Units">{row.unitCount}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Revenue">
                   <Money cents={row.totalUsdCents} size="sm" />
-                </TD>
-                <TD numeric>
-                  <Money cents={row.cogsCents} size="sm" tone="muted" />
-                </TD>
-                <TD numeric>
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Gross">
                   <Money cents={row.grossCents} size="sm" tone="flow" />
-                </TD>
-                <TD numeric>
+                </MobileRowMetaItem>
+                <MobileRowMetaItem label="Margin">
                   <Percent
                     value={row.totalUsdCents === 0 ? 0 : row.grossCents / row.totalUsdCents}
                   />
-                </TD>
-                <TD className="text-right">
-                  <SaleActions id={row.id} number={row.number} status={row.status} />
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-          <tfoot className="border-line-subtle border-t bg-inset/60">
-            <tr>
-              <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={5}>
-                Confirmed, this page
-              </td>
-              <td className="h-9 px-3 text-right">
-                <Money cents={pageTotals.revenue} size="sm" />
-              </td>
-              <td className="h-9 px-3 text-right">
-                <Money cents={pageTotals.cogs} size="sm" tone="muted" />
-              </td>
-              <td className="h-9 px-3 text-right">
-                <Money cents={pageTotals.gross} size="sm" tone="flow" />
-              </td>
-              <td className="h-9 px-3 text-right">
-                <Percent
-                  value={pageTotals.revenue === 0 ? 0 : pageTotals.gross / pageTotals.revenue}
-                />
-              </td>
-              <td />
-            </tr>
-          </tfoot>
-        </Table>
-      </TableWrap>
+                </MobileRowMetaItem>
+              </MobileRowMeta>
+            </Link>
+            <div className="flex justify-end pt-0.5">
+              <SaleActions id={row.id} number={row.number} status={row.status} />
+            </div>
+          </MobileRow>
+        ))}
+      </MobileList>
+
       <Pagination
         page={result.page}
         pageCount={result.pageCount}
