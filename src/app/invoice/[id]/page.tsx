@@ -22,6 +22,11 @@ import { getSettings } from '@/server/queries/reference';
  */
 export const metadata: Metadata = { title: 'Invoice' };
 
+// The invoice reads the live sale and business settings directly. It is
+// intentionally outside the authenticated app layout, so it must opt out of
+// instant prerendering itself when the production database is configured.
+export const instant = false;
+
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   await requireMember();
   const { id } = await params;
