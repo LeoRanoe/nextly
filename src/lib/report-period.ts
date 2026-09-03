@@ -44,6 +44,9 @@ export function periodRange(
     case 'year':
       return { from: new Date(Date.UTC(now.getUTCFullYear(), 0, 1)), to };
     case 'all':
-      return { from: new Date(Date.UTC(2000, 0, 1)), to: new Date(Date.UTC(9999, 0, 1)) };
+      // Keep the upper bound at the same safe, next-day boundary as every
+      // other preset. A year-9999 sentinel makes the P&L comparison window
+      // subtract thousands of years and serialize an invalid PostgreSQL date.
+      return { from: new Date(Date.UTC(2000, 0, 1)), to };
   }
 }
