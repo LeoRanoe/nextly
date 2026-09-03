@@ -34,6 +34,11 @@ function createDb() {
     globalThis.__nextlySql ??
     postgres(DATABASE_URL, {
       prepare: false,
+      // Supabase's transaction pooler does not support the startup type
+      // prefetch that postgres.js performs by default. Without this, the
+      // first parameterised query can remain open in Supavisor and the page
+      // waits until the platform timeout.
+      fetch_types: false,
       // Vercel can run many function instances at once. A pool of ten per
       // instance overwhelms a small Supabase pooler and leaves requests
       // waiting for a lease until the platform's timeout. Keep the pool
