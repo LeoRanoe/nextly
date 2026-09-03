@@ -56,9 +56,11 @@ function createDb() {
   if (NODE_ENV === 'production') {
     // Supavisor transaction mode currently has an open issue around
     // pipelined transactions: when React starts several server queries at
-    // once, a reply can be dropped and postgres.js waits forever. The option
-    // is supported by postgres.js at runtime but is not in its public type.
-    Object.assign(connectionOptions, { max_pipeline: 0 });
+    // once, a reply can be dropped and postgres.js waits forever. Keep one
+    // query in flight at a time. `0` is not a valid value here: postgres.js
+    // would skip reserving the connection for `BEGIN` and reject every
+    // transaction with `UNSAFE_TRANSACTION`.
+    Object.assign(connectionOptions, { max_pipeline: 1 });
   }
 
   const sql = globalThis.__nextlySql ?? postgres(DATABASE_URL, connectionOptions);
