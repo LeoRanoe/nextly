@@ -55,6 +55,12 @@ export const NAVIGATION: NavGroup[] = [
         Icon: Package,
         keywords: ['sku', 'variant', 'item', 'price', 'images'],
       },
+      {
+        href: '/bundles' as Route,
+        label: 'Bundles',
+        Icon: Package,
+        keywords: ['kits', 'packages', 'components', 'margin'],
+      },
       { href: '/categories', label: 'Categories', Icon: Tags },
       {
         href: '/suppliers',

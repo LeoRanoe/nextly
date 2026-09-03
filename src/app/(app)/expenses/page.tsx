@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { ExpenseSheet } from '@/components/forms/expense-sheet';
 import { ExpenseActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -48,15 +49,18 @@ export default function ExpensesPage({
         title="Expenses"
         description="Running costs only. Anything paid to get goods into stock belongs on the purchase order instead, where it becomes part of the cost of those goods."
         action={
-          <Suspense
-            fallback={
-              <Button variant="primary" disabled>
-                Log expense
-              </Button>
-            }
-          >
-            <ExpenseTrigger />
-          </Suspense>
+          <>
+            <ExportCsvLink entity="expenses" searchParams={searchParams} />
+            <Suspense
+              fallback={
+                <Button variant="primary" disabled>
+                  Log expense
+                </Button>
+              }
+            >
+              <ExpenseTrigger />
+            </Suspense>
+          </>
         }
       />
       <Surface className="overflow-hidden">

@@ -116,6 +116,8 @@ export const productVariants = pgTable(
     /** Supplier list price, for reference only. Never used to value stock. */
     referenceCostCents: bigint({ mode: 'number' }).notNull().default(0),
     weightGrams: integer().notNull().default(0),
+    /** Keep visible in the purchasing review even without recent sales. */
+    isStrategic: boolean().notNull().default(false),
     isDefault: boolean().notNull().default(false),
     isActive: boolean().notNull().default(true),
     position: integer().notNull().default(0),

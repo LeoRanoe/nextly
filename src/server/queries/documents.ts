@@ -37,6 +37,9 @@ export type SaleDetail = {
   items: {
     id: string;
     variantId: string;
+    bundleId: string | null;
+    bundleName: string | null;
+    bundleSku: string | null;
     productId: string;
     productName: string;
     variantName: string;
@@ -50,6 +53,16 @@ export type SaleDetail = {
     shortfall: number;
     /** F-6: serials captured at the point of sale, in the order typed. */
     serials: string[];
+    components: {
+      variantId: string;
+      quantityPerBundle: number;
+      quantity: number;
+      productName: string;
+      variantName: string;
+      sku: string;
+      weightGrams: number;
+      cogsCents: Cents;
+    }[];
   }[];
   ledgerEntries: {
     id: string;
@@ -122,10 +135,12 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
 
   if (!row) return null;
 
-  const [items, ledgerEntries, movements, payments, serials, refunds] = await Promise.all([
-    db.execute<Record<string, string | null>>(sql`
+  const [items, ledgerEntries, movements, payments, serials, refunds, componentRows] =
+    await Promise.all([
+      db.execute<Record<string, string | null>>(sql`
       SELECT
-        si.id, si.variant_id, v.product_id, p.name AS product_name,
+        si.id, si.variant_id, si.bundle_id, si.bundle_name, si.bundle_sku,
+        v.product_id, p.name AS product_name,
         v.name AS variant_name, v.sku,
         si.quantity, si.quantity_returned,
         si.unit_price_cents::text, si.unit_price_usd_cents::text,
@@ -136,7 +151,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       WHERE si.sale_id = ${id}
       ORDER BY si.position
     `),
-    db.execute<Record<string, string | null>>(sql`
+      db.execute<Record<string, string | null>>(sql`
       SELECT id, direction::text, description, amount_usd_cents::text, occurred_at::text
         FROM ledger_entries
        WHERE source_kind = 'sale'
@@ -145,32 +160,39 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
               OR source_id IN (SELECT id FROM sale_refunds WHERE sale_id = ${id}))
        ORDER BY occurred_at, seq
     `),
-    db.execute<Record<string, string | null>>(sql`
+      db.execute<Record<string, string | null>>(sql`
       SELECT m.id, m.variant_id, v.sku, m.quantity, m.value_cents::text, m.occurred_at::text
         FROM inventory_movements m
         JOIN product_variants v ON v.id = m.variant_id
        WHERE m.source_kind = 'sale' AND m.source_id = ${id}
        ORDER BY m.occurred_at, m.seq
     `),
-    db.execute<Record<string, string | null>>(sql`
+      db.execute<Record<string, string | null>>(sql`
       SELECT id, amount_cents::text, method::text, received_at::text, notes
         FROM sale_payments
        WHERE sale_id = ${id}
        ORDER BY received_at, created_at
     `),
-    db.execute<Record<string, string | null>>(sql`
+      db.execute<Record<string, string | null>>(sql`
       SELECT sale_item_id, serial
         FROM sale_item_serials
        WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id = ${id})
        ORDER BY created_at, serial
     `),
-    db.execute<Record<string, string | null>>(sql`
+      db.execute<Record<string, string | null>>(sql`
       SELECT id, amount_cents::text, method::text, refunded_at::text, reason
         FROM sale_refunds
        WHERE sale_id = ${id}
-       ORDER BY refunded_at, created_at
+      ORDER BY refunded_at, created_at
     `),
-  ]);
+      db.execute<Record<string, string | null>>(sql`
+      SELECT sale_item_id, variant_id, quantity_per_bundle, quantity,
+        product_name, variant_name, sku, weight_grams, cogs_cents::text
+      FROM sale_item_components
+      WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id = ${id})
+      ORDER BY created_at
+    `),
+    ]);
 
   const serialsByLine = new Map<string, string[]>();
   for (const row of serials) {
@@ -178,6 +200,12 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     const existing = serialsByLine.get(lineId);
     if (existing) existing.push(text(row.serial));
     else serialsByLine.set(lineId, [text(row.serial)]);
+  }
+  const componentRowsSafe: Record<string, string | null>[] = componentRows ?? [];
+  const componentsByLine = new Map<string, Record<string, string | null>[]>();
+  for (const component of componentRowsSafe) {
+    const lineId = text(component.sale_item_id);
+    componentsByLine.set(lineId, [...(componentsByLine.get(lineId) ?? []), component]);
   }
 
   return {
@@ -202,6 +230,9 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     items: items.map((item) => ({
       id: text(item.id),
       variantId: text(item.variant_id),
+      bundleId: maybe(item.bundle_id),
+      bundleName: maybe(item.bundle_name),
+      bundleSku: maybe(item.bundle_sku),
       productId: text(item.product_id),
       productName: text(item.product_name),
       variantName: text(item.variant_name),
@@ -214,6 +245,16 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
       cogsCents: num(item.cogs_cents),
       shortfall: num(item.shortfall),
       serials: serialsByLine.get(text(item.id)) ?? [],
+      components: (componentsByLine.get(text(item.id)) ?? []).map((component) => ({
+        variantId: text(component.variant_id),
+        quantityPerBundle: num(component.quantity_per_bundle),
+        quantity: num(component.quantity),
+        productName: text(component.product_name),
+        variantName: text(component.variant_name),
+        sku: text(component.sku),
+        weightGrams: num(component.weight_grams),
+        cogsCents: num(component.cogs_cents),
+      })),
     })),
     ledgerEntries: ledgerEntries.map((entry) => ({
       id: text(entry.id),
@@ -289,8 +330,10 @@ export type PurchaseOrderDetail = {
     sku: string;
     quantity: number;
     quantityReceived: number;
+    weightGrams: number;
     subtotalCents: Cents;
     overheadCents: Cents;
+    shippingOverheadCents: Cents;
     landedCostCents: Cents;
   }[];
   ledgerEntries: {
@@ -383,8 +426,9 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       SELECT
         i.id, i.variant_id, v.product_id, p.name AS product_name,
         v.name AS variant_name, v.sku,
-        i.quantity, i.quantity_received,
-        i.subtotal_cents::text, i.overhead_cents::text, i.landed_cost_cents::text
+        i.quantity, i.quantity_received, i.weight_grams,
+        i.subtotal_cents::text, i.overhead_cents::text, i.shipping_overhead_cents::text,
+        i.landed_cost_cents::text
       FROM purchase_order_items i
       JOIN product_variants v ON v.id = i.variant_id
       JOIN products p ON p.id = v.product_id
@@ -448,8 +492,10 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       sku: text(item.sku),
       quantity: num(item.quantity),
       quantityReceived: num(item.quantity_received),
+      weightGrams: num(item.weight_grams),
       subtotalCents: num(item.subtotal_cents),
       overheadCents: num(item.overhead_cents),
+      shippingOverheadCents: num(item.shipping_overhead_cents),
       landedCostCents: num(item.landed_cost_cents),
     })),
     paidCents: num(row.paid_cents),

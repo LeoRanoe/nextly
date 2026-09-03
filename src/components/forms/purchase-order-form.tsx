@@ -12,7 +12,7 @@ import { Money } from '@/components/ui/money';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { cn } from '@/lib/cn';
-import { allocateOverhead } from '@/lib/costing';
+import { allocateOverhead, allocateOverheadByWeight } from '@/lib/costing';
 import { formatMoney, parseMoney } from '@/lib/money';
 import { createPurchaseOrder, updatePurchaseOrder } from '@/server/actions/purchase-orders';
 import { createSupplier } from '@/server/actions/reference';
@@ -125,10 +125,24 @@ export function PurchaseOrderForm({
         id: line.key,
         subtotalCents: money(line.subtotal),
         quantity: Number.parseInt(line.quantity, 10) || 0,
+        weightGrams: byId.get(line.variantId ?? '')?.weightGrams ?? 0,
       }));
 
     const goods = usable.reduce((sum, line) => sum + line.subtotalCents, 0);
-    const allocated = allocateOverhead(usable, overhead);
+    const valueAllocated = allocateOverhead(
+      usable,
+      money(tax) + money(cardFee) + money(delivery),
+    );
+    const freightAllocated = allocateOverheadByWeight(
+      usable,
+      money(shipping) + money(shippingTax),
+    );
+    const allocated = valueAllocated.map((line, index) => ({
+      ...line,
+      overheadCents: line.overheadCents + (freightAllocated.lines[index]?.overheadCents ?? 0),
+      landedCostCents:
+        line.landedCostCents + (freightAllocated.lines[index]?.overheadCents ?? 0),
+    }));
 
     const rows = allocated.map((line) => {
       const source = lines.find((candidate) => candidate.key === line.id);
@@ -145,7 +159,13 @@ export function PurchaseOrderForm({
       };
     });
 
-    return { overhead, goods, total: goods + overhead, rows };
+    return {
+      overhead,
+      goods,
+      total: goods + overhead,
+      rows,
+      usedWeight: freightAllocated.usedWeight,
+    };
   }, [lines, byId, tax, cardFee, delivery, shipping, shippingTax]);
 
   // Two hook calls, always both — createPurchaseOrder and
@@ -480,8 +500,13 @@ export function PurchaseOrderForm({
       <Surface className="xl:sticky xl:top-20">
         <SurfaceHeader
           title="Landed cost"
-          hint="What each unit will really cost once freight is allocated"
+          hint="Freight uses weight when complete; other costs use value"
         />
+        {!preview.usedWeight && money(shipping) + money(shippingTax) > 0 ? (
+          <p className="border-line-subtle border-b bg-warning-muted px-4 py-2 text-[11px] text-warning">
+            A line is missing weight, so freight will fall back to value allocation.
+          </p>
+        ) : null}
         <dl className="space-y-2 border-line-subtle border-b p-4">
           <Row label="Goods" value={formatMoney(preview.goods)} />
           <Row label="Freight, tax and fees" value={formatMoney(preview.overhead)} />

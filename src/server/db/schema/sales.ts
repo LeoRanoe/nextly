@@ -11,6 +11,7 @@ import {
 import { customers, productVariants } from './catalog';
 import { currencyCode, paymentMethod, saleStatus } from './enums';
 import { members } from './identity';
+import { bundles } from './planning';
 
 /**
  * A sale.
@@ -30,6 +31,8 @@ export const sales = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     number: text().notNull(),
     invoiceNumber: text(),
+    /** SHA-256 of the revocable, unguessable customer invoice token. */
+    publicTokenHash: text(),
     customerId: uuid().references(() => customers.id, { onDelete: 'set null' }),
     status: saleStatus().notNull().default('draft'),
 
@@ -60,6 +63,7 @@ export const sales = pgTable(
   (t) => [
     uniqueIndex('sales_number_key').on(t.number),
     uniqueIndex('sales_invoice_number_key').on(t.invoiceNumber),
+    uniqueIndex('sales_public_token_key').on(t.publicTokenHash),
     index('sales_customer_idx').on(t.customerId),
     index('sales_sold_at_idx').on(t.soldAt.desc()),
     index('sales_status_idx').on(t.status),
@@ -154,6 +158,10 @@ export const saleItems = pgTable(
     variantId: uuid()
       .notNull()
       .references(() => productVariants.id, { onDelete: 'restrict' }),
+    /** Nullable for ordinary lines; populated with immutable bundle identity for bundle sales. */
+    bundleId: uuid().references(() => bundles.id, { onDelete: 'set null' }),
+    bundleName: text(),
+    bundleSku: text(),
 
     quantity: integer().notNull(),
     /** Price charged per unit, in the currency of the sale. */
@@ -175,6 +183,32 @@ export const saleItems = pgTable(
   (t) => [
     index('sale_items_sale_idx').on(t.saleId, t.position),
     index('sale_items_variant_idx').on(t.variantId),
+  ],
+);
+
+/** Immutable component allocation behind one customer-facing bundle line. */
+export const saleItemComponents = pgTable(
+  'sale_item_components',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    saleItemId: uuid()
+      .notNull()
+      .references(() => saleItems.id, { onDelete: 'cascade' }),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: 'restrict' }),
+    quantityPerBundle: integer().notNull(),
+    quantity: integer().notNull(),
+    productName: text().notNull(),
+    variantName: text().notNull(),
+    sku: text().notNull(),
+    weightGrams: integer().notNull().default(0),
+    cogsCents: bigint({ mode: 'number' }).notNull().default(0),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('sale_item_components_line_idx').on(t.saleItemId),
+    index('sale_item_components_variant_idx').on(t.variantId),
   ],
 );
 

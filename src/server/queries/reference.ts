@@ -297,6 +297,9 @@ export type SettingsRow = {
   weeklyPurchaseBudgetCents: number | null;
   reviewHorizonDays: number;
   safetyStockDays: number;
+  defaultSupplierLeadTimeDays: number;
+  targetBundleMarginBp: number;
+  defaultBundleDiscountBp: number;
   legalName: string | null;
   addressLine: string | null;
   city: string | null;
@@ -317,6 +320,8 @@ export async function getSettings(): Promise<SettingsRow | null> {
     SELECT business_name, base_currency, display_currency, low_stock_threshold::text,
            quote_validity_days::text, default_payment_days::text,
            weekly_purchase_budget_cents::text, review_horizon_days::text, safety_stock_days::text,
+           target_bundle_margin_bp::text, default_bundle_discount_bp::text,
+           default_supplier_lead_time_days::text,
            legal_name, address_line, city, phone, whatsapp, email, tax_id, logo_url, invoice_footer,
            instagram, opening_hours
       FROM settings LIMIT 1
@@ -334,6 +339,9 @@ export async function getSettings(): Promise<SettingsRow | null> {
       row.weekly_purchase_budget_cents == null ? null : num(row.weekly_purchase_budget_cents),
     reviewHorizonDays: num(row.review_horizon_days, 14),
     safetyStockDays: num(row.safety_stock_days, 7),
+    targetBundleMarginBp: num(row.target_bundle_margin_bp, 3000),
+    defaultBundleDiscountBp: num(row.default_bundle_discount_bp, 500),
+    defaultSupplierLeadTimeDays: num(row.default_supplier_lead_time_days, 28),
     legalName: row.legal_name ?? null,
     addressLine: row.address_line ?? null,
     city: row.city ?? null,
@@ -370,6 +378,7 @@ export type ProductDetail = {
     listPriceCents: Cents;
     referenceCostCents: Cents;
     weightGrams: number;
+    isStrategic: boolean;
     isActive: boolean;
     onHand: number;
     valueCents: Cents;
@@ -403,7 +412,8 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   const [variants, images] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT v.id, v.name, v.sku, v.list_price_cents::text, v.reference_cost_cents::text,
-             v.weight_grams::text AS weight_grams,
+              v.weight_grams::text AS weight_grams,
+              v.is_strategic::text AS is_strategic,
              v.is_active::text AS is_active,
              COALESCE(s.on_hand, 0)::text     AS on_hand,
              COALESCE(s.value_cents, 0)::text AS value_cents
@@ -442,6 +452,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       listPriceCents: num(variant.list_price_cents),
       referenceCostCents: num(variant.reference_cost_cents),
       weightGrams: num(variant.weight_grams),
+      isStrategic: bool(variant.is_strategic),
       isActive: bool(variant.is_active),
       onHand: num(variant.on_hand),
       valueCents: num(variant.value_cents),

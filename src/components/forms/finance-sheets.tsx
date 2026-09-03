@@ -121,6 +121,12 @@ export type SettingsInitial = {
   lowStockThreshold: number;
   quoteValidityDays: number;
   defaultPaymentDays: number;
+  weeklyPurchaseBudgetCents: number | null;
+  reviewHorizonDays: number;
+  safetyStockDays: number;
+  defaultSupplierLeadTimeDays: number;
+  targetBundleMarginBp: number;
+  defaultBundleDiscountBp: number;
   legalName: string;
   addressLine: string;
   city: string;
@@ -143,6 +149,22 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
   const [quoteValidityDays, setQuoteValidityDays] = useState(String(initial.quoteValidityDays));
   const [defaultPaymentDays, setDefaultPaymentDays] = useState(
     String(initial.defaultPaymentDays),
+  );
+  const [weeklyBudget, setWeeklyBudget] = useState(
+    initial.weeklyPurchaseBudgetCents === null
+      ? ''
+      : String(initial.weeklyPurchaseBudgetCents / 100),
+  );
+  const [reviewHorizonDays, setReviewHorizonDays] = useState(String(initial.reviewHorizonDays));
+  const [safetyStockDays, setSafetyStockDays] = useState(String(initial.safetyStockDays));
+  const [defaultSupplierLeadTimeDays, setDefaultSupplierLeadTimeDays] = useState(
+    String(initial.defaultSupplierLeadTimeDays),
+  );
+  const [targetBundleMargin, setTargetBundleMargin] = useState(
+    String(initial.targetBundleMarginBp / 100),
+  );
+  const [defaultBundleDiscount, setDefaultBundleDiscount] = useState(
+    String(initial.defaultBundleDiscountBp / 100),
   );
   const [legalName, setLegalName] = useState(initial.legalName);
   const [addressLine, setAddressLine] = useState(initial.addressLine);
@@ -198,6 +220,12 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
               lowStockThreshold: Number(lowStockThreshold),
               quoteValidityDays: Number(quoteValidityDays),
               defaultPaymentDays: Number(defaultPaymentDays),
+              weeklyPurchaseBudgetCents: weeklyBudget,
+              reviewHorizonDays: Number(reviewHorizonDays),
+              safetyStockDays: Number(safetyStockDays),
+              defaultSupplierLeadTimeDays: Number(defaultSupplierLeadTimeDays),
+              targetBundleMarginBp: Math.round(Number(targetBundleMargin) * 100),
+              defaultBundleDiscountBp: Math.round(Number(defaultBundleDiscount) * 100),
               legalName: legalName || undefined,
               addressLine: addressLine || undefined,
               city: city || undefined,
@@ -239,6 +267,79 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
                   inputMode="numeric"
                   value={lowStockThreshold}
                   onChange={(event) => setLowStockThreshold(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field
+                label="Weekly buying budget"
+                htmlFor="weeklyBudget"
+                hint="USD; optional advisory limit"
+              >
+                <Input
+                  id="weeklyBudget"
+                  numeric
+                  inputMode="decimal"
+                  value={weeklyBudget}
+                  onChange={(event) => setWeeklyBudget(event.target.value)}
+                  placeholder="No limit"
+                />
+              </Field>
+              <Field label="Review horizon" htmlFor="reviewHorizonDays" hint="Days">
+                <Input
+                  id="reviewHorizonDays"
+                  numeric
+                  inputMode="numeric"
+                  value={reviewHorizonDays}
+                  onChange={(event) => setReviewHorizonDays(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field label="Safety stock" htmlFor="safetyStockDays" hint="Days">
+                <Input
+                  id="safetyStockDays"
+                  numeric
+                  inputMode="numeric"
+                  value={safetyStockDays}
+                  onChange={(event) => setSafetyStockDays(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Default supplier lead time"
+                htmlFor="defaultSupplierLeadTimeDays"
+                hint="Days"
+              >
+                <Input
+                  id="defaultSupplierLeadTimeDays"
+                  numeric
+                  inputMode="numeric"
+                  value={defaultSupplierLeadTimeDays}
+                  onChange={(event) => setDefaultSupplierLeadTimeDays(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field label="Target bundle margin" htmlFor="targetBundleMargin" hint="Percent">
+                <Input
+                  id="targetBundleMargin"
+                  numeric
+                  inputMode="decimal"
+                  value={targetBundleMargin}
+                  onChange={(event) => setTargetBundleMargin(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Default bundle discount"
+                htmlFor="defaultBundleDiscount"
+                hint="Percent"
+              >
+                <Input
+                  id="defaultBundleDiscount"
+                  numeric
+                  inputMode="decimal"
+                  value={defaultBundleDiscount}
+                  onChange={(event) => setDefaultBundleDiscount(event.target.value)}
                 />
               </Field>
             </FieldRow>

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { SupplierSheet } from '@/components/forms/reference-sheets';
 import { SupplierActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -38,9 +39,12 @@ export default function SuppliersPage({
         title="Suppliers"
         description="Where stock is bought. Spend is the landed total of every received order, so it includes the freight and fees paid to that supplier."
         action={
-          <Suspense fallback={null}>
-            <SupplierSheet />
-          </Suspense>
+          <>
+            <ExportCsvLink entity="suppliers" searchParams={searchParams} />
+            <Suspense fallback={null}>
+              <SupplierSheet />
+            </Suspense>
+          </>
         }
       />
       <Surface className="overflow-hidden">

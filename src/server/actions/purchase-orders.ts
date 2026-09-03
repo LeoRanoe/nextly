@@ -2,7 +2,7 @@
 
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { allocateOverhead, totalOverhead } from '@/lib/costing';
+import { allocateOverhead, allocateOverheadByWeight, totalOverhead } from '@/lib/costing';
 import type { RateMicros } from '@/lib/fx';
 import type { Cents, CurrencyCode } from '@/lib/money';
 import { formatMoney } from '@/lib/money';
@@ -228,6 +228,7 @@ export const createPurchaseOrder = writeAction
           // edited, and a cost basis written before the goods arrive is a cost
           // basis that will be wrong.
           overheadCents: 0,
+          shippingOverheadCents: 0,
           landedCostCents: item.subtotalCents,
           position: index + 1,
         })),
@@ -328,6 +329,7 @@ export const updatePurchaseOrder = writeAction
           quantityReceived: 0,
           subtotalCents: item.subtotalCents,
           overheadCents: 0,
+          shippingOverheadCents: 0,
           landedCostCents: item.subtotalCents,
           position: index + 1,
         })),
@@ -387,6 +389,27 @@ export const receivePurchaseOrder = writeAction
         await lockVariant(tx, variantId);
       }
 
+      const baseLines = items.map((item) => ({
+        id: item.id,
+        subtotalCents: item.subtotalCents,
+        quantity: item.quantity,
+        weightGrams: item.weightGrams,
+      }));
+      const valueAllocated = allocateOverhead(
+        baseLines,
+        order.taxCents + order.cardFeeCents + order.deliveryCents,
+      );
+      const freightAllocated = allocateOverheadByWeight(
+        baseLines,
+        order.shippingCents + order.shippingTaxCents,
+      );
+      const allocated = valueAllocated.map((line, index) => ({
+        ...line,
+        overheadCents: line.overheadCents + (freightAllocated.lines[index]?.overheadCents ?? 0),
+        landedCostCents:
+          line.landedCostCents + (freightAllocated.lines[index]?.overheadCents ?? 0),
+        shippingOverheadCents: freightAllocated.lines[index]?.overheadCents ?? 0,
+      }));
       const overheadCents = totalOverhead({
         taxCents: order.taxCents,
         cardFeeCents: order.cardFeeCents,
@@ -394,15 +417,6 @@ export const receivePurchaseOrder = writeAction
         shippingCents: order.shippingCents,
         shippingTaxCents: order.shippingTaxCents,
       });
-
-      const allocated = allocateOverhead(
-        items.map((item) => ({
-          id: item.id,
-          subtotalCents: item.subtotalCents,
-          quantity: item.quantity,
-        })),
-        overheadCents,
-      );
 
       let landedTotalCents = 0;
 
@@ -414,6 +428,7 @@ export const receivePurchaseOrder = writeAction
           .update(purchaseOrderItems)
           .set({
             overheadCents: line.overheadCents,
+            shippingOverheadCents: line.shippingOverheadCents,
             landedCostCents: line.landedCostCents,
             quantityReceived: item.quantity,
           })
@@ -474,6 +489,7 @@ export const receivePurchaseOrder = writeAction
         number: order.number,
         landedTotalCents,
         overheadCents,
+        usedWeightAllocation: freightAllocated.usedWeight,
         unitCount: items.reduce((sum, item) => sum + item.quantity, 0),
       };
     });
@@ -769,7 +785,7 @@ export const cancelPurchaseOrder = writeAction
 
       await tx
         .update(purchaseOrderItems)
-        .set({ quantityReceived: 0, overheadCents: 0 })
+        .set({ quantityReceived: 0, overheadCents: 0, shippingOverheadCents: 0 })
         .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
 
       await tx

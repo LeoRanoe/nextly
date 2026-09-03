@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { SaleActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -63,9 +64,12 @@ export default function SalesPage({
         title="Sales"
         description="Each sale stores the exchange rate in force when it happened and the weighted-average cost it consumed, so neither a rate change nor a later purchase can rewrite a margin recorded months ago."
         action={
-          <Button asChild variant="primary">
-            <Link href="/sales/new">Record sale</Link>
-          </Button>
+          <>
+            <ExportCsvLink entity="sales" searchParams={searchParams} />
+            <Button asChild variant="primary">
+              <Link href="/sales/new">Record sale</Link>
+            </Button>
+          </>
         }
       />
       <Surface className="overflow-hidden">

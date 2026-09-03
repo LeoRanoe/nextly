@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { ReceiveOrderSheet } from '@/components/forms/finance-sheets';
 import { PurchaseOrderActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -66,9 +67,12 @@ export default function PurchaseOrdersPage({
         title="Purchase orders"
         description="Freight, tax and card fees are costs of the goods, not general expenses. On receipt they are allocated across the order's lines pro-rata by value, so every unit carries what it truly cost to land."
         action={
-          <Button asChild variant="primary">
-            <Link href="/purchase-orders/new">New order</Link>
-          </Button>
+          <>
+            <ExportCsvLink entity="purchase-orders" searchParams={searchParams} />
+            <Button asChild variant="primary">
+              <Link href="/purchase-orders/new">New order</Link>
+            </Button>
+          </>
         }
       />
       <Surface className="overflow-hidden">

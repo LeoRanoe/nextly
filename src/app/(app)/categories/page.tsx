@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { CategorySheet } from '@/components/forms/reference-sheets';
 import { CategoryActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
@@ -35,9 +36,12 @@ export default function CategoriesPage({
         title="Categories"
         description="How products are grouped — here, and as the filter chips on the public catalog."
         action={
-          <Suspense fallback={null}>
-            <CategorySheet />
-          </Suspense>
+          <>
+            <ExportCsvLink entity="categories" searchParams={searchParams} />
+            <Suspense fallback={null}>
+              <CategorySheet />
+            </Suspense>
+          </>
         }
       />
       <Surface className="overflow-hidden">

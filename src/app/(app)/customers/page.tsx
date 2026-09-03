@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { CustomerSheet } from '@/components/forms/reference-sheets';
 import { CustomerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
@@ -46,9 +47,12 @@ export default function CustomersPage({
         title="Customers"
         description="Order counts and lifetime spend are derived from confirmed sales, so they cannot drift out of step with the sales themselves."
         action={
-          <Suspense fallback={null}>
-            <CustomerSheet />
-          </Suspense>
+          <>
+            <ExportCsvLink entity="customers" searchParams={searchParams} />
+            <Suspense fallback={null}>
+              <CustomerSheet />
+            </Suspense>
+          </>
         }
       />
       <Surface className="overflow-hidden">

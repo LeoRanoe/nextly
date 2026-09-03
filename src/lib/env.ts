@@ -14,6 +14,7 @@ const serverSchema = z.object({
   DIRECT_URL: z.string().min(1).optional(),
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+  CRON_SECRET: z.string().min(32).optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
 

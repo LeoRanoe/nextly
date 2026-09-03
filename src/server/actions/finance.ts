@@ -383,6 +383,12 @@ export const updateSettings = ownerAction
             lowStockThreshold: input.lowStockThreshold,
             quoteValidityDays: input.quoteValidityDays,
             defaultPaymentDays: input.defaultPaymentDays,
+            weeklyPurchaseBudgetCents: input.weeklyPurchaseBudgetCents,
+            reviewHorizonDays: input.reviewHorizonDays,
+            safetyStockDays: input.safetyStockDays,
+            defaultSupplierLeadTimeDays: input.defaultSupplierLeadTimeDays,
+            targetBundleMarginBp: input.targetBundleMarginBp,
+            defaultBundleDiscountBp: input.defaultBundleDiscountBp,
             ...identity,
           })
           .where(eq(settings.id, existing.id));
@@ -393,6 +399,12 @@ export const updateSettings = ownerAction
           lowStockThreshold: input.lowStockThreshold,
           quoteValidityDays: input.quoteValidityDays,
           defaultPaymentDays: input.defaultPaymentDays,
+          weeklyPurchaseBudgetCents: input.weeklyPurchaseBudgetCents,
+          reviewHorizonDays: input.reviewHorizonDays,
+          safetyStockDays: input.safetyStockDays,
+          defaultSupplierLeadTimeDays: input.defaultSupplierLeadTimeDays,
+          targetBundleMarginBp: input.targetBundleMarginBp,
+          defaultBundleDiscountBp: input.defaultBundleDiscountBp,
           ...identity,
         });
       }

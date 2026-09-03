@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { LedgerSheet } from '@/components/forms/ledger-sheet';
 import { LedgerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -63,15 +64,18 @@ export default function LedgerPage({
         title="Cash ledger"
         description="Append-only. Corrections are made with a reversing entry, never by editing history, and the running balance is computed rather than stored so it cannot go stale."
         action={
-          <Suspense
-            fallback={
-              <Button variant="primary" disabled>
-                Record movement
-              </Button>
-            }
-          >
-            <LedgerTrigger />
-          </Suspense>
+          <>
+            <ExportCsvLink entity="ledger" searchParams={searchParams} />
+            <Suspense
+              fallback={
+                <Button variant="primary" disabled>
+                  Record movement
+                </Button>
+              }
+            >
+              <LedgerTrigger />
+            </Suspense>
+          </>
         }
       />
       <Surface className="overflow-hidden">

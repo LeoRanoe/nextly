@@ -66,6 +66,10 @@ async function pnlTotals(from: Date, to: Date): Promise<ProfitAndLossTotals> {
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM ledger_entries
          WHERE category = 'refund' AND source_kind = 'sale'
+           AND (
+             source_id IN (SELECT id FROM sales)
+             OR source_id IN (SELECT id FROM sale_refunds)
+           )
            AND occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS refunds,
       COALESCE((
@@ -175,22 +179,55 @@ export async function listProductMargins(
     : sql``;
 
   const rows = await db.execute<Record<string, string>>(sql`
-    WITH margins AS (
-      SELECT p.id AS product_id, p.code, p.name,
-             SUM(si.quantity - si.quantity_returned) AS units_sold,
-             SUM(ROUND(si.line_total_usd_cents::numeric
-                 * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))
-               AS revenue_cents,
-             SUM(ROUND(si.cogs_cents::numeric
-                 * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))
-               AS cogs_cents
+    WITH sale_base AS (
+      SELECT si.id AS sale_item_id, si.sale_id, si.variant_id, si.bundle_id,
+             si.quantity, si.quantity_returned,
+             GREATEST(si.quantity - si.quantity_returned, 0) AS net_quantity,
+             si.line_total_usd_cents, si.cogs_cents
         FROM sale_items si
         JOIN sales s ON s.id = si.sale_id
-        JOIN product_variants v ON v.id = si.variant_id
-        JOIN products p ON p.id = v.product_id
        WHERE s.status = 'confirmed' ${scope}
+    ),
+    bundle_components AS (
+      SELECT sb.sale_item_id, sb.quantity, sb.net_quantity, sb.line_total_usd_cents,
+             sic.variant_id, sic.quantity_per_bundle, sic.cogs_cents AS component_cogs_cents,
+             SUM(sic.cogs_cents) OVER (PARTITION BY sic.sale_item_id) AS bundle_cogs_cents,
+             COUNT(*) OVER (PARTITION BY sic.sale_item_id) AS component_count
+        FROM sale_base sb
+        JOIN sale_item_components sic ON sic.sale_item_id = sb.sale_item_id
+       WHERE sb.bundle_id IS NOT NULL
+    ),
+    line_margins AS (
+      SELECT variant_id, net_quantity AS units_sold,
+             ROUND(line_total_usd_cents::numeric * net_quantity / NULLIF(quantity, 0)) AS revenue_cents,
+             ROUND(cogs_cents::numeric * net_quantity / NULLIF(quantity, 0)) AS cogs_cents
+        FROM sale_base
+       WHERE bundle_id IS NULL
+      UNION ALL
+      SELECT variant_id,
+             SUM(net_quantity * quantity_per_bundle)::numeric AS units_sold,
+             SUM(ROUND(
+               line_total_usd_cents::numeric
+               * CASE WHEN bundle_cogs_cents > 0
+                   THEN component_cogs_cents::numeric / bundle_cogs_cents
+                   ELSE 1::numeric / NULLIF(component_count, 0)
+                 END
+               * net_quantity / NULLIF(quantity, 0)
+             )) AS revenue_cents,
+             SUM(ROUND(component_cogs_cents::numeric * net_quantity / NULLIF(quantity, 0))) AS cogs_cents
+        FROM bundle_components
+       GROUP BY sale_item_id, variant_id
+    ),
+    margins AS (
+      SELECT p.id AS product_id, p.code, p.name,
+             SUM(lm.units_sold) AS units_sold,
+             SUM(lm.revenue_cents) AS revenue_cents,
+             SUM(lm.cogs_cents) AS cogs_cents
+        FROM line_margins lm
+        JOIN product_variants v ON v.id = lm.variant_id
+        JOIN products p ON p.id = v.product_id
        GROUP BY p.id, p.code, p.name
-      HAVING SUM(si.quantity - si.quantity_returned) > 0
+      HAVING SUM(lm.units_sold) > 0
     )
     SELECT product_id, code, name,
            units_sold::text,

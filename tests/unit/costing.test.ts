@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocateOverhead,
+  allocateOverheadByWeight,
   consumeStock,
   EMPTY_VALUATION,
   margin,
@@ -121,6 +122,34 @@ describe('allocateOverhead', () => {
     expect(allocateOverhead([], 500)).toEqual([]);
     const [line] = allocateOverhead([{ id: 'a', subtotalCents: 100, quantity: 1 }], 0);
     expect(line?.landedCostCents).toBe(100);
+  });
+});
+
+describe('allocateOverheadByWeight', () => {
+  it('allocates freight by positive whole-gram weight and conserves every cent', () => {
+    const result = allocateOverheadByWeight(
+      [
+        { id: 'heavy', subtotalCents: 7500, quantity: 1, weightGrams: 1000 },
+        { id: 'light', subtotalCents: 2500, quantity: 1, weightGrams: 300 },
+      ],
+      1300,
+    );
+    expect(result.usedWeight).toBe(true);
+    expect(result.lines.map((line) => line.overheadCents)).toEqual([1000, 300]);
+    expect(sum(result.lines.map((line) => line.overheadCents))).toBe(1300);
+    expect(result.lines.map((line) => line.landedCostCents)).toEqual([8500, 2800]);
+  });
+
+  it('falls back to value when any weight is missing', () => {
+    const result = allocateOverheadByWeight(
+      [
+        { id: 'heavy', subtotalCents: 7500, quantity: 1, weightGrams: 1000 },
+        { id: 'unknown', subtotalCents: 2500, quantity: 1, weightGrams: 0 },
+      ],
+      1000,
+    );
+    expect(result.usedWeight).toBe(false);
+    expect(result.lines.map((line) => line.overheadCents)).toEqual([750, 250]);
   });
 });
 

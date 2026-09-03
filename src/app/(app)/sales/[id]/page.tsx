@@ -27,7 +27,11 @@ import { PAYMENT_LABELS, type PaymentBadgeCode, paymentBadgeOf } from '@/lib/pay
 import { listActivity } from '@/server/queries/activity';
 import { getSale } from '@/server/queries/documents';
 import { getCurrentRate } from '@/server/queries/overview';
-import { listCustomerOptions, listVariantOptions } from '@/server/queries/pickers';
+import {
+  listBundleOptions,
+  listCustomerOptions,
+  listVariantOptions,
+} from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Sale' };
 
@@ -82,9 +86,10 @@ async function Loader({
   if (!sale) notFound();
 
   if (editing === '1' && sale.status === 'draft') {
-    const [variants, customers, rate] = await Promise.all([
+    const [variants, customers, bundles, rate] = await Promise.all([
       listVariantOptions(),
       listCustomerOptions(),
+      listBundleOptions(),
       getCurrentRate(),
     ]);
 
@@ -93,6 +98,7 @@ async function Loader({
         variants={variants}
         customers={customers}
         rateMicros={rate?.rateMicros ?? RATE_SCALE}
+        bundles={bundles}
         initial={{
           id: sale.id,
           customerId: sale.customerId,
@@ -104,6 +110,7 @@ async function Loader({
           discountReason: sale.discountReason ?? '',
           items: sale.items.map((item) => ({
             variantId: item.variantId,
+            bundleId: item.bundleId,
             quantity: String(item.quantity),
             unitPrice: toDecimalString(item.unitPriceCents, sale.currency),
             serials: item.serials.join('\n'),

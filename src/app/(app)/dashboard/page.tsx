@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { AlertsPanel } from '@/components/overview/alerts-panel';
 import { CashFlowChart } from '@/components/overview/cash-flow-chart';
 import { ImportPipeline } from '@/components/overview/import-pipeline';
+import { InventoryDecisions } from '@/components/overview/inventory-decisions';
 import { InventoryHealth } from '@/components/overview/inventory-health';
 import { MarginLeaders } from '@/components/overview/margin-leaders';
 import { MarginWaterfall } from '@/components/overview/margin-waterfall';
@@ -94,6 +95,21 @@ export default function OverviewPage({ searchParams }: { searchParams: SearchPar
           />
           <Suspense fallback={<Skeleton className="m-4 h-16" />}>
             <ImportPipelineBlock />
+          </Suspense>
+        </Surface>
+
+        <Surface>
+          <SurfaceHeader
+            title="Inventory decisions"
+            hint="Weekly purchasing intelligence, ready for review"
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/reorder">Review queue</Link>
+              </Button>
+            }
+          />
+          <Suspense fallback={<PanelSkeleton rows={4} />}>
+            <InventoryDecisions />
           </Suspense>
         </Surface>
 

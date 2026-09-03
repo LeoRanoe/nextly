@@ -29,6 +29,7 @@ import { mulDivRound, sum } from '@/lib/money';
 /* ── Overhead allocation ─────────────────────────────────────────────────── */
 
 export type AllocatableLine = { id: string; subtotalCents: Cents; quantity: number };
+export type WeightAllocatableLine = AllocatableLine & { weightGrams: number };
 export type AllocatedLine = AllocatableLine & {
   overheadCents: Cents;
   landedCostCents: Cents;
@@ -98,6 +99,36 @@ export function allocateOverhead(
       landedCostCents: share.line.subtotalCents + overhead,
     };
   });
+}
+
+/** Allocate freight-related overhead by weight, falling back to value when
+ * any line is missing a positive weight. The flag lets callers show a warning. */
+export function allocateOverheadByWeight(
+  lines: readonly WeightAllocatableLine[],
+  overheadCents: Cents,
+): { lines: AllocatedLine[]; usedWeight: boolean } {
+  const complete =
+    lines.length > 0 &&
+    lines.every((line) => Number.isInteger(line.weightGrams) && line.weightGrams > 0);
+  if (!complete) return { lines: allocateOverhead(lines, overheadCents), usedWeight: false };
+  const allocated = allocateOverhead(
+    lines.map((line) => ({ ...line, subtotalCents: line.weightGrams })),
+    overheadCents,
+  );
+  return {
+    lines: allocated.flatMap((line, index) => {
+      const source = lines[index];
+      if (!source) return [];
+      return [
+        {
+          ...source,
+          overheadCents: line.overheadCents,
+          landedCostCents: source.subtotalCents + line.overheadCents,
+        },
+      ];
+    }),
+    usedWeight: true,
+  };
 }
 
 /** Every cost on a purchase order that is not the goods themselves. */

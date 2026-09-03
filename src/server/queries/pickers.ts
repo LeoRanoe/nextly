@@ -76,6 +76,93 @@ export async function listVariantOptions(): Promise<VariantOption[]> {
 
 export type Option = { id: string; label: string; hint?: string | null };
 
+export type BundleComponentOption = {
+  variantId: string;
+  quantity: number;
+  productName: string;
+  variantName: string;
+  sku: string;
+  listPriceCents: Cents;
+  landedUnitCostCents: Cents;
+  onHand: number;
+  weightGrams: number;
+};
+
+export type BundleOption = {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  priceCents: Cents;
+  availability: number;
+  componentRetailCents: Cents;
+  landedCostCents: Cents;
+  components: BundleComponentOption[];
+};
+
+export async function listBundleOptions(): Promise<BundleOption[]> {
+  if (!isDatabaseConfigured()) return [];
+  const [headers, componentRows] = await Promise.all([
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, sku, name, description, price_cents::text
+      FROM bundles WHERE is_active = true ORDER BY name
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT bc.bundle_id, bc.variant_id, bc.quantity, bc.product_name, bc.variant_name,
+        bc.sku, bc.weight_grams,
+        v.list_price_cents::text,
+        COALESCE(ROUND(s.value_cents::numeric / NULLIF(s.on_hand, 0)), v.reference_cost_cents, 0)::text AS landed_unit_cost_cents,
+        COALESCE(s.on_hand, 0)::text AS on_hand
+      FROM bundle_components bc
+      JOIN product_variants v ON v.id = bc.variant_id
+      LEFT JOIN v_stock_levels s ON s.variant_id = v.id
+      ORDER BY bc.bundle_id, bc.position
+    `),
+  ]);
+  const byBundle = new Map<string, BundleComponentOption[]>();
+  for (const row of componentRows) {
+    const component = {
+      variantId: text(row.variant_id),
+      quantity: num(row.quantity, 1),
+      productName: text(row.product_name),
+      variantName: text(row.variant_name),
+      sku: text(row.sku),
+      listPriceCents: num(row.list_price_cents),
+      landedUnitCostCents: num(row.landed_unit_cost_cents),
+      onHand: num(row.on_hand),
+      weightGrams: num(row.weight_grams),
+    };
+    byBundle.set(text(row.bundle_id), [
+      ...(byBundle.get(text(row.bundle_id)) ?? []),
+      component,
+    ]);
+  }
+  return headers.map((row) => {
+    const components = byBundle.get(text(row.id)) ?? [];
+    return {
+      id: text(row.id),
+      sku: text(row.sku),
+      name: text(row.name),
+      description: maybe(row.description),
+      priceCents: num(row.price_cents),
+      components,
+      availability: components.length
+        ? Math.min(
+            ...components.map((component) => Math.floor(component.onHand / component.quantity)),
+          )
+        : 0,
+      componentRetailCents: components.reduce(
+        (sum, component) => sum + component.quantity * component.listPriceCents,
+        0,
+      ),
+      landedCostCents: components.reduce(
+        (sum, component) => sum + component.quantity * component.landedUnitCostCents,
+        0,
+      ),
+    };
+  });
+}
+
 export async function listCustomerOptions(): Promise<Option[]> {
   if (!isDatabaseConfigured()) return [];
 

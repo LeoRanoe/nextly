@@ -1323,3 +1323,33 @@ Four things need an answer before implementation can complete:
 4. **Selling on credit (F-4).** Will you ever hand over goods before being paid in full?
 
 Everything else can proceed immediately.
+
+## 12 — Current implementation audit (2026-09-03)
+
+The purchasing intelligence, bundle sales, weight snapshots, commercial
+documents, public invoice access, CSV exports, and dashboard decision queue are
+implemented in the current working tree.
+
+Local verification completed:
+
+- `pnpm typecheck` — passed.
+- `pnpm lint` — passed with the Biome recommended preset.
+- `pnpm test` — passed, 10 test files / 82 tests.
+- `pnpm build` — passed with Next.js 16 Cache Components and 43 generated routes.
+- `git diff --check` — passed; CRLF notices are Git working-tree conversion
+  warnings, not whitespace errors.
+
+Operational verification still required before calling this release live:
+
+- `DATABASE_URL` and `DIRECT_URL` are blank in the current local environment,
+  so `pnpm db:migrate` could not connect and no migration was applied here.
+- Authenticated Playwright coverage is environment-gated and was skipped when
+  no test user/database was configured. Configure staging auth and rerun it;
+  a skipped test is not a pass.
+- Live Supabase RLS, staging/production reconciliation, backup retention,
+  restore drill, storage token, and Vercel environment configuration require
+  the real project credentials and cannot be proven from this checkout.
+
+The release gate therefore remains operationally blocked until the staging
+steps in `docs/production-readiness.md` are completed. This is an external
+environment prerequisite, not a code-test failure.

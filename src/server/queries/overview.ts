@@ -166,6 +166,10 @@ export async function getWaterfall({ from, to }: { from: Date; to: Date }): Prom
       COALESCE((
         SELECT SUM(amount_usd_cents) FROM ledger_entries
          WHERE category = 'refund' AND source_kind = 'sale'
+           AND (
+             source_id IN (SELECT id FROM sales)
+             OR source_id IN (SELECT id FROM sale_refunds)
+           )
            AND occurred_at >= ${fromIso} AND occurred_at < ${toIso}
       ), 0)::text AS refunds,
       COALESCE((

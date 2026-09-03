@@ -18,8 +18,11 @@ import {
 } from '@/lib/schemas';
 import { db } from '../db/client';
 import {
+  bundleComponents,
+  bundles,
   products,
   productVariants,
+  saleItemComponents,
   saleItemSerials,
   saleItems,
   salePayments,
@@ -167,28 +170,184 @@ async function lockSale(tx: Tx, saleId: string) {
 }
 
 async function assertSellableVariants(tx: Tx, variantIds: string[]): Promise<void> {
-  if (new Set(variantIds).size !== variantIds.length) {
-    throw new ActionError('Add each product variant only once per sale.');
-  }
-
+  const uniqueIds = [...new Set(variantIds)];
   const rows = await tx
     .select({ id: productVariants.id })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))
     .where(
       and(
-        inArray(productVariants.id, variantIds),
+        inArray(productVariants.id, uniqueIds),
         eq(productVariants.isActive, true),
         sql`${products.status} <> 'archived'`,
       ),
     );
-  if (rows.length !== variantIds.length) {
+  if (rows.length !== uniqueIds.length) {
     throw new ActionError('Every sale item must be an active product variant.');
   }
 }
 
 async function lockSaleVariants(tx: Tx, variantIds: string[]): Promise<void> {
   for (const variantId of [...new Set(variantIds)].sort()) await lockVariant(tx, variantId);
+}
+
+type ResolvedBundle = {
+  id: string;
+  name: string;
+  sku: string;
+  components: {
+    variantId: string;
+    quantity: number;
+    productName: string;
+    variantName: string;
+    sku: string;
+    weightGrams: number;
+  }[];
+};
+
+async function resolveBundle(tx: Tx, bundleId: string): Promise<ResolvedBundle> {
+  const [header] = await tx
+    .select({ id: bundles.id, name: bundles.name, sku: bundles.sku })
+    .from(bundles)
+    .where(and(eq(bundles.id, bundleId), eq(bundles.isActive, true)))
+    .limit(1);
+  if (!header) throw new ActionError('That bundle is inactive or no longer exists.');
+  const components = await tx
+    .select({
+      variantId: bundleComponents.variantId,
+      quantity: bundleComponents.quantity,
+      productName: bundleComponents.productName,
+      variantName: bundleComponents.variantName,
+      sku: bundleComponents.sku,
+      weightGrams: bundleComponents.weightGrams,
+      active: productVariants.isActive,
+      productStatus: products.status,
+    })
+    .from(bundleComponents)
+    .innerJoin(productVariants, eq(productVariants.id, bundleComponents.variantId))
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .where(eq(bundleComponents.bundleId, bundleId))
+    .orderBy(bundleComponents.position);
+  if (
+    components.length === 0 ||
+    components.some((component) => !component.active || component.productStatus === 'archived')
+  ) {
+    throw new ActionError('Every bundle component must be an active product.');
+  }
+  return {
+    ...header,
+    components: components.map(
+      ({ active: _active, productStatus: _status, ...component }) => component,
+    ),
+  };
+}
+
+async function resolveSaleBundles(tx: Tx, items: { bundleId?: string | null }[]) {
+  const map = new Map<string, ResolvedBundle>();
+  for (const bundleId of items
+    .map((item) => item.bundleId)
+    .filter((id): id is string => Boolean(id))) {
+    if (!map.has(bundleId)) map.set(bundleId, await resolveBundle(tx, bundleId));
+  }
+  return map;
+}
+
+async function createSaleLine(
+  tx: Tx,
+  input: {
+    saleId: string;
+    number: string;
+    soldAt: Date;
+    currency: CurrencyCode;
+    rateMicros: RateMicros;
+    memberId: string;
+    item: {
+      variantId: string;
+      bundleId?: string | null;
+      quantity: number;
+      unitPriceCents: Cents;
+      serials: string[];
+    };
+    bundle?: ResolvedBundle;
+    confirm: boolean;
+    position: number;
+  },
+): Promise<{ totalCents: Cents; totalUsdCents: Cents; cogsCents: Cents; shortfall: number }> {
+  const lineTotalCents = input.item.unitPriceCents * input.item.quantity;
+  const lineTotalUsdCents = normaliseToUsd(lineTotalCents, input.currency, input.rateMicros);
+  const unitPriceUsdCents = normaliseToUsd(
+    input.item.unitPriceCents,
+    input.currency,
+    input.rateMicros,
+  );
+  const components = input.bundle?.components ?? [
+    {
+      variantId: input.item.variantId,
+      quantity: 1,
+      productName: '',
+      variantName: '',
+      sku: '',
+      weightGrams: 0,
+    },
+  ];
+  let cogsCents = 0;
+  let shortfall = 0;
+  const allocations: { component: (typeof components)[number]; cogsCents: Cents }[] = [];
+  if (input.confirm) {
+    for (const component of components) {
+      const consumed = await consumeStockFor(tx, {
+        variantId: component.variantId,
+        quantity: input.item.quantity * component.quantity,
+        sourceKind: 'sale',
+        sourceId: input.saleId,
+        occurredAt: input.soldAt,
+        memberId: input.memberId,
+        note: `${input.number}${input.bundle ? ` · ${input.bundle.sku}` : ''} at weighted-average landed cost.`,
+      });
+      cogsCents += consumed.cogsCents;
+      shortfall += consumed.shortfall;
+      if (input.bundle) allocations.push({ component, cogsCents: consumed.cogsCents });
+    }
+  }
+  const [line] = await tx
+    .insert(saleItems)
+    .values({
+      saleId: input.saleId,
+      variantId: input.bundle?.components[0]?.variantId ?? input.item.variantId,
+      bundleId: input.bundle?.id ?? null,
+      bundleName: input.bundle?.name ?? null,
+      bundleSku: input.bundle?.sku ?? null,
+      quantity: input.item.quantity,
+      unitPriceCents: input.item.unitPriceCents,
+      unitPriceUsdCents,
+      lineTotalUsdCents,
+      cogsCents,
+      shortfall,
+      position: input.position,
+    })
+    .returning({ id: saleItems.id });
+  if (!line) throw new ActionError('Could not create the sale line.');
+  if (input.bundle) {
+    await tx.insert(saleItemComponents).values(
+      input.bundle.components.map((component, index) => ({
+        saleItemId: line.id,
+        variantId: component.variantId,
+        quantityPerBundle: component.quantity,
+        quantity: input.item.quantity * component.quantity,
+        productName: component.productName,
+        variantName: component.variantName,
+        sku: component.sku,
+        weightGrams: component.weightGrams,
+        cogsCents: allocations[index]?.cogsCents ?? 0,
+      })),
+    );
+  }
+  if (input.item.serials.length > 0) {
+    await tx
+      .insert(saleItemSerials)
+      .values(input.item.serials.map((serial) => ({ saleItemId: line.id, serial })));
+  }
+  return { totalCents: lineTotalCents, totalUsdCents: lineTotalUsdCents, cogsCents, shortfall };
 }
 
 const returnItemsSchema = z
@@ -205,14 +364,15 @@ export const createSale = writeAction
   .inputSchema(saleSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      await assertSellableVariants(
-        tx,
-        input.items.map((item) => item.variantId),
-      );
-      await lockSaleVariants(
-        tx,
-        input.items.map((item) => item.variantId),
-      );
+      const bundleMap = await resolveSaleBundles(tx, input.items);
+      const sellableIds = input.items.flatMap((item) => {
+        const bundle = item.bundleId ? bundleMap.get(item.bundleId) : undefined;
+        return bundle
+          ? bundle.components.map((component) => component.variantId)
+          : [item.variantId];
+      });
+      await assertSellableVariants(tx, sellableIds);
+      await lockSaleVariants(tx, sellableIds);
       const rateMicros =
         input.currency === 'SRD'
           ? await rateOn(input.soldAt, tx)
@@ -243,58 +403,22 @@ export const createSale = writeAction
       let shortfallTotal = 0;
 
       for (const [index, item] of input.items.entries()) {
-        // Normalise the line total, not the unit price. Converting per unit and
-        // then multiplying compounds the rounding error by the quantity.
-        const lineTotalCents = item.unitPriceCents * item.quantity;
-        const lineTotalUsdCents = normaliseToUsd(lineTotalCents, input.currency, rateMicros);
-        const unitPriceUsdCents = normaliseToUsd(
-          item.unitPriceCents,
-          input.currency,
+        const line = await createSaleLine(tx, {
+          saleId: sale.id,
+          number,
+          soldAt: input.soldAt,
+          currency: input.currency,
           rateMicros,
-        );
-
-        let lineCogs = 0;
-        let shortfall = 0;
-
-        if (input.confirm) {
-          const consumed = await consumeStockFor(tx, {
-            variantId: item.variantId,
-            quantity: item.quantity,
-            sourceKind: 'sale',
-            sourceId: sale.id,
-            occurredAt: input.soldAt,
-            memberId: ctx.member.id,
-            note: `${number} at weighted-average landed cost.`,
-          });
-          lineCogs = consumed.cogsCents;
-          shortfall = consumed.shortfall;
-        }
-
-        const [line] = await tx
-          .insert(saleItems)
-          .values({
-            saleId: sale.id,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            unitPriceCents: item.unitPriceCents,
-            unitPriceUsdCents,
-            lineTotalUsdCents,
-            cogsCents: lineCogs,
-            shortfall,
-            position: index + 1,
-          })
-          .returning({ id: saleItems.id });
-
-        if (line && item.serials.length > 0) {
-          await tx
-            .insert(saleItemSerials)
-            .values(item.serials.map((serial) => ({ saleItemId: line.id, serial })));
-        }
-
-        grossCents += lineTotalCents;
-        grossUsdCents += lineTotalUsdCents;
-        cogsCents += lineCogs;
-        shortfallTotal += shortfall;
+          memberId: ctx.member.id,
+          item,
+          bundle: item.bundleId ? bundleMap.get(item.bundleId) : undefined,
+          confirm: input.confirm,
+          position: index + 1,
+        });
+        grossCents += line.totalCents;
+        grossUsdCents += line.totalUsdCents;
+        cogsCents += line.cogsCents;
+        shortfallTotal += line.shortfall;
       }
 
       // The discount is subtracted from the document, never from the lines:
@@ -405,14 +529,15 @@ export const updateSale = writeAction
           'Money has already been recorded against this sale. Void it and record the correction instead.',
         );
       }
-      await assertSellableVariants(
-        tx,
-        input.items.map((item) => item.variantId),
-      );
-      await lockSaleVariants(
-        tx,
-        input.items.map((item) => item.variantId),
-      );
+      const bundleMap = await resolveSaleBundles(tx, input.items);
+      const sellableIds = input.items.flatMap((item) => {
+        const bundle = item.bundleId ? bundleMap.get(item.bundleId) : undefined;
+        return bundle
+          ? bundle.components.map((component) => component.variantId)
+          : [item.variantId];
+      });
+      await assertSellableVariants(tx, sellableIds);
+      await lockSaleVariants(tx, sellableIds);
       await clearDocumentPostings(tx, 'sale', input.id);
       await tx.delete(saleItems).where(eq(saleItems.saleId, input.id));
 
@@ -422,56 +547,22 @@ export const updateSale = writeAction
       let shortfallTotal = 0;
 
       for (const [index, item] of input.items.entries()) {
-        const lineTotalCents = item.unitPriceCents * item.quantity;
-        const lineTotalUsdCents = normaliseToUsd(lineTotalCents, input.currency, rateMicros);
-        const unitPriceUsdCents = normaliseToUsd(
-          item.unitPriceCents,
-          input.currency,
+        const line = await createSaleLine(tx, {
+          saleId: input.id,
+          number: sale.number,
+          soldAt: input.soldAt,
+          currency: input.currency,
           rateMicros,
-        );
-
-        let lineCogs = 0;
-        let shortfall = 0;
-
-        if (input.confirm) {
-          const consumed = await consumeStockFor(tx, {
-            variantId: item.variantId,
-            quantity: item.quantity,
-            sourceKind: 'sale',
-            sourceId: input.id,
-            occurredAt: input.soldAt,
-            memberId: ctx.member.id,
-            note: `${sale.number} at weighted-average landed cost.`,
-          });
-          lineCogs = consumed.cogsCents;
-          shortfall = consumed.shortfall;
-        }
-
-        const [line] = await tx
-          .insert(saleItems)
-          .values({
-            saleId: input.id,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            unitPriceCents: item.unitPriceCents,
-            unitPriceUsdCents,
-            lineTotalUsdCents,
-            cogsCents: lineCogs,
-            shortfall,
-            position: index + 1,
-          })
-          .returning({ id: saleItems.id });
-
-        if (line && item.serials.length > 0) {
-          await tx
-            .insert(saleItemSerials)
-            .values(item.serials.map((serial) => ({ saleItemId: line.id, serial })));
-        }
-
-        grossCents += lineTotalCents;
-        grossUsdCents += lineTotalUsdCents;
-        cogsCents += lineCogs;
-        shortfallTotal += shortfall;
+          memberId: ctx.member.id,
+          item,
+          bundle: item.bundleId ? bundleMap.get(item.bundleId) : undefined,
+          confirm: input.confirm,
+          position: index + 1,
+        });
+        grossCents += line.totalCents;
+        grossUsdCents += line.totalUsdCents;
+        cogsCents += line.cogsCents;
+        shortfallTotal += line.shortfall;
       }
 
       const discountUsdCents = normaliseToUsd(input.discountCents, input.currency, rateMicros);
@@ -564,23 +655,81 @@ export const confirmSale = writeAction
       if (sale.status !== 'draft') throw new ActionError('Only a draft can be confirmed.');
 
       const items = await tx.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      if (items.length === 0) {
+        throw new ActionError('Add at least one item before confirming this sale.');
+      }
+      const componentRows = await tx
+        .select()
+        .from(saleItemComponents)
+        .where(
+          inArray(
+            saleItemComponents.saleItemId,
+            items.map((item) => item.id),
+          ),
+        );
+      const componentsByLine = new Map<string, typeof componentRows>();
+      for (const component of componentRows)
+        componentsByLine.set(component.saleItemId, [
+          ...(componentsByLine.get(component.saleItemId) ?? []),
+          component,
+        ]);
       await lockSaleVariants(
         tx,
-        items.map((item) => item.variantId),
+        items.flatMap(
+          (item) =>
+            componentsByLine.get(item.id)?.map((component) => component.variantId) ?? [
+              item.variantId,
+            ],
+        ),
       );
 
       let cogsCents = 0;
 
       for (const item of items) {
-        const consumed = await consumeStockFor(tx, {
-          variantId: item.variantId,
-          quantity: item.quantity,
-          sourceKind: 'sale',
-          sourceId: sale.id,
-          occurredAt: sale.soldAt,
-          memberId: ctx.member.id,
-          note: `${sale.number} at weighted-average landed cost.`,
-        });
+        const components = componentsByLine.get(item.id);
+        const consumedRows: {
+          component: NonNullable<typeof components>[number];
+          consumed: { cogsCents: Cents; shortfall: number };
+        }[] = [];
+        if (components?.length) {
+          for (const component of components) {
+            consumedRows.push({
+              component,
+              consumed: await consumeStockFor(tx, {
+                variantId: component.variantId,
+                quantity: component.quantity,
+                sourceKind: 'sale',
+                sourceId: sale.id,
+                occurredAt: sale.soldAt,
+                memberId: ctx.member.id,
+                note: `${sale.number} · ${item.bundleSku ?? 'bundle'} at weighted-average landed cost.`,
+              }),
+            });
+          }
+        }
+        const consumed = consumedRows.length
+          ? {
+              cogsCents: consumedRows.reduce((sum, row) => sum + row.consumed.cogsCents, 0),
+              shortfall: consumedRows.reduce((sum, row) => sum + row.consumed.shortfall, 0),
+            }
+          : await consumeStockFor(tx, {
+              variantId: item.variantId,
+              quantity: item.quantity,
+              sourceKind: 'sale',
+              sourceId: sale.id,
+              occurredAt: sale.soldAt,
+              memberId: ctx.member.id,
+              note: `${sale.number} at weighted-average landed cost.`,
+            });
+
+        if (consumedRows.length) {
+          for (const row of consumedRows) {
+            await tx
+              .update(saleItemComponents)
+              .set({ cogsCents: row.consumed.cogsCents })
+              .where(eq(saleItemComponents.id, row.component.id));
+          }
+        }
 
         await tx
           .update(saleItems)
@@ -784,6 +933,18 @@ export const voidSale = writeAction
         .update(saleItems)
         .set({ cogsCents: 0, shortfall: 0 })
         .where(eq(saleItems.saleId, sale.id));
+      const saleItemIds = (
+        await tx
+          .select({ id: saleItems.id })
+          .from(saleItems)
+          .where(eq(saleItems.saleId, sale.id))
+      ).map((item) => item.id);
+      if (saleItemIds.length > 0) {
+        await tx
+          .update(saleItemComponents)
+          .set({ cogsCents: 0 })
+          .where(inArray(saleItemComponents.saleItemId, saleItemIds));
+      }
 
       await logActivity(tx, {
         memberId: ctx.member.id,
@@ -854,9 +1015,29 @@ export const returnSaleItems = writeAction
         );
 
       const byId = new Map(items.map((item) => [item.id, item]));
+      const componentRows = await tx
+        .select()
+        .from(saleItemComponents)
+        .where(
+          inArray(
+            saleItemComponents.saleItemId,
+            items.map((item) => item.id),
+          ),
+        );
+      const componentsByLine = new Map<string, typeof componentRows>();
+      for (const component of componentRows)
+        componentsByLine.set(component.saleItemId, [
+          ...(componentsByLine.get(component.saleItemId) ?? []),
+          component,
+        ]);
       await lockSaleVariants(
         tx,
-        items.map((item) => item.variantId),
+        items.flatMap(
+          (item) =>
+            componentsByLine.get(item.id)?.map((component) => component.variantId) ?? [
+              item.variantId,
+            ],
+        ),
       );
 
       let creditCents = 0;
@@ -883,27 +1064,51 @@ export const returnSaleItems = writeAction
           item.quantityReturned,
           line.quantity,
         );
-        const restock = returnedPortion(
-          item.cogsCents,
-          item.quantity,
-          item.quantityReturned,
-          line.quantity,
-        );
-
-        // A return and a sale/receipt touching the same variant must share the
-        // same row lock, even when the return itself does not need a valuation.
-        await lockValuation(tx, item.variantId);
-        await postStockMovement(tx, {
-          variantId: item.variantId,
-          kind: 'return',
-          quantity: line.quantity,
-          valueCents: restock,
-          sourceKind: 'sale',
-          sourceId: sale.id,
-          occurredAt: returnedAt,
-          note: `Returned from ${sale.number}.`,
-          memberId: ctx.member.id,
-        });
+        const components = componentsByLine.get(item.id);
+        let restockedLine = 0;
+        if (components?.length) {
+          for (const component of components) {
+            const restock = returnedPortion(
+              component.cogsCents,
+              item.quantity,
+              item.quantityReturned,
+              line.quantity,
+            );
+            await lockValuation(tx, component.variantId);
+            await postStockMovement(tx, {
+              variantId: component.variantId,
+              kind: 'return',
+              quantity: line.quantity * component.quantityPerBundle,
+              valueCents: restock,
+              sourceKind: 'sale',
+              sourceId: sale.id,
+              occurredAt: returnedAt,
+              note: `Returned from ${sale.number} · ${item.bundleSku ?? 'bundle'}.`,
+              memberId: ctx.member.id,
+            });
+            restockedLine += restock;
+          }
+        } else {
+          const restock = returnedPortion(
+            item.cogsCents,
+            item.quantity,
+            item.quantityReturned,
+            line.quantity,
+          );
+          await lockValuation(tx, item.variantId);
+          await postStockMovement(tx, {
+            variantId: item.variantId,
+            kind: 'return',
+            quantity: line.quantity,
+            valueCents: restock,
+            sourceKind: 'sale',
+            sourceId: sale.id,
+            occurredAt: returnedAt,
+            note: `Returned from ${sale.number}.`,
+            memberId: ctx.member.id,
+          });
+          restockedLine = restock;
+        }
 
         await tx
           .update(saleItems)
@@ -911,7 +1116,7 @@ export const returnSaleItems = writeAction
           .where(eq(saleItems.id, item.id));
 
         creditCents += refund;
-        restockedCents += restock;
+        restockedCents += restockedLine;
         units += line.quantity;
       }
 

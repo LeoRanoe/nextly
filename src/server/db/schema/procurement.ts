@@ -85,6 +85,8 @@ export const purchaseOrderItems = pgTable(
     subtotalCents: bigint({ mode: 'number' }).notNull().default(0),
     /** This line's pro-rata share of the order's overhead. */
     overheadCents: bigint({ mode: 'number' }).notNull().default(0),
+    /** Shipping and shipping-tax share; value-based fallback is used when a weight is missing. */
+    shippingOverheadCents: bigint({ mode: 'number' }).notNull().default(0),
     /** subtotalCents + overheadCents. The real cost of this line. */
     landedCostCents: bigint({ mode: 'number' }).notNull().default(0),
 

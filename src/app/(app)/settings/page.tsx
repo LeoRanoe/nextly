@@ -18,6 +18,7 @@ import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatDate, formatRelative, humanise } from '@/lib/format';
 import { formatRate } from '@/lib/fx';
+import { formatMoney } from '@/lib/money';
 import { getSettings, listMembers, listRates } from '@/server/queries/reference';
 
 export const metadata: Metadata = { title: 'Settings' };
@@ -241,6 +242,22 @@ async function BusinessSettings() {
       <Row label="Books currency" value={settings.baseCurrency} />
       <Row label="Display currency" value={settings.displayCurrency} />
       <Row label="Low stock at" value={`${settings.lowStockThreshold} units or fewer`} />
+      <Row
+        label="Weekly buying budget"
+        value={
+          settings.weeklyPurchaseBudgetCents === null
+            ? 'No limit'
+            : formatMoney(settings.weeklyPurchaseBudgetCents)
+        }
+      />
+      <Row
+        label="Reorder policy"
+        value={`${settings.reviewHorizonDays}d review · ${settings.safetyStockDays}d safety · ${settings.defaultSupplierLeadTimeDays}d default lead time`}
+      />
+      <Row
+        label="Bundle pricing"
+        value={`${settings.targetBundleMarginBp / 100}% margin · ${settings.defaultBundleDiscountBp / 100}% discount`}
+      />
     </dl>
   );
 }
@@ -269,6 +286,12 @@ async function SettingsAction() {
         lowStockThreshold: settings?.lowStockThreshold ?? 5,
         quoteValidityDays: settings?.quoteValidityDays ?? 14,
         defaultPaymentDays: settings?.defaultPaymentDays ?? 14,
+        weeklyPurchaseBudgetCents: settings?.weeklyPurchaseBudgetCents ?? null,
+        reviewHorizonDays: settings?.reviewHorizonDays ?? 14,
+        safetyStockDays: settings?.safetyStockDays ?? 7,
+        defaultSupplierLeadTimeDays: settings?.defaultSupplierLeadTimeDays ?? 28,
+        targetBundleMarginBp: settings?.targetBundleMarginBp ?? 3000,
+        defaultBundleDiscountBp: settings?.defaultBundleDiscountBp ?? 500,
         legalName: settings?.legalName ?? '',
         addressLine: settings?.addressLine ?? '',
         city: settings?.city ?? '',

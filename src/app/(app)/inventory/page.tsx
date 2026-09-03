@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { StockAdjustSheet } from '@/components/forms/finance-sheets';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ export default function InventoryPage({
       <PageHeader
         title="Inventory"
         description="Stock on hand is the sum of the movement ledger, never a number anyone edits. Value is weighted-average landed cost, so it includes the freight and fees paid to get each unit here."
+        action={<ExportCsvLink entity="inventory" searchParams={searchParams} />}
       />
       <Surface className="overflow-hidden">
         <ListToolbar>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ProductActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -57,9 +58,12 @@ export default function ProductsPage({
         title="Products"
         description="A product is what a customer recognises; a variant is what is actually stocked and sold. Publishing a product is what will put it on the public catalog, from these same rows."
         action={
-          <Button asChild variant="primary">
-            <Link href="/products/new">Add product</Link>
-          </Button>
+          <>
+            <ExportCsvLink entity="products" searchParams={searchParams} />
+            <Button asChild variant="primary">
+              <Link href="/products/new">Add product</Link>
+            </Button>
+          </>
         }
       />
       <Surface className="overflow-hidden">

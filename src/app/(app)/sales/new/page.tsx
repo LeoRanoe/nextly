@@ -7,7 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RATE_SCALE } from '@/lib/fx';
 import { getCurrentRate } from '@/server/queries/overview';
-import { listCustomerOptions, listVariantOptions } from '@/server/queries/pickers';
+import {
+  listBundleOptions,
+  listCustomerOptions,
+  listVariantOptions,
+} from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Record a sale' };
 
@@ -31,9 +35,10 @@ export default function NewSalePage() {
 }
 
 async function Loader() {
-  const [variants, customers, rate] = await Promise.all([
+  const [variants, customers, bundles, rate] = await Promise.all([
     listVariantOptions(),
     listCustomerOptions(),
+    listBundleOptions(),
     getCurrentRate(),
   ]);
 
@@ -42,6 +47,7 @@ async function Loader() {
       variants={variants}
       customers={customers}
       rateMicros={rate?.rateMicros ?? RATE_SCALE}
+      bundles={bundles}
     />
   );
 }

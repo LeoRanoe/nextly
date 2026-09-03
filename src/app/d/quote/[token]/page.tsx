@@ -6,7 +6,10 @@ import { formatMoney } from '@/lib/money';
 import { getPublicQuote } from '@/server/queries/quotes';
 import { getSettings } from '@/server/queries/reference';
 
-export const metadata: Metadata = { title: 'Quote / Offerte' };
+export const metadata: Metadata = {
+  title: 'Quote / Offerte',
+  robots: { index: false, follow: false },
+};
 export const instant = false;
 
 export default async function PublicQuotePage({
@@ -25,6 +28,7 @@ export default async function PublicQuotePage({
         <header className="flex items-start justify-between gap-6 border-b border-line pb-6">
           <div>
             {settings?.logoUrl ? (
+              // biome-ignore lint/performance/noImgElement: this print view keeps the stored logo self-contained.
               <img src={settings.logoUrl} alt="" className="mb-3 h-10 w-auto object-contain" />
             ) : null}
             <p className="text-[15px] font-semibold">{settings?.businessName ?? 'Nextly'}</p>

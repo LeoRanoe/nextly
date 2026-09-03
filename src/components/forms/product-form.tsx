@@ -30,6 +30,7 @@ type VariantRow = {
   listPrice: string;
   referenceCost: string;
   weightGrams: string;
+  isStrategic: boolean;
   isActive: boolean;
 };
 
@@ -58,6 +59,7 @@ const blankVariant = (): VariantRow => ({
   listPrice: '',
   referenceCost: '',
   weightGrams: '0',
+  isStrategic: false,
   isActive: true,
 });
 
@@ -182,6 +184,7 @@ export function ProductForm({
             listPriceCents: variant.listPrice || '0',
             referenceCostCents: variant.referenceCost || '0',
             weightGrams: Number(variant.weightGrams || 0),
+            isStrategic: variant.isStrategic,
             isActive: variant.isActive,
           })),
         } as Parameters<typeof execute>[0]);
@@ -298,7 +301,7 @@ export function ProductForm({
             {values.variants.map((variant, index) => (
               <div
                 key={variant.key}
-                className="grid gap-2 p-4 sm:grid-cols-[1fr_1fr_110px_110px_100px_32px]"
+                className="grid gap-2 p-4 sm:grid-cols-[1fr_1fr_110px_110px_100px_120px_32px]"
               >
                 <Field label={index === 0 ? 'Option' : ''} htmlFor={`vname-${variant.key}`}>
                   <Input
@@ -363,6 +366,17 @@ export function ProductForm({
                     }
                   />
                 </Field>
+                <label className="flex items-end gap-2 pb-1 text-[11px] text-ink-3">
+                  <input
+                    type="checkbox"
+                    checked={variant.isStrategic}
+                    onChange={(event) =>
+                      setVariant(variant.key, { isStrategic: event.target.checked })
+                    }
+                    className="mt-0.5 size-4 shrink-0 accent-[var(--nx-accent)]"
+                  />
+                  Strategic stock
+                </label>
                 <div className="flex items-end pb-0.5">
                   <Button
                     type="button"

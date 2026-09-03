@@ -100,6 +100,7 @@ export const variantSchema = z.object({
   listPriceCents: moneyInput,
   referenceCostCents: moneyInput,
   weightGrams: z.coerce.number().int().min(0).max(10_000_000).default(0),
+  isStrategic: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
 
@@ -152,6 +153,19 @@ export const supplierSchema = z.object({
     .optional(),
   notes: optionalText,
   leadTimeDays: z.coerce.number().int().min(1).max(365).default(28),
+});
+
+export const bundleComponentSchema = z.object({
+  variantId: uuid,
+  quantity,
+});
+
+export const bundleSchema = z.object({
+  sku: z.string().trim().min(1, 'Required').max(64),
+  name: shortText,
+  description: optionalText,
+  priceCents: moneyInput,
+  components: z.array(bundleComponentSchema).min(1, 'Add at least one component'),
 });
 
 export const customerSchema = z.object({
@@ -249,6 +263,7 @@ const serialList = z
 export const saleItemSchema = z
   .object({
     variantId: uuid,
+    bundleId: optionalUuid,
     quantity,
     unitPriceCents: positiveMoney,
     serials: serialList,
@@ -391,6 +406,15 @@ export const settingsSchema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).max(10_000),
   quoteValidityDays: z.coerce.number().int().min(1).max(365),
   defaultPaymentDays: z.coerce.number().int().min(0).max(365),
+  weeklyPurchaseBudgetCents: z
+    .union([moneyInput, z.literal('')])
+    .optional()
+    .transform((value) => (value === '' || value === undefined ? null : value)),
+  reviewHorizonDays: z.coerce.number().int().min(1).max(90),
+  safetyStockDays: z.coerce.number().int().min(0).max(365),
+  defaultSupplierLeadTimeDays: z.coerce.number().int().min(1).max(365),
+  targetBundleMarginBp: z.coerce.number().int().min(0).max(9900),
+  defaultBundleDiscountBp: z.coerce.number().int().min(0).max(9900),
   // Business identity (F-3). Optional free text — an invoice prints whatever
   // is filled in. `whatsapp` is stored as typed; the click-to-chat link strips
   // non-digits at render time so a spaced or dashed number still works.

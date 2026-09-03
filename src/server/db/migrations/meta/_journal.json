@@ -162,6 +162,13 @@
       "when": 1788394600000,
       "tag": "0022_planning_and_inventory_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788394700000,
+      "tag": "0023_bundle_sales_and_shipping",
+      "breakpoints": true
     }
   ]
 }

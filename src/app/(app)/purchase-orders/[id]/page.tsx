@@ -130,6 +130,11 @@ async function Loader({
     order.shippingCents +
     order.shippingTaxCents;
   const unitCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const totalWeightGrams = order.items.reduce(
+    (sum, item) => sum + item.quantity * item.weightGrams,
+    0,
+  );
+  const missingWeights = order.items.filter((item) => item.weightGrams <= 0).length;
   const landedTotal = order.items.reduce((sum, item) => sum + item.landedCostCents, 0);
   const canReceive = order.status === 'ordered' || order.status === 'shipped';
 
@@ -205,6 +210,10 @@ async function Loader({
           <Field label="Expected" value={formatDate(order.expectedAt)} />
           <Field label="Received" value={formatDate(order.receivedAt)} />
           <Field label="Rate" value={`1 USD = ${formatRate(order.fxRateMicros, 2)} SRD`} />
+          <Field
+            label="Shipment weight"
+            value={totalWeightGrams > 0 ? `${totalWeightGrams.toLocaleString()} g` : 'Missing'}
+          />
           {order.status === 'received' ? (
             <>
               <Field label="Landed" value={formatMoney(landedTotal, order.currency)} />
@@ -226,7 +235,10 @@ async function Loader({
 
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
         <Surface>
-          <SurfaceHeader title="Overhead" hint="Allocated across lines pro-rata by value" />
+          <SurfaceHeader
+            title="Overhead"
+            hint="Freight by weight when complete; other costs by value"
+          />
           <dl className="divide-y divide-line-subtle">
             <Row label="Tax" value={order.taxCents} />
             <Row label="Card fee" value={order.cardFeeCents} />
@@ -240,6 +252,13 @@ async function Loader({
           </dl>
         </Surface>
 
+        {missingWeights > 0 ? (
+          <p className="rounded-control border border-warning/40 bg-warning-muted px-3 py-2 text-[12px] text-warning">
+            {missingWeights} line{missingWeights === 1 ? '' : 's'} has no weight. Shipping
+            allocation fell back to value allocation.
+          </p>
+        ) : null}
+
         <Surface className="overflow-hidden">
           <SurfaceHeader title="Items" />
           <div className="hidden lg:block">
@@ -249,6 +268,7 @@ async function Loader({
                   <TR className="hover:bg-transparent">
                     <TH>Product</TH>
                     <TH>SKU</TH>
+                    <TH numeric>Weight (g)</TH>
                     <TH numeric>Ordered</TH>
                     <TH numeric>Received</TH>
                     <TH numeric>Subtotal</TH>
@@ -266,6 +286,11 @@ async function Loader({
                       </TD>
                       <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
                         {item.sku}
+                      </TD>
+                      <TD numeric className="text-ink-3">
+                        {item.weightGrams > 0
+                          ? (item.quantity * item.weightGrams).toLocaleString()
+                          : '—'}
                       </TD>
                       <TD numeric className="text-ink-3">
                         {item.quantity}
@@ -292,7 +317,7 @@ async function Loader({
                 </TBody>
                 <tfoot className="border-line-subtle border-t bg-inset/60">
                   <tr>
-                    <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={4}>
+                    <td className="h-9 px-3 text-[12px] text-ink-3" colSpan={5}>
                       {order.receivedAt
                         ? 'Foots exactly to the order total'
                         : 'Not yet received — overhead not allocated'}
@@ -327,6 +352,11 @@ async function Loader({
                 </MobileRowHeader>
                 <MobileRowMeta>
                   <MobileRowMetaItem label="Ordered">{item.quantity}</MobileRowMetaItem>
+                  <MobileRowMetaItem label="Weight">
+                    {item.weightGrams > 0
+                      ? `${(item.quantity * item.weightGrams).toLocaleString()} g`
+                      : 'Missing'}
+                  </MobileRowMetaItem>
                   <MobileRowMetaItem label="Received">
                     {item.quantityReceived}
                   </MobileRowMetaItem>

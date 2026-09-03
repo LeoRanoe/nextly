@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { QuoteRequestActions } from '@/components/forms/quote-request-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { ExportCsvLink } from '@/components/patterns/export-csv-link';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -65,6 +66,7 @@ export default function QuotesPage({
       <PageHeader
         title="Quote requests"
         description="Messages the storefront received from visitors asking what something costs. Nothing here touches the books — a request becomes real only when you convert it into a draft sale."
+        action={<ExportCsvLink entity="quote-requests" searchParams={searchParams} />}
       />
       <Surface className="overflow-hidden">
         <ListToolbar>

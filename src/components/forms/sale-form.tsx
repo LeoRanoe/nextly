@@ -16,7 +16,7 @@ import { fromBase, type RateMicros, toBase } from '@/lib/fx';
 import { formatMoney, mulDivRound, parseMoney, toDecimalString } from '@/lib/money';
 import { createCustomer } from '@/server/actions/reference';
 import { createSale, updateSale } from '@/server/actions/sales';
-import type { Option, VariantOption } from '@/server/queries/pickers';
+import type { BundleOption, Option, VariantOption } from '@/server/queries/pickers';
 
 /**
  * Recording a sale.
@@ -31,6 +31,7 @@ import type { Option, VariantOption } from '@/server/queries/pickers';
 type Line = {
   key: string;
   variantId: string | null;
+  bundleId: string | null;
   quantity: string;
   unitPrice: string;
   /** F-6: raw textarea contents — one serial per line, parsed on submit. */
@@ -40,6 +41,7 @@ type Line = {
 const newLine = (): Line => ({
   key: crypto.randomUUID(),
   variantId: null,
+  bundleId: null,
   quantity: '1',
   unitPrice: '',
   serials: '',
@@ -64,18 +66,26 @@ export type SaleFormValues = {
   notes: string;
   discount: string;
   discountReason: string;
-  items: { variantId: string; quantity: string; unitPrice: string; serials: string }[];
+  items: {
+    variantId: string;
+    bundleId?: string | null;
+    quantity: string;
+    unitPrice: string;
+    serials: string;
+  }[];
 };
 
 export function SaleForm({
   variants,
   customers,
   rateMicros,
+  bundles = [],
   initial,
 }: {
   variants: VariantOption[];
   customers: Option[];
   rateMicros: RateMicros;
+  bundles?: BundleOption[];
   /** Omit for a blank form. Editing is only ever offered for a draft — see
    *  updateSale, which refuses anything else. */
   initial?: SaleFormValues;
@@ -101,6 +111,7 @@ export function SaleForm({
       initial?.items.map((item) => ({
         key: crypto.randomUUID(),
         variantId: item.variantId,
+        bundleId: item.bundleId ?? null,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         serials: item.serials,
@@ -111,10 +122,14 @@ export function SaleForm({
     () => new Map(variants.map((variant) => [variant.id, variant])),
     [variants],
   );
+  const bundleById = useMemo(
+    () => new Map(bundles.map((bundle) => [bundle.id, bundle])),
+    [bundles],
+  );
 
   const variantOptions: ComboboxOption[] = useMemo(
-    () =>
-      variants.map((variant) => ({
+    () => [
+      ...variants.map((variant) => ({
         value: variant.id,
         label: `${variant.productName} · ${variant.variantName}`,
         hint: variant.sku,
@@ -126,7 +141,14 @@ export function SaleForm({
               : 'none left',
         disabled: !variant.isActive,
       })),
-    [variants],
+      ...bundles.map((bundle) => ({
+        value: `bundle:${bundle.id}`,
+        label: `Bundle · ${bundle.name}`,
+        hint: bundle.sku,
+        meta: `${bundle.availability} available`,
+      })),
+    ],
+    [variants, bundles],
   );
 
   const customerOptions: ComboboxOption[] = customerList.map((customer) => ({
@@ -162,7 +184,8 @@ export function SaleForm({
 
     for (const line of lines) {
       const variant = line.variantId ? byId.get(line.variantId) : undefined;
-      if (!variant) continue;
+      const bundle = line.bundleId ? bundleById.get(line.bundleId) : undefined;
+      if (!variant && !bundle) continue;
 
       const quantity = Number.parseInt(line.quantity, 10);
       if (!Number.isFinite(quantity) || quantity <= 0) continue;
@@ -178,22 +201,31 @@ export function SaleForm({
       gross += currency === 'SRD' ? toBase(lineRevenue, rateMicros) : lineRevenue;
       units += quantity;
 
-      const pos = position.get(variant.id);
-      if (pos) {
-        const take = Math.min(quantity, Math.max(pos.qty, 0));
+      const components =
+        bundle?.components ??
+        (variant
+          ? [
+              {
+                variantId: variant.id,
+                quantity: 1,
+                productName: variant.productName,
+                variantName: variant.variantName,
+              },
+            ]
+          : []);
+      for (const component of components) {
+        const pos = position.get(component.variantId);
+        if (!pos) continue;
+        const needed = quantity * component.quantity;
+        const take = Math.min(needed, Math.max(pos.qty, 0));
         const cost = take === pos.qty ? pos.value : mulDivRound(pos.value, take, pos.qty);
         cogs += cost;
-        position.set(variant.id, {
-          qty: pos.qty - take,
-          value: pos.value - cost,
-        });
-
-        if (quantity > take) {
+        position.set(component.variantId, { qty: pos.qty - needed, value: pos.value - cost });
+        if (needed > take)
           shortfalls.push({
-            label: `${variant.productName} · ${variant.variantName}`,
-            short: quantity - take,
+            label: bundle?.name ?? `${component.productName} · ${component.variantName}`,
+            short: needed - take,
           });
-        }
       }
     }
 
@@ -218,7 +250,7 @@ export function SaleForm({
       units,
       shortfalls,
     };
-  }, [lines, byId, currency, rateMicros, variants, discount]);
+  }, [lines, byId, bundleById, currency, rateMicros, variants, discount]);
 
   /** Native-currency total: sum of line totals less the discount, both in the
    *  sale's currency. `paidNowCents` is a payment on this number, not on the
@@ -312,6 +344,7 @@ export function SaleForm({
       .filter((line) => line.variantId)
       .map((line) => ({
         variantId: line.variantId as string,
+        bundleId: line.bundleId,
         quantity: line.quantity,
         unitPriceCents: line.unitPrice || '0',
         serials: parseSerials(line.serials),
@@ -421,8 +454,13 @@ export function SaleForm({
           <div className="divide-y divide-line-subtle">
             {lines.map((line, index) => {
               const variant = line.variantId ? byId.get(line.variantId) : undefined;
+              const bundle = line.bundleId ? bundleById.get(line.bundleId) : undefined;
               const quantity = Number.parseInt(line.quantity, 10) || 0;
-              const oversold = variant ? quantity > Math.max(variant.onHand, 0) : false;
+              const oversold = bundle
+                ? quantity > bundle.availability
+                : variant
+                  ? quantity > Math.max(variant.onHand, 0)
+                  : false;
 
               let unitPrice = 0;
               try {
@@ -448,8 +486,30 @@ export function SaleForm({
                     <Combobox
                       id={`variant-${line.key}`}
                       options={variantOptions}
-                      value={line.variantId}
+                      value={line.bundleId ? `bundle:${line.bundleId}` : line.variantId}
                       onChange={(value) => {
+                        if (value?.startsWith('bundle:')) {
+                          const pickedBundle = bundleById.get(value.slice(7));
+                          const first = pickedBundle?.components[0];
+                          if (!pickedBundle || !first) return;
+                          setLines((current) =>
+                            current.map((candidate) =>
+                              candidate.key === line.key
+                                ? {
+                                    ...candidate,
+                                    bundleId: pickedBundle.id,
+                                    variantId: first.variantId,
+                                    unitPrice: toDecimalString(
+                                      currency === 'SRD'
+                                        ? fromBase(pickedBundle.priceCents, rateMicros)
+                                        : pickedBundle.priceCents,
+                                    ),
+                                  }
+                                : candidate,
+                            ),
+                          );
+                          return;
+                        }
                         const picked = value ? byId.get(value) : undefined;
                         setLines((current) =>
                           current.map((candidate) =>
@@ -457,6 +517,7 @@ export function SaleForm({
                               ? {
                                   ...candidate,
                                   variantId: value,
+                                  bundleId: null,
                                   unitPrice: picked
                                     ? toDecimalString(
                                         currency === 'SRD'
@@ -469,7 +530,7 @@ export function SaleForm({
                           ),
                         );
                       }}
-                      placeholder="Choose a product"
+                      placeholder="Choose a product or bundle"
                       searchPlaceholder="Search by name or SKU"
                     />
                   </Field>
@@ -566,11 +627,12 @@ export function SaleForm({
                     </Field>
                   ) : null}
 
-                  {oversold && variant ? (
+                  {oversold ? (
                     <p className="flex items-center gap-1.5 text-[11px] text-warning sm:col-span-6">
                       <AlertTriangle className="size-3" />
-                      Only {Math.max(variant.onHand, 0)} on hand. The sale will still record,
-                      and the shortfall will be flagged.
+                      {bundle
+                        ? `Only ${bundle.availability} complete bundle${bundle.availability === 1 ? '' : 's'} available. The sale will still record, and component shortfalls will be flagged.`
+                        : `Only ${Math.max(variant?.onHand ?? 0, 0)} on hand. The sale will still record, and the shortfall will be flagged.`}
                     </p>
                   ) : null}
                 </div>
