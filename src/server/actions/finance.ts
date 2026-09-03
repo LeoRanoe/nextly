@@ -11,7 +11,14 @@ import {
   uuid,
 } from '@/lib/schemas';
 import { db } from '../db/client';
-import { expenses, fxRates, ledgerEntries, settings } from '../db/schema';
+import {
+  expenses,
+  fxRates,
+  ledgerEntries,
+  members,
+  reconciliationExceptions,
+  settings,
+} from '../db/schema';
 import { clearDocumentPostings, logActivity, postLedgerEntry } from '../services/posting';
 import { rateForRecord, rateOn } from '../services/rates';
 import { ActionError, ownerAction, writeAction } from './client';
@@ -197,6 +204,17 @@ export const createLedgerEntry = writeAction
   .inputSchema(ledgerEntrySchema)
   .action(async ({ parsedInput: input, ctx }) => {
     await db.transaction(async (tx) => {
+      if (input.category === 'owner_contribution' || input.category === 'owner_draw') {
+        const [principal] = await tx
+          .select({ isPrincipal: members.isPrincipal })
+          .from(members)
+          .where(eq(members.id, input.memberId ?? ''))
+          .limit(1);
+        if (!principal?.isPrincipal) {
+          throw new ActionError('Owner contributions and draws must name an active principal.');
+        }
+      }
+
       const rateMicros =
         input.currency === 'SRD'
           ? await rateOn(input.occurredAt, tx)
@@ -246,6 +264,14 @@ export const reverseLedgerEntry = writeAction
 
       if (!entry) throw new ActionError('That entry no longer exists.');
 
+      const [existingReversal] = await tx
+        .select({ id: ledgerEntries.id })
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.reversalOfId, entry.id))
+        .limit(1);
+      if (existingReversal)
+        throw new ActionError('That ledger entry has already been reversed.');
+
       await postLedgerEntry(tx, {
         direction: entry.direction === 'in' ? 'out' : 'in',
         category: entry.category,
@@ -257,6 +283,7 @@ export const reverseLedgerEntry = writeAction
         occurredAt: new Date(),
         memberId: ctx.member.id,
         principalId: entry.memberId,
+        reversalOfId: entry.id,
         notes: input.reason,
       });
 
@@ -271,6 +298,27 @@ export const reverseLedgerEntry = writeAction
       return entry.description;
     });
     return { description };
+  });
+
+/** Close a reconciliation note only after the original business evidence has
+ * been reviewed. The exception row remains as the audit record. */
+export const resolveReconciliationException = ownerAction
+  .metadata({ action: 'resolved', entity: 'reconciliation exception' })
+  .inputSchema(z.object({ id: uuid, resolutionNotes: z.string().trim().min(3).max(1_000) }))
+  .action(async ({ parsedInput: input, ctx }) => {
+    const [resolved] = await db
+      .update(reconciliationExceptions)
+      .set({
+        status: 'resolved',
+        resolvedAt: new Date(),
+        resolutionNotes: input.resolutionNotes,
+        resolvedById: ctx.member.id,
+      })
+      .where(eq(reconciliationExceptions.id, input.id))
+      .returning({ id: reconciliationExceptions.id });
+
+    if (!resolved) throw new ActionError('That reconciliation item no longer exists.');
+    return { id: resolved.id };
   });
 
 /**

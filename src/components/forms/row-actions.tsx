@@ -383,6 +383,7 @@ export function RecordPaymentSheet({
   const [method, setMethod] = useState('cash');
   const [receivedAt, setReceivedAt] = useState('');
   const [notes, setNotes] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string>();
   const formId = useId();
 
   let parsed: Cents = 0;
@@ -406,6 +407,7 @@ export function RecordPaymentSheet({
         },
       );
       onOpenChange(false);
+      setIdempotencyKey(undefined);
       router.refresh();
     },
     onError({ error }) {
@@ -439,9 +441,12 @@ export function RecordPaymentSheet({
         id={formId}
         onSubmit={(event) => {
           event.preventDefault();
+          const key = idempotencyKey ?? crypto.randomUUID();
+          setIdempotencyKey(key);
           payAction.execute({
             saleId,
             amountCents: String(parsed),
+            idempotencyKey: key,
             paymentMethod: method as 'cash',
             receivedAt: receivedAt || undefined,
             notes: notes || undefined,
@@ -610,6 +615,7 @@ function SupplierPaymentSheet({
   const [method, setMethod] = useState('card');
   const [paidAt, setPaidAt] = useState('');
   const [notes, setNotes] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string>();
   const formId = useId();
 
   let parsed: Cents = 0;
@@ -630,6 +636,7 @@ function SupplierPaymentSheet({
             : 'That settles the order. Its payments are in the cash ledger.',
       });
       onOpenChange(false);
+      setIdempotencyKey(undefined);
       router.refresh();
     },
     onError({ error }) {
@@ -663,9 +670,12 @@ function SupplierPaymentSheet({
         id={formId}
         onSubmit={(event) => {
           event.preventDefault();
+          const key = idempotencyKey ?? crypto.randomUUID();
+          setIdempotencyKey(key);
           payAction.execute({
             orderId,
             amountCents: String(parsed),
+            idempotencyKey: key,
             paymentMethod: method as 'cash',
             paidAt: paidAt || undefined,
             notes: notes || undefined,

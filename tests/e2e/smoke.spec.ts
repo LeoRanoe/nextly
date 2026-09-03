@@ -9,11 +9,9 @@ import { expect, test } from '@playwright/test';
  * allocation genuinely ran on receipt, which is the whole reason this
  * product exists (see docs/00-product/overview.md's PO-001 story).
  *
- * Runs against whatever database `E2E_BASE_URL` (or the local dev server)
- * is wired to — see docs/05-operations/environments.md. That is
- * deliberately the shared one, not a disposable copy: the ledger is
- * append-only and a sale is a numbered document, so tearing anything down
- * would mean deleting exactly the records the system exists to preserve.
+ * Runs only against an isolated staging database. The guard below deliberately
+ * prevents this mutating workflow from using production or the shared live
+ * database.
  * Three things make that safe:
  *   - every identifier is unique per run (`E2E-${Date.now()}`), so a retry
  *     never collides with a previous run or with itself;
@@ -28,8 +26,10 @@ import { expect, test } from '@playwright/test';
  */
 
 test.skip(
-  !process.env.E2E_EMAIL || !process.env.E2E_PASSWORD,
-  'e2e needs E2E_EMAIL / E2E_PASSWORD for a database this app is wired to — see docs/05-operations/environments.md',
+  !process.env.E2E_EMAIL ||
+    !process.env.E2E_PASSWORD ||
+    process.env.E2E_ISOLATED_STAGING !== '1',
+  'e2e mutations require E2E_EMAIL, E2E_PASSWORD, and an isolated staging database (E2E_ISOLATED_STAGING=1)',
 );
 
 /** "$1,234.5000" → 1234.5, "1,234" → 1234. Strips everything but digits,

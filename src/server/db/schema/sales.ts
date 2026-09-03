@@ -60,6 +60,7 @@ export const sales = pgTable(
     index('sales_customer_idx').on(t.customerId),
     index('sales_sold_at_idx').on(t.soldAt.desc()),
     index('sales_status_idx').on(t.status),
+    index('sales_created_by_idx').on(t.createdById),
   ],
 );
 
@@ -94,11 +95,49 @@ export const salePayments = pgTable(
     /** Who banked it, for the audit trail. */
     memberId: uuid().references(() => members.id, { onDelete: 'set null' }),
     createdById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    /** Client-generated key makes a retried payment a no-op. */
+    idempotencyKey: uuid(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('sale_payments_sale_idx').on(t.saleId),
     index('sale_payments_received_idx').on(t.receivedAt.desc()),
+    index('sale_payments_member_idx').on(t.memberId),
+    index('sale_payments_created_by_idx').on(t.createdById),
+    uniqueIndex('sale_payments_idempotency_key').on(t.idempotencyKey),
+  ],
+);
+
+/**
+ * A cash refund is explicit and append-only. Returning goods changes stock and
+ * creates a credit due; this row is the separate decision that money actually
+ * left the business. Its ledger entry points to this row, not the sale, so one
+ * return/refund cannot be mistaken for another.
+ */
+export const saleRefunds = pgTable(
+  'sale_refunds',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    saleId: uuid()
+      .notNull()
+      .references(() => sales.id, { onDelete: 'restrict' }),
+    amountCents: bigint({ mode: 'number' }).notNull(),
+    currency: currencyCode().notNull().default('USD'),
+    fxRateMicros: bigint({ mode: 'number' }).notNull().default(1_000_000),
+    method: paymentMethod().notNull().default('cash'),
+    refundedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    reason: text().notNull(),
+    memberId: uuid().references(() => members.id, { onDelete: 'set null' }),
+    createdById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    idempotencyKey: uuid(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('sale_refunds_sale_idx').on(t.saleId),
+    index('sale_refunds_refunded_idx').on(t.refundedAt.desc()),
+    index('sale_refunds_member_idx').on(t.memberId),
+    index('sale_refunds_created_by_idx').on(t.createdById),
+    uniqueIndex('sale_refunds_idempotency_key').on(t.idempotencyKey),
   ],
 );
 

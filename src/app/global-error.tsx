@@ -31,7 +31,9 @@ export default function GlobalError({
         }}
       >
         <div style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}>
-          <p style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>Nextly hit a wall</p>
+          <p style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>
+            Nextly could not load this page
+          </p>
           <p
             style={{
               marginTop: 8,
@@ -40,8 +42,8 @@ export default function GlobalError({
               color: '#9aa7b2',
             }}
           >
-            Something failed before the page could even start. Reloading usually clears it; if
-            it keeps happening, the error has already been logged.
+            Try again once. If it keeps happening, mention the error code to support. The error
+            has been logged.
           </p>
           <button
             type="button"

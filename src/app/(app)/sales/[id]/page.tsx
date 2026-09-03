@@ -2,6 +2,7 @@ import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { RefundSheet } from '@/components/forms/refund-sheet';
 import { ReturnSheet } from '@/components/forms/return-sheet';
 import { SaleActions } from '@/components/forms/row-actions';
 import { SaleForm } from '@/components/forms/sale-form';
@@ -163,6 +164,14 @@ async function Loader({
                 </Button>
               ) : null}
               {sale.status === 'confirmed' ? (
+                <RefundSheet
+                  saleId={sale.id}
+                  number={sale.number}
+                  currency={sale.currency}
+                  refundableCents={sale.refundableCents}
+                />
+              ) : null}
+              {sale.status === 'confirmed' ? (
                 <ReturnSheet
                   saleId={sale.id}
                   number={sale.number}
@@ -198,6 +207,12 @@ async function Loader({
             <>
               <Field label="Total" value={formatMoney(sale.totalCents, sale.currency)} />
               <Field label="Paid" value={formatMoney(sale.paidCents, sale.currency)} />
+              {sale.refundedCents > 0 ? (
+                <Field
+                  label="Refunded"
+                  value={formatMoney(sale.refundedCents, sale.currency)}
+                />
+              ) : null}
               <Field
                 label="Balance"
                 value={balanceCents > 0 ? formatMoney(balanceCents, sale.currency) : 'Settled'}
@@ -408,6 +423,36 @@ async function Loader({
                   </span>
                   <span className="text-[13px] text-positive">
                     {formatMoney(payment.amountCents, sale.currency)}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Surface>
+      ) : null}
+
+      {sale.status === 'confirmed' && sale.refunds.length > 0 ? (
+        <Surface className="overflow-hidden">
+          <SurfaceHeader
+            title="Refunds"
+            hint="Refunds are separate cash-out decisions from returns"
+          />
+          <div className="divide-y divide-line-subtle">
+            {sale.refunds.map((refund) => (
+              <div
+                key={refund.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <span className="min-w-0 truncate text-[13px] text-ink-2">
+                  {humanise(refund.method)}
+                  <span className="text-ink-4"> · {refund.reason}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-[12px] text-ink-4">
+                    {formatDate(refund.refundedAt)}
+                  </span>
+                  <span className="text-[13px] text-negative">
+                    {formatMoney(refund.amountCents, sale.currency)}
                   </span>
                 </span>
               </div>

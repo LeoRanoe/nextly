@@ -5,7 +5,6 @@ import { Suspense } from 'react';
 import { LedgerSheet } from '@/components/forms/ledger-sheet';
 import { LedgerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ExportButton } from '@/components/patterns/export-button';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -79,7 +78,6 @@ export default function LedgerPage({
         <ListToolbar>
           <ListSearch placeholder="Search by description or owner" />
           <ListFilter param="category" label="Category" options={CATEGORY_OPTIONS} />
-          <ExportButton entity="ledger" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={5} widths={['w-20', 'w-40', 'w-16']} />}>
           <LedgerTable searchParams={searchParams} />

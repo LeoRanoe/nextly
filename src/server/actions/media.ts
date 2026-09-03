@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuid } from '@/lib/schemas';
 import { db } from '../db/client';
@@ -113,6 +113,15 @@ export const setPrimaryProductImage = writeAction
   .inputSchema(z.object({ id: uuid, productId: uuid }))
   .action(async ({ parsedInput: input, ctx }) => {
     await db.transaction(async (tx) => {
+      const [image] = await tx
+        .select({ id: productImages.id })
+        .from(productImages)
+        .where(
+          and(eq(productImages.id, input.id), eq(productImages.productId, input.productId)),
+        )
+        .limit(1);
+      if (!image) throw new ActionError('That image does not belong to this product.');
+
       await tx
         .update(productImages)
         .set({ isPrimary: false })
@@ -135,11 +144,34 @@ export const setPrimaryProductImage = writeAction
 export const reorderProductImages = writeAction
   .metadata({ action: 'updated', entity: 'product image' })
   .inputSchema(z.object({ productId: uuid, orderedIds: z.array(uuid).min(1) }))
-  .action(async ({ parsedInput: input }) => {
+  .action(async ({ parsedInput: input, ctx }) => {
     await db.transaction(async (tx) => {
+      if (new Set(input.orderedIds).size !== input.orderedIds.length) {
+        throw new ActionError('An image can only appear once in the new order.');
+      }
+
+      const rows = await tx
+        .select({ id: productImages.id })
+        .from(productImages)
+        .where(eq(productImages.productId, input.productId));
+      const actualIds = new Set(rows.map((row) => row.id));
+      if (
+        actualIds.size !== input.orderedIds.length ||
+        input.orderedIds.some((id) => !actualIds.has(id))
+      ) {
+        throw new ActionError('The image order must contain every image for this product.');
+      }
+
       for (const [index, id] of input.orderedIds.entries()) {
         await tx.update(productImages).set({ position: index }).where(eq(productImages.id, id));
       }
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'reordered product images',
+        entityType: 'product',
+        entityId: input.productId,
+      });
     });
     return { productId: input.productId };
   });

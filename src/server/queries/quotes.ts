@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { and, type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
 import type { QuoteRequestStatus } from '@/lib/schemas';
 import { db } from '../db/client';
@@ -15,7 +15,7 @@ import { maybe, num, text } from './row';
  * answer" is one click rather than a scan.
  */
 
-const STATUSES = ['new', 'contacted', 'converted', 'declined'] as const;
+const STATUSES = ['new', 'contacted', 'converted', 'declined', 'archived'] as const;
 
 export function isQuoteRequestStatus(value: unknown): value is QuoteRequestStatus {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
@@ -86,6 +86,7 @@ export type QuoteRequestRow = {
   id: string;
   name: string;
   contact: string;
+  productId: string | null;
   quantity: number;
   details: string | null;
   status: QuoteRequestStatus;
@@ -114,26 +115,29 @@ export async function listQuoteRequests(
   const perPage = clampPerPage(query.perPage);
   const status = statusParam(query.status);
 
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-  if (query.q) {
-    params.push(`%${query.q}%`);
-    const term = params.length;
-    conditions.push(
-      `(r.name ILIKE $${term} OR r.contact ILIKE $${term} OR r.details ILIKE $${term})`,
-    );
+  const conditions: SQL[] = [];
+  if (!status) {
+    conditions.push(sql`r.status <> 'archived'::quote_request_status`);
+  }
+  if (query.q?.trim()) {
+    const pattern = `%${query.q.trim()}%`;
+    conditions.push(sql`(
+      r.name ILIKE ${pattern}
+      OR r.contact ILIKE ${pattern}
+      OR r.details ILIKE ${pattern}
+    )`);
   }
   if (status) {
-    params.push(status);
-    conditions.push(`r.status = $${params.length}::quote_request_status`);
+    conditions.push(sql`r.status = ${status}::quote_request_status`);
   }
 
-  const where = conditions.length > 0 ? sql.raw(`WHERE ${conditions.join(' AND ')}`) : sql``;
+  const where = conditions.length > 0 ? sql`WHERE ${and(...conditions)}` : sql``;
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT r.id::text AS id,
            r.name,
            r.contact,
+           r.product_id::text AS product_id,
            r.quantity::text,
            r.details,
            r.status::text AS status,
@@ -158,6 +162,7 @@ export async function listQuoteRequests(
       id: text(row.id),
       name: text(row.name),
       contact: text(row.contact),
+      productId: maybe(row.product_id),
       quantity: num(row.quantity, 1),
       details: maybe(row.details),
       status: isQuoteRequestStatus(row.status) ? row.status : 'new',

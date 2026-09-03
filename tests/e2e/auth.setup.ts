@@ -13,9 +13,11 @@ import { expect, test as setup } from '@playwright/test';
 setup('authenticate', async ({ page }) => {
   const email = process.env.E2E_EMAIL;
   const password = process.env.E2E_PASSWORD;
-  if (!email || !password) {
-    throw new Error('E2E_EMAIL and E2E_PASSWORD must be set to run the e2e suite.');
-  }
+  setup.skip(
+    !email || !password || process.env.E2E_ISOLATED_STAGING !== '1',
+    'authenticated e2e requires E2E_EMAIL, E2E_PASSWORD, and E2E_ISOLATED_STAGING=1',
+  );
+  if (!email || !password) return;
 
   await page.goto('/login');
 

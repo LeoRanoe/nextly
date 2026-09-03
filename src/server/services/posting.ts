@@ -63,6 +63,7 @@ export async function nextDocumentNumber(tx: Tx, prefix: 'PO-' | 'V'): Promise<s
  * double-counts the cost.
  */
 export async function lockValuation(tx: Tx, variantId: string): Promise<Valuation> {
+  await lockVariant(tx, variantId);
   await tx.execute(
     sql`SELECT 1 FROM inventory_movements WHERE variant_id = ${variantId} FOR UPDATE`,
   );
@@ -78,6 +79,12 @@ export async function lockValuation(tx: Tx, variantId: string): Promise<Valuatio
     quantity: Number(rows[0]?.quantity ?? 0),
     valueCents: Number(rows[0]?.value_cents ?? 0),
   };
+}
+
+/** Lock a variant even when it has no movement rows yet. Callers that touch
+ * several variants should call this for sorted ids first to avoid deadlocks. */
+export async function lockVariant(tx: Tx, variantId: string): Promise<void> {
+  await tx.execute(sql`SELECT id FROM product_variants WHERE id = ${variantId} FOR UPDATE`);
 }
 
 export type StockPosting = {
@@ -165,6 +172,7 @@ export type LedgerPosting = {
   principalId?: string | null;
   sourceKind?: DocumentKind;
   sourceId?: string | null;
+  reversalOfId?: string | null;
   notes?: string | null;
 };
 
@@ -184,6 +192,7 @@ export async function postLedgerEntry(tx: Tx, posting: LedgerPosting): Promise<v
     memberId: posting.principalId ?? null,
     sourceKind: posting.sourceKind ?? 'manual',
     sourceId: posting.sourceId ?? null,
+    reversalOfId: posting.reversalOfId ?? null,
     paymentMethod: posting.paymentMethod,
     occurredAt: posting.occurredAt,
     notes: posting.notes ?? null,

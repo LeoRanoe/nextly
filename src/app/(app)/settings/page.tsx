@@ -1,12 +1,11 @@
-import type { Metadata, Route } from 'next';
-import Link from 'next/link';
+import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { RateSheet, SettingsSheet } from '@/components/forms/finance-sheets';
+import { InviteMemberSheet } from '@/components/forms/invite-member-sheet';
 import { MemberActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   MobileList,
   MobileRow,
@@ -51,7 +50,12 @@ export default async function SettingsPage() {
         <Surface className="overflow-hidden">
           <SurfaceHeader
             title="Team"
-            hint="Accounts are provisioned in Supabase. Contact the owner."
+            hint="Invite people and control what they can change."
+            action={
+              <Suspense fallback={null}>
+                <InviteMemberSheet />
+              </Suspense>
+            }
           />
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <MembersTable />
@@ -71,23 +75,6 @@ export default async function SettingsPage() {
           <Suspense fallback={<Skeleton className="m-4 h-24" />}>
             <BusinessSettings />
           </Suspense>
-        </Surface>
-
-        <Surface className="overflow-hidden">
-          <SurfaceHeader
-            title="Data & backup"
-            hint="Every list can be exported from its own toolbar with the filters you have applied."
-          />
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <p className="text-[13px] text-ink-3">
-              Quick backup — all tables in one CSV. Not a substitute for a real database dump.
-            </p>
-            <Button asChild variant="secondary" size="sm" className="shrink-0">
-              <Link href={'/api/export?entity=backup' as Route} download>
-                Download backup
-              </Link>
-            </Button>
-          </div>
         </Surface>
       </div>
     </>

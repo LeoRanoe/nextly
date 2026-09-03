@@ -53,6 +53,8 @@ export const purchaseOrders = pgTable(
     uniqueIndex('purchase_orders_number_key').on(t.number),
     index('purchase_orders_status_idx').on(t.status),
     index('purchase_orders_ordered_at_idx').on(t.orderedAt.desc()),
+    index('purchase_orders_supplier_idx').on(t.supplierId),
+    index('purchase_orders_created_by_idx').on(t.createdById),
   ],
 );
 
@@ -125,10 +127,48 @@ export const purchaseOrderPayments = pgTable(
     /** Who banked it, for the audit trail. */
     memberId: uuid().references(() => members.id, { onDelete: 'set null' }),
     createdById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    /** Client-generated key makes a retried payment a no-op. */
+    idempotencyKey: uuid(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('po_payments_order_idx').on(t.purchaseOrderId),
     index('po_payments_paid_idx').on(t.paidAt.desc()),
+    index('po_payments_member_idx').on(t.memberId),
+    index('po_payments_created_by_idx').on(t.createdById),
+    uniqueIndex('po_payments_idempotency_key').on(t.idempotencyKey),
+  ],
+);
+
+/**
+ * A supplier refund is append-only and separate from cancellation. A payment
+ * is money that left; this row records money that came back and points to its
+ * own ledger entry, so the order can be safely reconciled without rewriting
+ * either history.
+ */
+export const purchaseOrderRefunds = pgTable(
+  'purchase_order_refunds',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    purchaseOrderId: uuid()
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: 'restrict' }),
+    amountCents: bigint({ mode: 'number' }).notNull(),
+    currency: currencyCode().notNull().default('USD'),
+    fxRateMicros: bigint({ mode: 'number' }).notNull().default(1_000_000),
+    method: paymentMethod().notNull().default('bank_transfer'),
+    refundedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    reason: text().notNull(),
+    memberId: uuid().references(() => members.id, { onDelete: 'set null' }),
+    createdById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    idempotencyKey: uuid(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('po_refunds_order_idx').on(t.purchaseOrderId),
+    index('po_refunds_refunded_idx').on(t.refundedAt.desc()),
+    index('po_refunds_member_idx').on(t.memberId),
+    index('po_refunds_created_by_idx').on(t.createdById),
+    uniqueIndex('po_refunds_idempotency_key').on(t.idempotencyKey),
   ],
 );

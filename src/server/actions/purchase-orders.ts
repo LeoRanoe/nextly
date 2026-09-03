@@ -1,6 +1,6 @@
 'use server';
 
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { allocateOverhead, totalOverhead } from '@/lib/costing';
 import type { RateMicros } from '@/lib/fx';
@@ -8,14 +8,24 @@ import type { Cents, CurrencyCode } from '@/lib/money';
 import { formatMoney } from '@/lib/money';
 import {
   purchaseOrderPaymentSchema,
+  purchaseOrderRefundSchema,
   purchaseOrderSchema,
   receivePurchaseOrderSchema,
   uuid,
 } from '@/lib/schemas';
 import { db } from '../db/client';
-import { purchaseOrderItems, purchaseOrderPayments, purchaseOrders } from '../db/schema';
+import {
+  products,
+  productVariants,
+  purchaseOrderItems,
+  purchaseOrderPayments,
+  purchaseOrderRefunds,
+  purchaseOrders,
+} from '../db/schema';
 import {
   clearDocumentPostings,
+  lockValuation,
+  lockVariant,
   logActivity,
   nextDocumentNumber,
   type PaymentMethod as PaymentMethodName,
@@ -48,9 +58,24 @@ async function insertPayment(
     paidAt: Date;
     memberId: string;
     notes?: string | null;
+    idempotencyKey?: string;
   },
 ): Promise<{ id: string }> {
   if (input.amountCents <= 0) throw new ActionError('A payment must be more than zero.');
+
+  if (input.idempotencyKey) {
+    const [existing] = await tx
+      .select({ id: purchaseOrderPayments.id })
+      .from(purchaseOrderPayments)
+      .where(
+        and(
+          eq(purchaseOrderPayments.purchaseOrderId, input.orderId),
+          eq(purchaseOrderPayments.idempotencyKey, input.idempotencyKey),
+        ),
+      )
+      .limit(1);
+    if (existing) return { id: existing.id };
+  }
 
   const [payment] = await tx
     .insert(purchaseOrderPayments)
@@ -64,6 +89,7 @@ async function insertPayment(
       notes: input.notes ?? null,
       memberId: input.memberId,
       createdById: input.memberId,
+      idempotencyKey: input.idempotencyKey ?? null,
     })
     .returning();
 
@@ -89,9 +115,58 @@ async function insertPayment(
 /** What has been paid on an order so far, in the currency of the order. */
 async function paidOnOrder(tx: Tx, orderId: string): Promise<Cents> {
   const [row] = await tx.execute<{ paid: string }>(
-    sql`SELECT COALESCE(SUM(amount_cents), 0)::text AS paid FROM purchase_order_payments WHERE purchase_order_id = ${orderId}`,
+    sql`SELECT (
+      COALESCE((SELECT SUM(amount_cents) FROM purchase_order_payments WHERE purchase_order_id = ${orderId}), 0)
+      + COALESCE((
+          SELECT SUM(CASE WHEN direction = 'out' THEN amount_cents ELSE -amount_cents END)
+            FROM ledger_entries
+           WHERE source_kind = 'purchase_order'
+             AND source_id = ${orderId}
+             AND category = 'purchase'
+        ), 0)
+      - COALESCE((SELECT SUM(amount_cents) FROM purchase_order_refunds WHERE purchase_order_id = ${orderId}), 0)
+      - COALESCE((
+          SELECT SUM(amount_cents)
+            FROM ledger_entries
+           WHERE source_kind = 'purchase_order'
+             AND source_id = ${orderId}
+             AND category = 'refund'
+             AND direction = 'in'
+        ), 0)
+    )::text AS paid`,
   );
   return Number(row?.paid ?? 0);
+}
+
+async function lockOrder(tx: Tx, orderId: string) {
+  await tx.execute(sql`SELECT id FROM purchase_orders WHERE id = ${orderId} FOR UPDATE`);
+  const [order] = await tx
+    .select()
+    .from(purchaseOrders)
+    .where(eq(purchaseOrders.id, orderId))
+    .limit(1);
+  return order;
+}
+
+async function assertPurchasableVariants(tx: Tx, variantIds: string[]): Promise<void> {
+  if (new Set(variantIds).size !== variantIds.length) {
+    throw new ActionError('Add each product variant only once per purchase order.');
+  }
+
+  const rows = await tx
+    .select({ id: productVariants.id })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .where(
+      and(
+        inArray(productVariants.id, variantIds),
+        eq(productVariants.isActive, true),
+        sql`${products.status} <> 'archived'`,
+      ),
+    );
+  if (rows.length !== variantIds.length) {
+    throw new ActionError('Every purchase line must be an active product variant.');
+  }
 }
 
 export const createPurchaseOrder = writeAction
@@ -99,6 +174,10 @@ export const createPurchaseOrder = writeAction
   .inputSchema(purchaseOrderSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
+      await assertPurchasableVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
       const rateMicros = await rateForRecord(input.orderedAt, tx);
       const number = await nextDocumentNumber(tx, 'PO-');
 
@@ -168,11 +247,7 @@ export const updatePurchaseOrder = writeAction
   .inputSchema(purchaseOrderSchema.extend({ id: uuid }))
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [order] = await tx
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, input.id))
-        .limit(1);
+      const order = await lockOrder(tx, input.id);
 
       if (!order) throw new ActionError('That purchase order no longer exists.');
 
@@ -185,6 +260,27 @@ export const updatePurchaseOrder = writeAction
         throw new ActionError('A cancelled order cannot be edited.');
       }
 
+      await assertPurchasableVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
+      const alreadyPaid = await paidOnOrder(tx, order.id);
+      const newLandedCeiling =
+        input.items.reduce((sum, item) => sum + item.subtotalCents, 0) +
+        totalOverhead({
+          taxCents: input.taxCents,
+          cardFeeCents: input.cardFeeCents,
+          deliveryCents: input.deliveryCents,
+          shippingCents: input.shippingCents,
+          shippingTaxCents: input.shippingTaxCents,
+        });
+      if (alreadyPaid > newLandedCeiling) {
+        throw new ActionError(
+          'The revised order total is below payments already made. Refund the difference before editing it.',
+        );
+      }
+      const rateMicros = await rateForRecord(input.orderedAt, tx);
+
       await tx
         .update(purchaseOrders)
         .set({
@@ -194,6 +290,7 @@ export const updatePurchaseOrder = writeAction
           deliveryCents: input.deliveryCents,
           shippingCents: input.shippingCents,
           shippingTaxCents: input.shippingTaxCents,
+          fxRateMicros: rateMicros,
           orderedAt: input.orderedAt,
           expectedAt: input.expectedAt ?? null,
           reference: input.reference ?? null,
@@ -248,11 +345,7 @@ export const receivePurchaseOrder = writeAction
   .inputSchema(receivePurchaseOrderSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [order] = await tx
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, input.id))
-        .limit(1);
+      const order = await lockOrder(tx, input.id);
 
       if (!order) throw new ActionError('That purchase order no longer exists.');
       if (order.status === 'received') {
@@ -270,6 +363,10 @@ export const receivePurchaseOrder = writeAction
 
       if (items.length === 0) {
         throw new ActionError('Add at least one item before receiving this order.');
+      }
+
+      for (const variantId of [...new Set(items.map((item) => item.variantId))].sort()) {
+        await lockVariant(tx, variantId);
       }
 
       const overheadCents = totalOverhead({
@@ -304,6 +401,7 @@ export const receivePurchaseOrder = writeAction
           })
           .where(eq(purchaseOrderItems.id, item.id));
 
+        await lockValuation(tx, item.variantId);
         await postStockMovement(tx, {
           variantId: item.variantId,
           kind: 'receipt',
@@ -325,16 +423,25 @@ export const receivePurchaseOrder = writeAction
         .where(eq(purchaseOrders.id, order.id));
 
       if (input.postPayment) {
-        await insertPayment(tx, {
-          orderId: order.id,
-          number: order.number,
-          amountCents: landedTotalCents,
-          currency: order.currency,
-          rateMicros: order.fxRateMicros,
-          method: input.paymentMethod,
-          paidAt: input.receivedAt,
-          memberId: ctx.member.id,
-        });
+        const alreadyPaid = await paidOnOrder(tx, order.id);
+        const remaining = landedTotalCents - alreadyPaid;
+        if (remaining < 0) {
+          throw new ActionError(
+            'Payments already exceed this order total. Refund the difference before receiving it.',
+          );
+        }
+        if (remaining > 0) {
+          await insertPayment(tx, {
+            orderId: order.id,
+            number: order.number,
+            amountCents: remaining,
+            currency: order.currency,
+            rateMicros: order.fxRateMicros,
+            method: input.paymentMethod,
+            paidAt: input.receivedAt,
+            memberId: ctx.member.id,
+          });
+        }
       }
 
       await logActivity(tx, {
@@ -374,15 +481,38 @@ export const recordPurchaseOrderPayment = writeAction
   .inputSchema(purchaseOrderPaymentSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [order] = await tx
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, input.orderId))
-        .limit(1);
+      const order = await lockOrder(tx, input.orderId);
 
       if (!order) throw new ActionError('That purchase order no longer exists.');
       if (order.status === 'cancelled') {
         throw new ActionError('A cancelled order cannot be paid — raise a new one instead.');
+      }
+
+      if (input.idempotencyKey) {
+        const [existing] = await tx
+          .select({ amountCents: purchaseOrderPayments.amountCents })
+          .from(purchaseOrderPayments)
+          .where(
+            and(
+              eq(purchaseOrderPayments.purchaseOrderId, order.id),
+              eq(purchaseOrderPayments.idempotencyKey, input.idempotencyKey),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          const paidCents = await paidOnOrder(tx, order.id);
+          const [totals] = await tx.execute<{ landed: string }>(
+            sql`SELECT COALESCE(SUM(landed_cost_cents), 0)::text AS landed FROM purchase_order_items WHERE purchase_order_id = ${order.id}`,
+          );
+          const landedCents = Number(totals?.landed ?? 0);
+          return {
+            number: order.number,
+            amountCents: existing.amountCents,
+            landedCents,
+            paidCents,
+            balanceCents: Math.max(0, landedCents - paidCents),
+          };
+        }
       }
 
       const [totals] = await tx.execute<{ landed: string }>(
@@ -414,6 +544,7 @@ export const recordPurchaseOrderPayment = writeAction
         paidAt: input.paidAt ?? new Date(),
         memberId: ctx.member.id,
         notes: input.notes ?? null,
+        idempotencyKey: input.idempotencyKey,
       });
 
       await logActivity(tx, {
@@ -438,19 +569,136 @@ export const recordPurchaseOrderPayment = writeAction
     return result;
   });
 
+async function refundedOnOrder(tx: Tx, orderId: string): Promise<Cents> {
+  const [row] = await tx.execute<{ refunded: string }>(sql`
+    SELECT (
+      COALESCE((SELECT SUM(amount_cents) FROM purchase_order_refunds WHERE purchase_order_id = ${orderId}), 0)
+      + COALESCE((
+          SELECT SUM(amount_cents)
+            FROM ledger_entries
+           WHERE source_kind = 'purchase_order'
+             AND source_id = ${orderId}
+             AND category = 'refund'
+             AND direction = 'in'
+        ), 0)
+    )::text AS refunded
+  `);
+  return Number(row?.refunded ?? 0);
+}
+
+/** Record money returned by a supplier. Refunds reduce the net amount owed,
+ * but remain visible as their own append-only ledger event. */
+export const refundPurchaseOrder = writeAction
+  .metadata({ action: 'refunded', entity: 'purchase order' })
+  .inputSchema(purchaseOrderRefundSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const order = await lockOrder(tx, input.orderId);
+      if (!order) throw new ActionError('That purchase order no longer exists.');
+      if (order.status === 'cancelled') {
+        throw new ActionError('A cancelled order cannot receive another refund.');
+      }
+
+      if (input.idempotencyKey) {
+        const [existing] = await tx
+          .select({ amountCents: purchaseOrderRefunds.amountCents })
+          .from(purchaseOrderRefunds)
+          .where(
+            and(
+              eq(purchaseOrderRefunds.purchaseOrderId, order.id),
+              eq(purchaseOrderRefunds.idempotencyKey, input.idempotencyKey),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          const refundedCents = await refundedOnOrder(tx, order.id);
+          return {
+            number: order.number,
+            amountCents: existing.amountCents,
+            refundedCents,
+            refundableCents: Math.max(0, await paidOnOrder(tx, order.id)),
+          };
+        }
+      }
+
+      const refundedCents = await refundedOnOrder(tx, order.id);
+      const paidCents = (await paidOnOrder(tx, order.id)) + refundedCents;
+      const refundableCents = paidCents - refundedCents;
+      if (refundableCents <= 0) {
+        throw new ActionError('There is no paid supplier money left to refund on this order.');
+      }
+      if (input.amountCents > refundableCents) {
+        throw new ActionError(
+          `That is more than the refundable balance (${formatMoney(refundableCents, order.currency)}).`,
+        );
+      }
+
+      const refundedAt = input.refundedAt ?? new Date();
+      const [refund] = await tx
+        .insert(purchaseOrderRefunds)
+        .values({
+          purchaseOrderId: order.id,
+          amountCents: input.amountCents,
+          currency: order.currency,
+          fxRateMicros: order.fxRateMicros,
+          method: input.paymentMethod,
+          refundedAt,
+          reason: input.reason,
+          memberId: ctx.member.id,
+          createdById: ctx.member.id,
+          idempotencyKey: input.idempotencyKey ?? null,
+        })
+        .returning({ id: purchaseOrderRefunds.id });
+      if (!refund) throw new ActionError('Could not record the supplier refund.');
+
+      await postLedgerEntry(tx, {
+        direction: 'in',
+        category: 'refund',
+        description: `Refund ${order.number}`,
+        currency: order.currency,
+        rateMicros: order.fxRateMicros,
+        amountCents: input.amountCents,
+        paymentMethod: input.paymentMethod,
+        occurredAt: refundedAt,
+        memberId: ctx.member.id,
+        sourceKind: 'purchase_order',
+        sourceId: refund.id,
+        notes: input.reason,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'refunded purchase order',
+        entityType: 'purchase_order',
+        entityId: order.id,
+        entityLabel: order.number,
+        diff: {
+          refunded_cents: { from: refundedCents, to: refundedCents + input.amountCents },
+        },
+      });
+
+      return {
+        number: order.number,
+        amountCents: input.amountCents,
+        refundedCents: refundedCents + input.amountCents,
+        refundableCents: refundableCents - input.amountCents,
+      };
+    });
+    return result;
+  });
+
 /** Move an order between `ordered` and `shipped`. */
 export const setPurchaseOrderStatus = writeAction
   .metadata({ action: 'updated', entity: 'purchase order' })
   .inputSchema(z.object({ id: uuid, status: z.enum(['ordered', 'shipped']) }))
   .action(async ({ parsedInput: input, ctx }) => {
     const number = await db.transaction(async (tx) => {
-      const [order] = await tx
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, input.id))
-        .limit(1);
+      const order = await lockOrder(tx, input.id);
 
       if (!order) throw new ActionError('That purchase order no longer exists.');
+      if (order.status === 'cancelled') {
+        throw new ActionError('A cancelled order cannot change status.');
+      }
       if (order.status === 'received') {
         throw new ActionError('A received order cannot go back to an earlier status.');
       }
@@ -488,14 +736,16 @@ export const cancelPurchaseOrder = writeAction
   .inputSchema(z.object({ id: uuid, reason: z.string().trim().max(500).optional() }))
   .action(async ({ parsedInput: input, ctx }) => {
     const number = await db.transaction(async (tx) => {
-      const [order] = await tx
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, input.id))
-        .limit(1);
+      const order = await lockOrder(tx, input.id);
 
       if (!order) throw new ActionError('That purchase order no longer exists.');
       if (order.status === 'cancelled') throw new ActionError('Already cancelled.');
+
+      if ((await paidOnOrder(tx, order.id)) > 0) {
+        throw new ActionError(
+          'This order has payments. Refund them through the refund workflow before cancelling it.',
+        );
+      }
 
       await clearDocumentPostings(tx, 'purchase_order', order.id);
 

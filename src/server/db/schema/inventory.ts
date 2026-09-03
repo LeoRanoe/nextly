@@ -54,5 +54,6 @@ export const inventoryMovements = pgTable(
     uniqueIndex('inventory_movements_seq_key').on(t.seq),
     index('inventory_movements_source_idx').on(t.sourceKind, t.sourceId),
     index('inventory_movements_occurred_idx').on(t.occurredAt.desc()),
+    index('inventory_movements_created_by_idx').on(t.createdById),
   ],
 );

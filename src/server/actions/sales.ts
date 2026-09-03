@@ -8,12 +8,29 @@ import { normaliseToUsd } from '@/lib/fx';
 import type { Cents, CurrencyCode } from '@/lib/money';
 import { formatMoney } from '@/lib/money';
 import { balanceCentsOf, paymentStatusOf } from '@/lib/payment-status';
-import { moneyInput, quantity, salePaymentSchema, saleSchema, uuid } from '@/lib/schemas';
+import {
+  moneyInput,
+  quantity,
+  salePaymentSchema,
+  saleRefundSchema,
+  saleSchema,
+  uuid,
+} from '@/lib/schemas';
 import { db } from '../db/client';
-import { saleItemSerials, saleItems, salePayments, sales } from '../db/schema';
+import {
+  products,
+  productVariants,
+  saleItemSerials,
+  saleItems,
+  salePayments,
+  saleRefunds,
+  sales,
+} from '../db/schema';
 import {
   clearDocumentPostings,
   consumeStockFor,
+  lockValuation,
+  lockVariant,
   logActivity,
   nextDocumentNumber,
   type PaymentMethod as PaymentMethodName,
@@ -55,9 +72,24 @@ async function insertPayment(
     receivedAt: Date;
     memberId: string;
     notes?: string | null;
+    idempotencyKey?: string;
   },
-): Promise<{ id: string }> {
+): Promise<{ id: string; amountCents: Cents; reused: boolean }> {
   if (input.amountCents <= 0) throw new ActionError('A payment must be more than zero.');
+
+  if (input.idempotencyKey) {
+    const [existing] = await tx
+      .select({ id: salePayments.id, amountCents: salePayments.amountCents })
+      .from(salePayments)
+      .where(
+        and(
+          eq(salePayments.saleId, input.saleId),
+          eq(salePayments.idempotencyKey, input.idempotencyKey),
+        ),
+      )
+      .limit(1);
+    if (existing) return { id: existing.id, amountCents: existing.amountCents, reused: true };
+  }
 
   const [payment] = await tx
     .insert(salePayments)
@@ -71,6 +103,7 @@ async function insertPayment(
       notes: input.notes ?? null,
       memberId: input.memberId,
       createdById: input.memberId,
+      idempotencyKey: input.idempotencyKey ?? null,
     })
     .returning();
 
@@ -90,21 +123,96 @@ async function insertPayment(
     sourceId: payment.id,
   });
 
-  return { id: payment.id };
+  return { id: payment.id, amountCents: input.amountCents, reused: false };
 }
 
 /** What has been paid on a sale so far, in the currency of the sale. */
 async function paidOnSale(tx: Tx, saleId: string): Promise<Cents> {
   const [row] = await tx.execute<{ paid: string }>(
-    sql`SELECT COALESCE(SUM(amount_cents), 0)::text AS paid FROM sale_payments WHERE sale_id = ${saleId}`,
+    sql`SELECT (
+      COALESCE((SELECT SUM(amount_cents) FROM sale_payments WHERE sale_id = ${saleId}), 0)
+      + COALESCE((
+          SELECT SUM(CASE WHEN direction = 'in' THEN amount_cents ELSE -amount_cents END)
+            FROM ledger_entries
+           WHERE source_kind = 'sale'
+             AND source_id = ${saleId}
+             AND category = 'sales_receipt'
+        ), 0)
+    )::text AS paid`,
   );
   return Number(row?.paid ?? 0);
 }
+
+async function refundedOnSale(tx: Tx, saleId: string): Promise<Cents> {
+  const [row] = await tx.execute<{ refunded: string }>(sql`
+    SELECT (
+      COALESCE((SELECT SUM(amount_cents) FROM sale_refunds WHERE sale_id = ${saleId}), 0)
+      + COALESCE((
+          SELECT SUM(amount_cents)
+            FROM ledger_entries
+           WHERE source_kind = 'sale'
+             AND source_id = ${saleId}
+             AND category = 'refund'
+             AND direction = 'out'
+        ), 0)
+    )::text AS refunded
+  `);
+  return Number(row?.refunded ?? 0);
+}
+
+async function lockSale(tx: Tx, saleId: string) {
+  await tx.execute(sql`SELECT id FROM sales WHERE id = ${saleId} FOR UPDATE`);
+  const [sale] = await tx.select().from(sales).where(eq(sales.id, saleId)).limit(1);
+  return sale;
+}
+
+async function assertSellableVariants(tx: Tx, variantIds: string[]): Promise<void> {
+  if (new Set(variantIds).size !== variantIds.length) {
+    throw new ActionError('Add each product variant only once per sale.');
+  }
+
+  const rows = await tx
+    .select({ id: productVariants.id })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .where(
+      and(
+        inArray(productVariants.id, variantIds),
+        eq(productVariants.isActive, true),
+        sql`${products.status} <> 'archived'`,
+      ),
+    );
+  if (rows.length !== variantIds.length) {
+    throw new ActionError('Every sale item must be an active product variant.');
+  }
+}
+
+async function lockSaleVariants(tx: Tx, variantIds: string[]): Promise<void> {
+  for (const variantId of [...new Set(variantIds)].sort()) await lockVariant(tx, variantId);
+}
+
+const returnItemsSchema = z
+  .array(z.object({ saleItemId: uuid, quantity }))
+  .min(1, 'Return at least one unit')
+  .superRefine((items, ctx) => {
+    const ids = new Set(items.map((item) => item.saleItemId));
+    if (ids.size !== items.length) {
+      ctx.addIssue({ code: 'custom', message: 'Choose each sale line only once.' });
+    }
+  });
 export const createSale = writeAction
   .metadata({ action: 'created', entity: 'sale' })
   .inputSchema(saleSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
+      await assertSellableVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
+      await lockSaleVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
       const rateMicros =
         input.currency === 'SRD'
           ? await rateOn(input.soldAt, tx)
@@ -274,7 +382,7 @@ export const updateSale = writeAction
   .inputSchema(saleSchema.extend({ id: uuid }))
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.id)).limit(1);
+      const sale = await lockSale(tx, input.id);
       if (!sale) throw new ActionError('That sale no longer exists.');
       if (sale.status !== 'draft') {
         throw new ActionError(
@@ -297,6 +405,14 @@ export const updateSale = writeAction
           'Money has already been recorded against this sale. Void it and record the correction instead.',
         );
       }
+      await assertSellableVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
+      await lockSaleVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
       await clearDocumentPostings(tx, 'sale', input.id);
       await tx.delete(saleItems).where(eq(saleItems.saleId, input.id));
 
@@ -443,11 +559,15 @@ export const confirmSale = writeAction
   )
   .action(async ({ parsedInput: input, ctx }) => {
     const number = await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.id)).limit(1);
+      const sale = await lockSale(tx, input.id);
       if (!sale) throw new ActionError('That sale no longer exists.');
       if (sale.status !== 'draft') throw new ActionError('Only a draft can be confirmed.');
 
       const items = await tx.select().from(saleItems).where(eq(saleItems.saleId, sale.id));
+      await lockSaleVariants(
+        tx,
+        items.map((item) => item.variantId),
+      );
 
       let cogsCents = 0;
 
@@ -536,7 +656,7 @@ export const recordSalePayment = writeAction
   .inputSchema(salePaymentSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.saleId)).limit(1);
+      const sale = await lockSale(tx, input.saleId);
       if (!sale) throw new ActionError('That sale no longer exists.');
       if (sale.status !== 'confirmed') {
         throw new ActionError(
@@ -544,6 +664,29 @@ export const recordSalePayment = writeAction
             ? 'A draft has not happened yet — confirm it before collecting money on it.'
             : 'That sale is void; nothing is owed on it.',
         );
+      }
+
+      if (input.idempotencyKey) {
+        const [existing] = await tx
+          .select({ amountCents: salePayments.amountCents })
+          .from(salePayments)
+          .where(
+            and(
+              eq(salePayments.saleId, sale.id),
+              eq(salePayments.idempotencyKey, input.idempotencyKey),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          const paid = await paidOnSale(tx, sale.id);
+          return {
+            number: sale.number,
+            currency: sale.currency,
+            amountCents: existing.amountCents,
+            paymentStatus: paymentStatusOf(sale.totalCents, paid),
+            balanceCents: balanceCentsOf(sale.totalCents, paid),
+          };
+        }
       }
 
       const alreadyPaid = await paidOnSale(tx, sale.id);
@@ -555,7 +698,7 @@ export const recordSalePayment = writeAction
         );
       }
 
-      await insertPayment(tx, {
+      const payment = await insertPayment(tx, {
         saleId: sale.id,
         number: sale.number,
         amountCents: input.amountCents,
@@ -565,6 +708,7 @@ export const recordSalePayment = writeAction
         receivedAt: input.receivedAt ?? new Date(),
         memberId: ctx.member.id,
         notes: input.notes ?? null,
+        idempotencyKey: input.idempotencyKey,
       });
 
       await logActivity(tx, {
@@ -578,11 +722,11 @@ export const recordSalePayment = writeAction
         },
       });
 
-      const paid = alreadyPaid + input.amountCents;
+      const paid = alreadyPaid + payment.amountCents;
       return {
         number: sale.number,
         currency: sale.currency,
-        amountCents: input.amountCents,
+        amountCents: payment.amountCents,
         paymentStatus: paymentStatusOf(sale.totalCents, paid),
         balanceCents: balanceCentsOf(sale.totalCents, paid),
       };
@@ -604,9 +748,22 @@ export const voidSale = writeAction
   .inputSchema(z.object({ id: uuid, reason: z.string().trim().max(500).optional() }))
   .action(async ({ parsedInput: input, ctx }) => {
     const number = await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.id)).limit(1);
+      const sale = await lockSale(tx, input.id);
       if (!sale) throw new ActionError('That sale no longer exists.');
       if (sale.status === 'void') throw new ActionError('That sale is already void.');
+
+      const paid = await paidOnSale(tx, sale.id);
+      if (paid > 0) {
+        throw new ActionError(
+          'This sale has payments. Refund them through the refund workflow before voiding it.',
+        );
+      }
+      const [returned] = await tx.execute<{ units: string }>(
+        sql`SELECT COALESCE(SUM(quantity_returned), 0)::text AS units FROM sale_items WHERE sale_id = ${sale.id}`,
+      );
+      if (Number(returned?.units ?? 0) > 0) {
+        throw new ActionError('This sale has returned items and cannot be voided.');
+      }
 
       await clearDocumentPostings(tx, 'sale', sale.id);
 
@@ -651,8 +808,8 @@ export const voidSale = writeAction
  *
  *   stock  the goods come back in at the cost they went out at, so the
  *          weighted average is restored rather than re-priced;
- *   cash   the refund leaves in the currency it arrived in, at the rate the
- *          sale fixed, so the reversal nets against the original receipt;
+ *   cash   no money moves automatically. The return creates a derived credit
+ *          due; `refundSale` is the separate action that pays it out.
  *   margin the line's returned portion is tracked on `quantity_returned`,
  *          leaving the original figures intact beside it.
  *
@@ -667,14 +824,12 @@ export const returnSaleItems = writeAction
     z.object({
       saleId: uuid,
       reason: z.string().trim().min(3, 'Say why the goods came back').max(500),
-      items: z
-        .array(z.object({ saleItemId: uuid, quantity }))
-        .min(1, 'Return at least one unit'),
+      items: returnItemsSchema,
     }),
   )
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, input.saleId)).limit(1);
+      const sale = await lockSale(tx, input.saleId);
       if (!sale) throw new ActionError('That sale no longer exists.');
       if (sale.status !== 'confirmed') {
         throw new ActionError(
@@ -698,8 +853,12 @@ export const returnSaleItems = writeAction
         );
 
       const byId = new Map(items.map((item) => [item.id, item]));
+      await lockSaleVariants(
+        tx,
+        items.map((item) => item.variantId),
+      );
 
-      let refundCents = 0;
+      let creditCents = 0;
       let restockedCents = 0;
       let units = 0;
       const returnedAt = new Date();
@@ -730,6 +889,9 @@ export const returnSaleItems = writeAction
           line.quantity,
         );
 
+        // A return and a sale/receipt touching the same variant must share the
+        // same row lock, even when the return itself does not need a valuation.
+        await lockValuation(tx, item.variantId);
         await postStockMovement(tx, {
           variantId: item.variantId,
           kind: 'return',
@@ -747,28 +909,9 @@ export const returnSaleItems = writeAction
           .set({ quantityReturned: item.quantityReturned + line.quantity })
           .where(eq(saleItems.id, item.id));
 
-        refundCents += refund;
+        creditCents += refund;
         restockedCents += restock;
         units += line.quantity;
-      }
-
-      // A line can be free (price zero) and still come back; only money that
-      // actually moves gets a ledger entry.
-      if (refundCents > 0) {
-        await postLedgerEntry(tx, {
-          direction: 'out',
-          category: 'refund',
-          description: `Refund ${sale.number}`,
-          currency: sale.currency,
-          rateMicros: sale.fxRateMicros,
-          amountCents: refundCents,
-          paymentMethod: sale.paymentMethod,
-          occurredAt: returnedAt,
-          memberId: ctx.member.id,
-          sourceKind: 'sale',
-          sourceId: sale.id,
-          notes: input.reason,
-        });
       }
 
       await logActivity(tx, {
@@ -782,10 +925,118 @@ export const returnSaleItems = writeAction
       return {
         number: sale.number,
         currency: sale.currency,
-        refundCents,
-        refundUsdCents: normaliseToUsd(refundCents, sale.currency, sale.fxRateMicros),
+        creditCents,
+        creditUsdCents: normaliseToUsd(creditCents, sale.currency, sale.fxRateMicros),
         restockedCents,
         units,
+      };
+    });
+
+    return result;
+  });
+
+/**
+ * Pay out a credit created by a return. This is intentionally separate from
+ * `returnSaleItems`: goods can be accepted back while the customer chooses a
+ * replacement or store credit, and cash must never leave merely because stock
+ * was restocked.
+ */
+export const refundSale = writeAction
+  .metadata({ action: 'refunded', entity: 'sale' })
+  .inputSchema(saleRefundSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const sale = await lockSale(tx, input.saleId);
+      if (!sale) throw new ActionError('That sale no longer exists.');
+      if (sale.status !== 'confirmed') {
+        throw new ActionError('Only a confirmed sale can be refunded.');
+      }
+
+      if (input.idempotencyKey) {
+        const [existing] = await tx
+          .select({ amountCents: saleRefunds.amountCents })
+          .from(saleRefunds)
+          .where(
+            and(
+              eq(saleRefunds.saleId, sale.id),
+              eq(saleRefunds.idempotencyKey, input.idempotencyKey),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          const refundedCents = await refundedOnSale(tx, sale.id);
+          return {
+            number: sale.number,
+            currency: sale.currency,
+            amountCents: existing.amountCents,
+            refundedCents,
+            refundableCents: Math.max(0, (await paidOnSale(tx, sale.id)) - refundedCents),
+          };
+        }
+      }
+
+      const paidCents = await paidOnSale(tx, sale.id);
+      const refundedCents = await refundedOnSale(tx, sale.id);
+      const refundableCents = paidCents - refundedCents;
+      if (refundableCents <= 0) {
+        throw new ActionError('There is no received money left to refund on this sale.');
+      }
+      if (input.amountCents > refundableCents) {
+        throw new ActionError(
+          `That is more than the refundable balance (${formatMoney(refundableCents, sale.currency)}).`,
+        );
+      }
+
+      const refundedAt = input.refundedAt ?? new Date();
+      const [refund] = await tx
+        .insert(saleRefunds)
+        .values({
+          saleId: sale.id,
+          amountCents: input.amountCents,
+          currency: sale.currency,
+          fxRateMicros: sale.fxRateMicros,
+          method: input.paymentMethod,
+          refundedAt,
+          reason: input.reason,
+          memberId: ctx.member.id,
+          createdById: ctx.member.id,
+          idempotencyKey: input.idempotencyKey ?? null,
+        })
+        .returning({ id: saleRefunds.id });
+      if (!refund) throw new ActionError('Could not record the refund.');
+
+      await postLedgerEntry(tx, {
+        direction: 'out',
+        category: 'refund',
+        description: `Refund ${sale.number}`,
+        currency: sale.currency,
+        rateMicros: sale.fxRateMicros,
+        amountCents: input.amountCents,
+        paymentMethod: input.paymentMethod,
+        occurredAt: refundedAt,
+        memberId: ctx.member.id,
+        sourceKind: 'sale',
+        sourceId: refund.id,
+        notes: input.reason,
+      });
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'refunded sale',
+        entityType: 'sale',
+        entityId: sale.id,
+        entityLabel: sale.number,
+        diff: {
+          refunded_cents: { from: refundedCents, to: refundedCents + input.amountCents },
+        },
+      });
+
+      return {
+        number: sale.number,
+        currency: sale.currency,
+        amountCents: input.amountCents,
+        refundedCents: refundedCents + input.amountCents,
+        refundableCents: refundableCents - input.amountCents,
       };
     });
 

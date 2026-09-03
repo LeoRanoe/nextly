@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ReceiveOrderSheet } from '@/components/forms/finance-sheets';
 import { PurchaseOrderForm } from '@/components/forms/purchase-order-form';
+import { PurchaseOrderRefundSheet } from '@/components/forms/purchase-order-refund-sheet';
 import { PurchaseOrderActions } from '@/components/forms/row-actions';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -183,6 +184,12 @@ async function Loader({
                   unitCount={unitCount}
                 />
               ) : null}
+              <PurchaseOrderRefundSheet
+                orderId={order.id}
+                number={order.number}
+                currency={order.currency}
+                refundableCents={order.refundableCents}
+              />
               <PurchaseOrderActions
                 id={order.id}
                 number={order.number}
@@ -202,6 +209,12 @@ async function Loader({
             <>
               <Field label="Landed" value={formatMoney(landedTotal, order.currency)} />
               <Field label="Paid" value={formatMoney(paidCents, order.currency)} />
+              {order.refundedCents > 0 ? (
+                <Field
+                  label="Refunded"
+                  value={formatMoney(order.refundedCents, order.currency)}
+                />
+              ) : null}
               <Field
                 label="Owed"
                 value={balanceCents > 0 ? formatMoney(balanceCents, order.currency) : 'Settled'}
@@ -360,6 +373,36 @@ async function Loader({
                   <span className="text-[12px] text-ink-4">{formatDate(payment.paidAt)}</span>
                   <span className="text-[13px] text-negative">
                     {formatMoney(payment.amountCents, order.currency)}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Surface>
+      ) : null}
+
+      {order.refunds.length > 0 ? (
+        <Surface className="overflow-hidden">
+          <SurfaceHeader
+            title="Refunds"
+            hint="Supplier refunds are recorded separately from payments"
+          />
+          <div className="divide-y divide-line-subtle">
+            {order.refunds.map((refund) => (
+              <div
+                key={refund.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <span className="min-w-0 truncate text-[13px] text-ink-2">
+                  {humanise(refund.method)}
+                  <span className="text-ink-4"> · {refund.reason}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-[12px] text-ink-4">
+                    {formatDate(refund.refundedAt)}
+                  </span>
+                  <span className="text-[13px] text-positive">
+                    {formatMoney(refund.amountCents, order.currency)}
                   </span>
                 </span>
               </div>

@@ -5,7 +5,6 @@ import { Suspense } from 'react';
 import { CustomerSheet } from '@/components/forms/reference-sheets';
 import { CustomerActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ExportButton } from '@/components/patterns/export-button';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
@@ -55,7 +54,6 @@ export default function CustomersPage({
       <Surface className="overflow-hidden">
         <ListToolbar>
           <ListSearch placeholder="Search by name, code, phone or email" />
-          <ExportButton entity="customers" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-16', 'w-40', 'w-16']} />}>
           <CustomersTable searchParams={searchParams} />

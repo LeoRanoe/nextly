@@ -5,6 +5,7 @@ import {
   convertQuoteRequestSchema,
   quoteRequestSchema,
   quoteRequestStatusSchema,
+  quoteRequestUpdateSchema,
 } from '@/lib/schemas';
 import { db } from '../db/client';
 import {
@@ -18,6 +19,16 @@ import {
 import { logActivity, nextDocumentNumber, type Tx } from '../services/posting';
 import { rateForRecord } from '../services/rates';
 import { ActionError, publicAction, writeAction } from './client';
+
+async function lockQuoteRequest(tx: Tx, id: string) {
+  await tx.execute(sql`SELECT id FROM quote_requests WHERE id = ${id} FOR UPDATE`);
+  const [request] = await tx
+    .select()
+    .from(quoteRequests)
+    .where(eq(quoteRequests.id, id))
+    .limit(1);
+  return request;
+}
 
 /**
  * Quote requests (F-5): the public half of demand capture.
@@ -66,16 +77,69 @@ export const createQuoteRequest = publicAction
     return { id: request?.id ?? '' };
   });
 
+export const updateQuoteRequest = writeAction
+  .metadata({ action: 'updated', entity: 'quote_request' })
+  .inputSchema(quoteRequestUpdateSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const request = await lockQuoteRequest(tx, input.id);
+
+      if (!request) throw new ActionError('That request no longer exists.');
+      if (request.status === 'converted') {
+        throw new ActionError(
+          'A converted request is kept as sales history and cannot be edited.',
+        );
+      }
+
+      if (input.productId) {
+        const [variant] = await tx
+          .select({ id: productVariants.id })
+          .from(productVariants)
+          .innerJoin(products, eq(products.id, productVariants.productId))
+          .where(
+            and(
+              eq(productVariants.productId, input.productId),
+              eq(productVariants.isActive, true),
+              eq(products.status, 'active'),
+              eq(products.catalogPublished, true),
+            ),
+          )
+          .limit(1);
+        if (!variant) throw new ActionError('That product is no longer listed.');
+      }
+
+      await tx
+        .update(quoteRequests)
+        .set({
+          name: input.name,
+          contact: input.contact,
+          productId: input.productId,
+          quantity: input.quantity,
+          details: input.details ?? null,
+          handledById: ctx.member.id,
+        })
+        .where(eq(quoteRequests.id, input.id));
+
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated quote request',
+        entityType: 'quote_request',
+        entityId: request.id,
+        entityLabel: request.name,
+      });
+
+      return { name: input.name };
+    });
+
+    return result;
+  });
+
 export const setQuoteRequestStatus = writeAction
   .metadata({ action: 'updated', entity: 'quote_request' })
   .inputSchema(quoteRequestStatusSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const name = await db.transaction(async (tx) => {
-      const [request] = await tx
-        .select()
-        .from(quoteRequests)
-        .where(eq(quoteRequests.id, input.id))
-        .limit(1);
+      const request = await lockQuoteRequest(tx, input.id);
 
       if (!request) throw new ActionError('That request no longer exists.');
       // Conversion is not a status you click — it happens by making the draft
@@ -107,6 +171,9 @@ export const setQuoteRequestStatus = writeAction
  *  `nextCode` in actions/reference.ts — same series, so a converted quote
  *  cannot collide with a hand-created customer. */
 async function nextCustomerCode(tx: Tx): Promise<string> {
+  // Different quote requests can be converted concurrently. Serialize the
+  // MAX+1 allocation so customer creation cannot collide.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('customers:K'))`);
   const rows = await tx.execute<{ next: string }>(sql`
     SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D', '', 'g'), '')::bigint), 0) + 1 AS next
       FROM customers
@@ -120,11 +187,7 @@ export const convertQuoteRequestToSale = writeAction
   .inputSchema(convertQuoteRequestSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const result = await db.transaction(async (tx) => {
-      const [request] = await tx
-        .select()
-        .from(quoteRequests)
-        .where(eq(quoteRequests.id, input.id))
-        .limit(1);
+      const request = await lockQuoteRequest(tx, input.id);
 
       if (!request) throw new ActionError('That request no longer exists.');
       if (request.status === 'converted') {

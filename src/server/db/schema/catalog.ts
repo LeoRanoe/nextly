@@ -84,6 +84,7 @@ export const products = pgTable(
     uniqueIndex('products_code_key').on(t.code),
     uniqueIndex('products_slug_key').on(t.slug),
     index('products_category_idx').on(t.categoryId),
+    index('products_supplier_idx').on(t.supplierId),
     index('products_status_idx').on(t.status),
     index('products_catalog_idx').on(t.catalogPublished),
   ],
@@ -217,5 +218,7 @@ export const quoteRequests = pgTable(
   (t) => [
     index('quote_requests_status_idx').on(t.status, t.createdAt.desc()),
     index('quote_requests_product_idx').on(t.productId),
+    index('quote_requests_sale_idx').on(t.saleId),
+    index('quote_requests_handler_idx').on(t.handledById),
   ],
 );

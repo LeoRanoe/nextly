@@ -39,6 +39,7 @@ export const fxRates = pgTable(
   (t) => [
     uniqueIndex('fx_rates_pair_effective_key').on(t.base, t.quote, t.effectiveFrom),
     index('fx_rates_effective_idx').on(t.effectiveFrom.desc()),
+    index('fx_rates_created_by_idx').on(t.createdById),
   ],
 );
 
@@ -80,6 +81,35 @@ export const expenses = pgTable(
   (t) => [
     index('expenses_occurred_idx').on(t.occurredAt.desc()),
     index('expenses_category_idx').on(t.categoryId),
+    index('expenses_created_by_idx').on(t.createdById),
+  ],
+);
+
+/**
+ * A durable, non-destructive record of a data exception found during
+ * reconciliation. These rows document what needs a human decision; they never
+ * pretend to be a receipt, payment, or stock movement.
+ */
+export const reconciliationExceptions = pgTable(
+  'reconciliation_exceptions',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    kind: text().notNull(),
+    entityType: text().notNull(),
+    entityKey: text().notNull(),
+    severity: text().notNull().default('warning'),
+    status: text().notNull().default('open'),
+    description: text().notNull(),
+    detectedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp({ withTimezone: true }),
+    resolutionNotes: text(),
+    resolvedById: uuid().references(() => members.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('reconciliation_exception_key').on(t.kind, t.entityType, t.entityKey, t.status),
+    index('reconciliation_exception_status_idx').on(t.status, t.detectedAt.desc()),
+    index('reconciliation_exception_resolved_by_idx').on(t.resolvedById),
   ],
 );
 
@@ -120,6 +150,8 @@ export const ledgerEntries = pgTable(
 
     sourceKind: documentKind().notNull().default('manual'),
     sourceId: uuid(),
+    /** One reversal per original entry; corrections never erase history. */
+    reversalOfId: uuid(),
 
     paymentMethod: paymentMethod().notNull().default('cash'),
     occurredAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -132,6 +164,8 @@ export const ledgerEntries = pgTable(
     uniqueIndex('ledger_entries_seq_key').on(t.seq),
     index('ledger_entries_category_idx').on(t.category),
     index('ledger_entries_member_idx').on(t.memberId),
+    index('ledger_entries_created_by_idx').on(t.createdById),
     index('ledger_entries_source_idx').on(t.sourceKind, t.sourceId),
+    uniqueIndex('ledger_entries_reversal_key').on(t.reversalOfId),
   ],
 );

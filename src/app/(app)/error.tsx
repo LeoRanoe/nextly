@@ -31,10 +31,9 @@ export default function AppError({
       <div className="grid size-10 place-items-center rounded-card border border-negative/30 bg-negative-muted text-negative">
         <AlertTriangle className="size-[18px]" />
       </div>
-      <p className="mt-3 font-medium text-[14px] text-ink">Something failed to load</p>
+      <p className="mt-3 font-medium text-[14px] text-ink">Nextly could not load this page</p>
       <p className="mt-1 max-w-[42ch] text-[13px] text-ink-3 leading-relaxed">
-        This page hit an error rather than finding nothing — most often a dropped connection to
-        the database. Reloading usually clears it
+        Try again once. If it keeps happening, mention the error code to support
         {error.digest ? (
           <>
             ; if it keeps happening, mention{' '}

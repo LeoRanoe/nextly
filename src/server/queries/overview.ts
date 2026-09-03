@@ -438,7 +438,7 @@ export async function getSetupState(): Promise<SetupState> {
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT
       (EXISTS (SELECT 1 FROM fx_rates))::text AS rate,
-      (EXISTS (SELECT 1 FROM suppliers WHERE status = 'active'))::text AS supplier,
+      (EXISTS (SELECT 1 FROM suppliers))::text AS supplier,
       (EXISTS (SELECT 1 FROM products WHERE status <> 'archived'))::text AS product,
       (EXISTS (SELECT 1 FROM purchase_orders WHERE status <> 'draft'))::text AS order,
       (EXISTS (SELECT 1 FROM sales WHERE status = 'confirmed'))::text AS sale

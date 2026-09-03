@@ -46,6 +46,7 @@ export async function getAlerts(): Promise<Alert[]> {
     unposted_orders: string;
     receivable_usd: string;
     overdue_sales: string;
+    open_reconciliation: string;
   }>(sql`
     WITH threshold AS (
       SELECT COALESCE((SELECT low_stock_threshold FROM settings LIMIT 1), 5) AS value
@@ -244,6 +245,7 @@ export async function getAlerts(): Promise<Alert[]> {
           )
           AND s.sold_at < now() - make_interval(days => ${OVERDUE_AFTER_DAYS})
       )::text AS overdue_sales
+      ,(SELECT COUNT(*) FROM reconciliation_exceptions WHERE status = 'open')::text AS open_reconciliation
   `);
 
   if (!row) return [];
@@ -418,6 +420,18 @@ export async function getAlerts(): Promise<Alert[]> {
       detail:
         'A received order with no payment posting means the cash balance is understated. The stock was received but the money was never recorded.',
       href: '/purchase-orders',
+    });
+  }
+
+  const openReconciliation = count(row.open_reconciliation);
+  if (openReconciliation > 0) {
+    alerts.push({
+      id: 'open-reconciliation',
+      severity: 'critical',
+      title: `${openReconciliation} open reconciliation ${plural(openReconciliation, 'item', 'items')}`,
+      detail:
+        'Known historical exceptions are documented for review. Resolve them from the original records; do not create replacement receipts or movements.',
+      href: '/reports',
     });
   }
 

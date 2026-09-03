@@ -5,7 +5,6 @@ import { Suspense } from 'react';
 import { CategorySheet } from '@/components/forms/reference-sheets';
 import { CategoryActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ExportButton } from '@/components/patterns/export-button';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
@@ -44,7 +43,6 @@ export default function CategoriesPage({
       <Surface className="overflow-hidden">
         <ListToolbar>
           <ListSearch placeholder="Search by name or slug" />
-          <ExportButton entity="categories" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<Skeleton className="m-4 h-24" />}>
           <CategoriesTable searchParams={searchParams} />

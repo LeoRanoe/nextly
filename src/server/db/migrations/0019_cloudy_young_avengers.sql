@@ -1,0 +1,1 @@
+CREATE INDEX "ledger_entries_created_by_idx" ON "ledger_entries" USING btree ("created_by_id");

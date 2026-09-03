@@ -51,7 +51,7 @@ export function ReturnSheet({
     onSuccess({ data }) {
       toast.success(`${data?.number} return recorded`, {
         description: data
-          ? `${formatMoney(data.refundCents, data.currency)} refunded, ${data.units} unit${data.units === 1 ? '' : 's'} back in stock.`
+          ? `${formatMoney(data.creditCents, data.currency)} credit created, ${data.units} unit${data.units === 1 ? '' : 's'} back in stock. Refund it separately when the cash leaves.`
           : undefined,
       });
       setOpen(false);
@@ -90,12 +90,12 @@ export function ReturnSheet({
         open={open}
         onOpenChange={setOpen}
         title={`Return items from ${number}`}
-        description="The sale stays exactly as it was. The goods come back into stock at the cost they left at, and the refund goes out in the currency it arrived in, at the rate the sale fixed."
+        description="The sale stays exactly as it was. The goods come back into stock at the cost they left at, and a credit is created. Refund it separately when cash actually leaves."
         footer={
           <>
             <span className="tabular mr-auto text-[13px] text-ink">
               {chosen.length > 0
-                ? `Refund ${formatMoney(refundCents, currency)}`
+                ? `Credit ${formatMoney(refundCents, currency)}`
                 : 'Nothing selected'}
             </span>
             <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -167,7 +167,7 @@ export function ReturnSheet({
             <Field
               label="Why the goods came back"
               htmlFor={reasonId}
-              hint="Recorded on the refund entry"
+              hint="Recorded on the return history"
               required
             >
               <Textarea

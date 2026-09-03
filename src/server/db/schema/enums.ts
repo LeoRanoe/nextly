@@ -45,6 +45,7 @@ export const quoteRequestStatus = pgEnum('quote_request_status', [
   'contacted',
   'converted',
   'declined',
+  'archived',
 ]);
 
 export const ledgerDirection = pgEnum('ledger_direction', ['in', 'out']);

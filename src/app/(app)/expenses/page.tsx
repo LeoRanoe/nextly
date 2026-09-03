@@ -5,7 +5,6 @@ import { Suspense } from 'react';
 import { ExpenseSheet } from '@/components/forms/expense-sheet';
 import { ExpenseActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ExportButton } from '@/components/patterns/export-button';
 import { ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -63,7 +62,6 @@ export default function ExpensesPage({
       <Surface className="overflow-hidden">
         <ListToolbar>
           <ListSearch placeholder="Search by description or category" />
-          <ExportButton entity="expenses" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-20', 'w-44', 'w-16']} />}>
           <ExpensesTable searchParams={searchParams} />

@@ -66,7 +66,16 @@ export type SaleDetail = {
     receivedAt: string;
     notes: string | null;
   }[];
+  refunds: {
+    id: string;
+    amountCents: Cents;
+    method: string;
+    refundedAt: string;
+    reason: string;
+  }[];
   paidCents: Cents;
+  refundedCents: Cents;
+  refundableCents: Cents;
   movements: {
     id: string;
     variantId: string;
@@ -95,6 +104,14 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
            AND l.source_id = s.id
            AND l.category = 'sales_receipt'
       ), 0)::text AS legacy_paid_cents
+      ,COALESCE((
+        SELECT SUM(l.amount_cents)
+          FROM ledger_entries l
+         WHERE l.source_kind = 'sale'
+           AND l.source_id = s.id
+           AND l.category = 'refund'
+           AND l.direction = 'out'
+      ), 0)::text AS legacy_refunded_cents
     FROM sales s
     LEFT JOIN customers c ON c.id = s.customer_id
     WHERE s.id = ${id}
@@ -103,7 +120,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
 
   if (!row) return null;
 
-  const [items, ledgerEntries, movements, payments, serials] = await Promise.all([
+  const [items, ledgerEntries, movements, payments, serials, refunds] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT
         si.id, si.variant_id, v.product_id, p.name AS product_name,
@@ -122,7 +139,8 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
         FROM ledger_entries
        WHERE source_kind = 'sale'
          AND (source_id = ${id}
-              OR source_id IN (SELECT id FROM sale_payments WHERE sale_id = ${id}))
+              OR source_id IN (SELECT id FROM sale_payments WHERE sale_id = ${id})
+              OR source_id IN (SELECT id FROM sale_refunds WHERE sale_id = ${id}))
        ORDER BY occurred_at, seq
     `),
     db.execute<Record<string, string | null>>(sql`
@@ -143,6 +161,12 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
         FROM sale_item_serials
        WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id = ${id})
        ORDER BY created_at, serial
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, amount_cents::text, method::text, refunded_at::text, reason
+        FROM sale_refunds
+       WHERE sale_id = ${id}
+       ORDER BY refunded_at, created_at
     `),
   ]);
 
@@ -204,6 +228,23 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     paidCents:
       payments.reduce((total, payment) => total + num(payment.amount_cents), 0) +
       num(row.legacy_paid_cents),
+    refundedCents:
+      refunds.reduce((total, refund) => total + num(refund.amount_cents), 0) +
+      num(row.legacy_refunded_cents),
+    refundableCents: Math.max(
+      0,
+      payments.reduce((total, payment) => total + num(payment.amount_cents), 0) +
+        num(row.legacy_paid_cents) -
+        refunds.reduce((total, refund) => total + num(refund.amount_cents), 0) -
+        num(row.legacy_refunded_cents),
+    ),
+    refunds: refunds.map((refund) => ({
+      id: text(refund.id),
+      amountCents: num(refund.amount_cents),
+      method: text(refund.method),
+      refundedAt: text(refund.refunded_at),
+      reason: text(refund.reason),
+    })),
     movements: movements.map((movement) => ({
       id: text(movement.id),
       variantId: text(movement.variant_id),
@@ -265,12 +306,21 @@ export type PurchaseOrderDetail = {
   }[];
   /** Money paid to the supplier (F-9). Derived, never stored on the order. */
   paidCents: Cents;
+  refundedCents: Cents;
+  refundableCents: Cents;
   payments: {
     id: string;
     amountCents: Cents;
     method: string;
     paidAt: string;
     notes: string | null;
+  }[];
+  refunds: {
+    id: string;
+    amountCents: Cents;
+    method: string;
+    refundedAt: string;
+    reason: string;
   }[];
 };
 
@@ -295,7 +345,27 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
                AND l.source_id = o.id
                AND l.category = 'purchase'
           ), 0)
+        - COALESCE((SELECT SUM(pr.amount_cents) FROM purchase_order_refunds pr
+                   WHERE pr.purchase_order_id = o.id), 0)
+        - COALESCE((
+            SELECT SUM(l.amount_cents)
+              FROM ledger_entries l
+             WHERE l.source_kind = 'purchase_order'
+               AND l.source_id = o.id
+               AND l.category = 'refund'
+               AND l.direction = 'in'
+          ), 0)
       )::text AS paid_cents
+      ,(
+        COALESCE((
+          SELECT SUM(l.amount_cents)
+            FROM ledger_entries l
+           WHERE l.source_kind = 'purchase_order'
+             AND l.source_id = o.id
+             AND l.category = 'refund'
+             AND l.direction = 'in'
+        ), 0)
+       )::text AS legacy_refunded_cents
     FROM purchase_orders o
     LEFT JOIN suppliers s ON s.id = o.supplier_id
     WHERE o.id = ${id}
@@ -304,7 +374,7 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
 
   if (!row) return null;
 
-  const [items, ledgerEntries, movements, payments] = await Promise.all([
+  const [items, ledgerEntries, movements, payments, refunds] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT
         i.id, i.variant_id, v.product_id, p.name AS product_name,
@@ -322,7 +392,8 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
         FROM ledger_entries
        WHERE source_kind = 'purchase_order'
          AND (source_id = ${id}
-              OR source_id IN (SELECT id FROM purchase_order_payments WHERE purchase_order_id = ${id}))
+              OR source_id IN (SELECT id FROM purchase_order_payments WHERE purchase_order_id = ${id})
+              OR source_id IN (SELECT id FROM purchase_order_refunds WHERE purchase_order_id = ${id}))
        ORDER BY occurred_at, seq
     `),
     db.execute<Record<string, string | null>>(sql`
@@ -337,6 +408,12 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
         FROM purchase_order_payments
        WHERE purchase_order_id = ${id}
        ORDER BY paid_at, created_at
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT id, amount_cents::text, method::text, refunded_at::text, reason
+        FROM purchase_order_refunds
+       WHERE purchase_order_id = ${id}
+       ORDER BY refunded_at, created_at
     `),
   ]);
 
@@ -372,6 +449,10 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       landedCostCents: num(item.landed_cost_cents),
     })),
     paidCents: num(row.paid_cents),
+    refundedCents:
+      refunds.reduce((total, refund) => total + num(refund.amount_cents), 0) +
+      num(row.legacy_refunded_cents),
+    refundableCents: Math.max(0, num(row.paid_cents)),
     ledgerEntries: ledgerEntries.map((entry) => ({
       id: text(entry.id),
       direction: text(entry.direction) as 'in' | 'out',
@@ -393,6 +474,13 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail 
       method: text(payment.method),
       paidAt: text(payment.paid_at),
       notes: maybe(payment.notes),
+    })),
+    refunds: refunds.map((refund) => ({
+      id: text(refund.id),
+      amountCents: num(refund.amount_cents),
+      method: text(refund.method),
+      refundedAt: text(refund.refunded_at),
+      reason: text(refund.reason),
     })),
   };
 }

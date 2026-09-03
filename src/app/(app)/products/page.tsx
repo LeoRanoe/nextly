@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ProductActions } from '@/components/forms/row-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ExportButton } from '@/components/patterns/export-button';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -68,7 +67,6 @@ export default function ProductsPage({
           <ListSearch placeholder="Search by name or code" />
           <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
           <ListFilter param="catalog" label="Catalog" options={CATALOG_OPTIONS} />
-          <ExportButton entity="products" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-44', 'w-24', 'w-16']} />}>
           <ProductsTable searchParams={searchParams} />

@@ -15,11 +15,12 @@ import type { Tx } from './posting';
  *  the transaction predates the series, which is better than silently using 1. */
 export async function rateOn(date: Date, tx?: Tx): Promise<RateMicros> {
   const client = tx ?? db;
+  const effectiveAt = date.toISOString();
 
   const rows = await client.execute<{ rate_micros: string }>(sql`
     SELECT rate_micros::text
       FROM fx_rates
-     WHERE base = 'USD' AND quote = 'SRD' AND effective_from <= ${date}
+     WHERE base = 'USD' AND quote = 'SRD' AND effective_from <= ${effectiveAt}
      ORDER BY effective_from DESC
      LIMIT 1
   `);
@@ -52,9 +53,12 @@ export async function rateOn(date: Date, tx?: Tx): Promise<RateMicros> {
 export async function rateForRecord(date: Date, tx?: Tx): Promise<RateMicros> {
   try {
     return await rateOn(date, tx);
-  } catch {
+  } catch (error) {
     // A USD-only business with no rate configured is workable; SRD entry is
     // what genuinely needs one, and that path calls rateOn directly.
-    return RATE_SCALE;
+    if (error instanceof Error && error.message.startsWith('No exchange rate has been set.')) {
+      return RATE_SCALE;
+    }
+    throw error;
   }
 }

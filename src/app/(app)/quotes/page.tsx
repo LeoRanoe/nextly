@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { QuoteRequestActions } from '@/components/forms/quote-request-actions';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ExportButton } from '@/components/patterns/export-button';
 import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +30,11 @@ import {
 import { formatRelative, humanise } from '@/lib/format';
 import { parseListParams, quoteQuerySchema, type RawSearchParams } from '@/lib/list-params';
 import type { QuoteRequestStatus } from '@/lib/schemas';
-import { listQuoteRequests, listQuoteVariantOptions } from '@/server/queries/quotes';
+import {
+  listQuoteProductOptions,
+  listQuoteRequests,
+  listQuoteVariantOptions,
+} from '@/server/queries/quotes';
 
 export const metadata: Metadata = { title: 'Quote Requests' };
 
@@ -41,6 +44,7 @@ const STATUS_TONE: Record<QuoteRequestStatus, 'accent' | 'info' | 'positive' | '
   contacted: 'info',
   converted: 'positive',
   declined: 'neutral',
+  archived: 'neutral',
 };
 
 const STATUS_OPTIONS = [
@@ -48,6 +52,7 @@ const STATUS_OPTIONS = [
   { value: 'contacted', label: 'Contacted' },
   { value: 'converted', label: 'Converted' },
   { value: 'declined', label: 'Declined' },
+  { value: 'archived', label: 'Archived' },
 ];
 
 export default function QuotesPage({
@@ -65,7 +70,6 @@ export default function QuotesPage({
         <ListToolbar>
           <ListSearch placeholder="Search by name, contact or item" />
           <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
-          <ExportButton entity="quotes" searchParams={searchParams} />
         </ListToolbar>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-36', 'w-20', 'w-24']} />}>
           <QuotesTable searchParams={searchParams} />
@@ -79,9 +83,10 @@ async function QuotesTable({ searchParams }: { searchParams: Promise<RawSearchPa
   const raw = await searchParams;
   const query = parseListParams(quoteQuerySchema, raw);
   const hasFilters = Boolean(query.q || query.status);
-  const [result, variants] = await Promise.all([
+  const [result, variants, products] = await Promise.all([
     listQuoteRequests(query),
     listQuoteVariantOptions(),
+    listQuoteProductOptions(),
   ]);
 
   if (result.total === 0 && !hasFilters) {
@@ -159,19 +164,24 @@ async function QuotesTable({ searchParams }: { searchParams: Promise<RawSearchPa
                   </TD>
                   <TD className="text-[12px] text-ink-3">{row.handledByName ?? '—'}</TD>
                   <TD className="text-right">
-                    {row.saleId ? (
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={`/sales/${row.saleId}` as Route}>View sale</Link>
-                      </Button>
-                    ) : (
+                    <span className="inline-flex items-center gap-2">
+                      {row.saleId ? (
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/sales/${row.saleId}` as Route}>View sale</Link>
+                        </Button>
+                      ) : null}
                       <QuoteRequestActions
                         id={row.id}
                         name={row.name}
+                        contact={row.contact}
+                        productId={row.productId}
                         quantity={row.quantity}
+                        details={row.details}
                         status={row.status}
                         variants={variants}
+                        products={products}
                       />
-                    )}
+                    </span>
                   </TD>
                 </TR>
               ))}
@@ -209,19 +219,24 @@ async function QuotesTable({ searchParams }: { searchParams: Promise<RawSearchPa
               </MobileRowMetaItem>
             </MobileRowMeta>
             <div className="flex justify-end pt-0.5">
-              {row.saleId ? (
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/sales/${row.saleId}` as Route}>View sale</Link>
-                </Button>
-              ) : (
+              <span className="inline-flex items-center gap-2">
+                {row.saleId ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/sales/${row.saleId}` as Route}>View sale</Link>
+                  </Button>
+                ) : null}
                 <QuoteRequestActions
                   id={row.id}
                   name={row.name}
+                  contact={row.contact}
+                  productId={row.productId}
                   quantity={row.quantity}
+                  details={row.details}
                   status={row.status}
                   variants={variants}
+                  products={products}
                 />
-              )}
+              </span>
             </div>
           </MobileRow>
         ))}

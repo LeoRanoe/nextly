@@ -31,10 +31,10 @@ export default function RootError({
           <AlertTriangle className="size-5" />
         </div>
         <h1 className="mt-4 font-medium text-[18px] text-ink tracking-[-0.02em]">
-          Something failed to load
+          Nextly could not load this page
         </h1>
         <p className="mt-2 text-[13px] text-ink-3 leading-relaxed">
-          Reloading usually clears it. If it keeps happening, the error has been logged
+          Try again once. If it keeps happening, mention the error code to support
           {error.digest ? (
             <>
               {' '}

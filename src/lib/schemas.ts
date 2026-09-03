@@ -21,7 +21,8 @@ export const moneyInput = z
       ctx.addIssue({ code: 'custom', message: 'Enter an amount like 29.55' });
       return z.NEVER;
     }
-  });
+  })
+  .refine((cents) => cents >= 0, 'Cannot be negative');
 
 /** Money that must be greater than zero. */
 export const positiveMoney = moneyInput.refine((cents) => cents > 0, {
@@ -203,12 +204,27 @@ export const receivePurchaseOrderSchema = z.object({
 export const purchaseOrderPaymentSchema = z.object({
   orderId: uuid,
   amountCents: positiveMoney,
+  /** Stable across a client retry so the same payment cannot post twice. */
+  idempotencyKey: uuid.optional(),
   paidAt: z
     .union([dateInput, z.literal('')])
     .transform((value) => (value === '' ? undefined : value))
     .optional(),
   paymentMethod,
   notes: optionalText,
+});
+
+/** A supplier refund against money already paid on a purchase order. */
+export const purchaseOrderRefundSchema = z.object({
+  orderId: uuid,
+  amountCents: positiveMoney,
+  refundedAt: z
+    .union([dateInput, z.literal('')])
+    .transform((value) => (value === '' ? undefined : value))
+    .optional(),
+  paymentMethod,
+  reason: z.string().trim().min(3, 'Say why the supplier refunded the money').max(500),
+  idempotencyKey: uuid.optional(),
 });
 
 /* ── Sales ───────────────────────────────────────────────────────────────── */
@@ -232,7 +248,7 @@ export const saleItemSchema = z
   .object({
     variantId: uuid,
     quantity,
-    unitPriceCents: moneyInput,
+    unitPriceCents: positiveMoney,
     serials: serialList,
   })
   .refine((item) => item.serials.length <= item.quantity, {
@@ -295,6 +311,8 @@ export const saleSchema = z
 export const salePaymentSchema = z.object({
   saleId: uuid,
   amountCents: positiveMoney,
+  /** Stable across a client retry so the same payment cannot post twice. */
+  idempotencyKey: uuid.optional(),
   /** Optional: payments are banked on the day they arrive. An empty date input
    *  means "now", so it is folded to undefined here rather than reaching the
    *  database as a string. */
@@ -304,6 +322,19 @@ export const salePaymentSchema = z.object({
     .optional(),
   paymentMethod,
   notes: optionalText,
+});
+
+/** A cash refund against money already received on a confirmed sale. */
+export const saleRefundSchema = z.object({
+  saleId: uuid,
+  amountCents: positiveMoney,
+  paymentMethod,
+  refundedAt: z
+    .union([dateInput, z.literal('')])
+    .transform((value) => (value === '' ? undefined : value))
+    .optional(),
+  reason: z.string().trim().min(3, 'Say why the money was refunded').max(500),
+  idempotencyKey: uuid.optional(),
 });
 
 /* ── Finance ─────────────────────────────────────────────────────────────── */
@@ -403,7 +434,7 @@ export const quoteRequestSchema = z.object({
     .transform((value) => (value === '' ? undefined : value)),
 });
 
-const quoteRequestStatuses = ['new', 'contacted', 'converted', 'declined'] as const;
+const quoteRequestStatuses = ['new', 'contacted', 'converted', 'declined', 'archived'] as const;
 
 export type QuoteRequestStatus = (typeof quoteRequestStatuses)[number];
 
@@ -411,8 +442,12 @@ export type QuoteRequestStatus = (typeof quoteRequestStatuses)[number];
  *  by the convert action itself — the list offers the other three. */
 export const quoteRequestStatusSchema = z.object({
   id: uuid,
-  status: z.enum(['new', 'contacted', 'declined']),
+  status: z.enum(['new', 'contacted', 'declined', 'archived']),
 });
+
+/** Fields an owner or staff member may correct after a visitor submits a
+ * request. Conversion remains a separate action because it creates a sale. */
+export const quoteRequestUpdateSchema = quoteRequestSchema.extend({ id: uuid });
 
 /** Turning a request into a draft sale (F-5). The visitor asked about a
  *  product; an owner decides which colourway was actually quoted and at what

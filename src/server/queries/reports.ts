@@ -175,22 +175,30 @@ export async function listProductMargins(
     : sql``;
 
   const rows = await db.execute<Record<string, string>>(sql`
-    SELECT p.id AS product_id, p.code, p.name,
-           SUM(si.quantity - si.quantity_returned)::text AS units_sold,
-           SUM(ROUND(si.line_total_usd_cents::numeric
-               * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))::text
-             AS revenue_cents,
-           SUM(ROUND(si.cogs_cents::numeric
-               * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))::text
-             AS cogs_cents
-      FROM sale_items si
-      JOIN sales s ON s.id = si.sale_id
-      JOIN product_variants v ON v.id = si.variant_id
-      JOIN products p ON p.id = v.product_id
-     WHERE s.status = 'confirmed' ${scope}
-     GROUP BY p.id, p.code, p.name
-    HAVING SUM(si.quantity - si.quantity_returned) > 0
-     ORDER BY ${sql.raw(column)} DESC, p.name
+    WITH margins AS (
+      SELECT p.id AS product_id, p.code, p.name,
+             SUM(si.quantity - si.quantity_returned) AS units_sold,
+             SUM(ROUND(si.line_total_usd_cents::numeric
+                 * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))
+               AS revenue_cents,
+             SUM(ROUND(si.cogs_cents::numeric
+                 * (si.quantity - si.quantity_returned) / NULLIF(si.quantity, 0)))
+               AS cogs_cents
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        JOIN product_variants v ON v.id = si.variant_id
+        JOIN products p ON p.id = v.product_id
+       WHERE s.status = 'confirmed' ${scope}
+       GROUP BY p.id, p.code, p.name
+      HAVING SUM(si.quantity - si.quantity_returned) > 0
+    )
+    SELECT product_id, code, name,
+           units_sold::text,
+           revenue_cents::text,
+           cogs_cents::text,
+           (revenue_cents - cogs_cents)::text AS gross_cents
+      FROM margins
+     ORDER BY ${sql.raw(column)} DESC, name
   `);
 
   return rows.map((row) => {

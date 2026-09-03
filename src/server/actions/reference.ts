@@ -2,6 +2,7 @@
 
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { publicEnv } from '@/lib/env';
 import {
   categorySchema,
   customerSchema,
@@ -9,6 +10,7 @@ import {
   supplierSchema,
   uuid,
 } from '@/lib/schemas';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '../db/client';
 import { categories, customers, members, purchaseOrders, sales, suppliers } from '../db/schema';
 import { logActivity } from '../services/posting';
@@ -27,6 +29,8 @@ async function nextCode(
   table: 'customers' | 'products',
   prefix: string,
 ): Promise<string> {
+  // MAX+1 is only safe when allocations for the same series are serialized.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${table}:${prefix}`}))`);
   const rows = await tx.execute<{ next: string }>(sql`
     SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D', '', 'g'), '')::bigint), 0) + 1 AS next
       FROM ${sql.raw(table)}
@@ -372,6 +376,11 @@ export const updateMember = ownerAction
       // Removing the last owner would lock everyone out of team management and
       // settings, with no way back in through the interface.
       if (existing.role === 'owner' && input.role !== 'owner') {
+        // Lock the owner set before counting it. Without this, two concurrent
+        // demotions could both observe two owners and leave none.
+        await tx.execute(
+          sql`SELECT id FROM members WHERE role = 'owner' ORDER BY id FOR UPDATE`,
+        );
         const [row] = await tx
           .select({ count: sql<string>`COUNT(*)::text` })
           .from(members)
@@ -400,6 +409,65 @@ export const updateMember = ownerAction
       });
     });
     return { fullName: input.fullName };
+  });
+
+/** Invite a new member through Supabase Auth, then create the matching books
+ * row. The auth user is linked immediately so the first sign-in cannot claim
+ * an unintended case-variant email row. */
+export const inviteMember = ownerAction
+  .metadata({ action: 'invited', entity: 'member' })
+  .inputSchema(memberSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const email = input.email.toLowerCase();
+    const [existing] = await db
+      .select({ id: members.id })
+      .from(members)
+      .where(sql`lower(${members.email}) = ${email}`)
+      .limit(1);
+
+    if (existing) throw new ActionError('A team member with that email already exists.');
+
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${publicEnv().NEXT_PUBLIC_APP_URL}/auth/callback`,
+    });
+    if (error || !data.user) {
+      throw new ActionError(error?.message ?? 'Supabase could not send the invitation.');
+    }
+
+    try {
+      const result = await db.transaction(async (tx) => {
+        const [member] = await tx
+          .insert(members)
+          .values({
+            authUserId: data.user.id,
+            email,
+            fullName: input.fullName,
+            role: input.role,
+            isPrincipal: input.isPrincipal,
+          })
+          .returning({ id: members.id, fullName: members.fullName });
+
+        if (!member) throw new ActionError('Could not create the invited team member.');
+
+        await logActivity(tx, {
+          memberId: ctx.member.id,
+          action: 'invited team member',
+          entityType: 'member',
+          entityId: member.id,
+          entityLabel: member.fullName,
+        });
+
+        return member;
+      });
+
+      return result;
+    } catch (error) {
+      // Avoid leaving an auth account without a corresponding books row when
+      // a database constraint or connection failure happens after inviting.
+      await admin.auth.admin.deleteUser(data.user.id);
+      throw error;
+    }
   });
 
 export const removeMember = ownerAction
