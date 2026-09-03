@@ -34,9 +34,20 @@ function createDb() {
     globalThis.__nextlySql ??
     postgres(DATABASE_URL, {
       prepare: false,
-      max: NODE_ENV === 'production' ? 10 : 4,
-      idle_timeout: 20,
-      connect_timeout: 10,
+      // Vercel can run many function instances at once. A pool of ten per
+      // instance overwhelms a small Supabase pooler and leaves requests
+      // waiting for a lease until the platform's timeout. Keep the pool
+      // deliberately small; the queries are short and the app has a handful
+      // of concurrent users, not a long-lived application server.
+      max: NODE_ENV === 'production' ? 2 : 4,
+      idle_timeout: NODE_ENV === 'production' ? 5 : 20,
+      connect_timeout: NODE_ENV === 'production' ? 5 : 10,
+      max_lifetime: NODE_ENV === 'production' ? 300 : undefined,
+      connection: {
+        application_name: 'nextly',
+        statement_timeout: NODE_ENV === 'production' ? 15_000 : 0,
+        idle_in_transaction_session_timeout: NODE_ENV === 'production' ? 15_000 : 0,
+      },
     });
   if (NODE_ENV !== 'production') globalThis.__nextlySql = sql;
   return drizzle(sql, { schema, casing: 'snake_case' });
