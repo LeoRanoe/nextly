@@ -260,6 +260,7 @@ export const createSupplier = writeAction
           name: input.name,
           kind: input.kind,
           website: input.website ?? null,
+          leadTimeDays: input.leadTimeDays,
           notes: input.notes ?? null,
         })
         .returning();
@@ -298,6 +299,7 @@ export const updateSupplier = writeAction
           name: input.name,
           kind: input.kind,
           website: input.website ?? null,
+          leadTimeDays: input.leadTimeDays,
           notes: input.notes ?? null,
         })
         .where(eq(suppliers.id, input.id));

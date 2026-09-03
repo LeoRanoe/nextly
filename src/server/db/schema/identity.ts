@@ -55,6 +55,14 @@ export const settings = pgTable(
     baseCurrency: text().notNull().default('USD'),
     displayCurrency: text().notNull().default('SRD'),
     lowStockThreshold: bigint({ mode: 'number' }).notNull().default(5),
+    quoteValidityDays: bigint({ mode: 'number' }).notNull().default(14),
+    defaultPaymentDays: bigint({ mode: 'number' }).notNull().default(14),
+    weeklyPurchaseBudgetCents: bigint({ mode: 'number' }),
+    reviewHorizonDays: bigint({ mode: 'number' }).notNull().default(14),
+    safetyStockDays: bigint({ mode: 'number' }).notNull().default(7),
+    defaultSupplierLeadTimeDays: bigint({ mode: 'number' }).notNull().default(28),
+    targetBundleMarginBp: bigint({ mode: 'number' }).notNull().default(3000),
+    defaultBundleDiscountBp: bigint({ mode: 'number' }).notNull().default(500),
 
     /* ── Business identity (F-3) ───────────────────────────────────────────
        What an invoice has to say about who issued it. All optional: a

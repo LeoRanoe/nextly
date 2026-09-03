@@ -29,6 +29,7 @@ export const sales = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     number: text().notNull(),
+    invoiceNumber: text(),
     customerId: uuid().references(() => customers.id, { onDelete: 'set null' }),
     status: saleStatus().notNull().default('draft'),
 
@@ -50,6 +51,7 @@ export const sales = pgTable(
 
     paymentMethod: paymentMethod().notNull().default('cash'),
     soldAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    dueAt: timestamp({ withTimezone: true }),
     notes: text(),
     createdById: uuid().references(() => members.id, { onDelete: 'set null' }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -57,6 +59,7 @@ export const sales = pgTable(
   },
   (t) => [
     uniqueIndex('sales_number_key').on(t.number),
+    uniqueIndex('sales_invoice_number_key').on(t.invoiceNumber),
     index('sales_customer_idx').on(t.customerId),
     index('sales_sold_at_idx').on(t.soldAt.desc()),
     index('sales_status_idx').on(t.status),

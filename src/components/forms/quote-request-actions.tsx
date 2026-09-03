@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { CreateQuoteDialog } from '@/components/forms/create-quote-dialog';
 import { ConvertQuoteDialog } from '@/components/forms/quote-convert-dialog';
 import { QuoteRequestSheet } from '@/components/forms/quote-request-sheet';
 import { Item, Menu } from '@/components/ui/dropdown-menu';
@@ -61,6 +62,15 @@ export function QuoteRequestActions({
           <Item onSelect={() => statusAction.execute({ id, status: 'contacted' })}>
             Mark contacted
           </Item>
+        ) : null}
+        {status !== 'converted' && status !== 'archived' ? (
+          <CreateQuoteDialog
+            requestId={id}
+            requesterName={name}
+            quantity={quantity}
+            variants={variants}
+            inMenu
+          />
         ) : null}
         {status === 'contacted' ? (
           <Item onSelect={() => statusAction.execute({ id, status: 'new' })}>Back to new</Item>

@@ -175,6 +175,7 @@ async function SuppliersTable({ searchParams }: { searchParams: Promise<RawSearc
                       name={row.name}
                       kind={row.kind}
                       website={row.website}
+                      leadTimeDays={row.leadTimeDays}
                       notes={row.notes}
                       productCount={row.productCount}
                       orderCount={row.orderCount}
@@ -213,6 +214,7 @@ async function SuppliersTable({ searchParams }: { searchParams: Promise<RawSearc
                 kind={row.kind}
                 website={row.website}
                 notes={row.notes}
+                leadTimeDays={row.leadTimeDays}
                 productCount={row.productCount}
                 orderCount={row.orderCount}
               />

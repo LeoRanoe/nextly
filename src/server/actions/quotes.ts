@@ -1,8 +1,10 @@
 'use server';
 
+import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import {
   convertQuoteRequestSchema,
+  quoteCreateSchema,
   quoteRequestSchema,
   quoteRequestStatusSchema,
   quoteRequestUpdateSchema,
@@ -12,9 +14,12 @@ import {
   customers,
   products,
   productVariants,
+  quoteItems,
   quoteRequests,
+  quotes,
   saleItems,
   sales,
+  settings,
 } from '../db/schema';
 import { logActivity, nextDocumentNumber, type Tx } from '../services/posting';
 import { rateForRecord } from '../services/rates';
@@ -29,6 +34,96 @@ async function lockQuoteRequest(tx: Tx, id: string) {
     .limit(1);
   return request;
 }
+
+function quoteToken() {
+  const raw = randomBytes(32).toString('base64url');
+  return { raw, hash: createHash('sha256').update(raw).digest('hex') };
+}
+
+/** Turn a storefront request into an immutable customer-facing quote draft. */
+export const createQuoteFromRequest = writeAction
+  .metadata({ action: 'created', entity: 'quote' })
+  .inputSchema(quoteCreateSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const result = await db.transaction(async (tx) => {
+      const request = await lockQuoteRequest(tx, input.requestId);
+      if (!request) throw new ActionError('That request no longer exists.');
+      if (request.status === 'converted')
+        throw new ActionError('That request already became a sale.');
+
+      const [variant] = await tx
+        .select({
+          id: productVariants.id,
+          name: productVariants.name,
+          sku: productVariants.sku,
+          productId: products.id,
+          productName: products.name,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(and(eq(productVariants.id, input.variantId), eq(products.status, 'active')))
+        .limit(1);
+      if (!variant) throw new ActionError('That product variant no longer exists.');
+      if (request.productId && variant.productId !== request.productId)
+        throw new ActionError('Choose a variant from the requested product.');
+
+      const [settingsRow] = await tx
+        .select({ days: sql<number>`quote_validity_days` })
+        .from(settings)
+        .limit(1);
+      const validUntil = new Date(Date.now() + Number(settingsRow?.days ?? 14) * 86_400_000);
+      const number = await nextDocumentNumber(tx, 'QT-');
+      const token = quoteToken();
+      const subtotalCents = input.unitPriceCents * request.quantity;
+      const totalCents = subtotalCents - input.discountCents;
+      if (totalCents < 0)
+        throw new ActionError('The discount cannot exceed the quote subtotal.');
+
+      const [quote] = await tx
+        .insert(quotes)
+        .values({
+          number,
+          customerName: request.name,
+          customerContact: request.contact,
+          requestId: request.id,
+          currency: 'USD',
+          subtotalCents,
+          discountCents: input.discountCents,
+          totalCents,
+          validUntil,
+          publicTokenHash: token.hash,
+          notes: input.notes ?? request.details ?? null,
+          createdById: ctx.member.id,
+        })
+        .returning({ id: quotes.id });
+      if (!quote) throw new ActionError('Could not create the quote.');
+      await tx.insert(quoteItems).values({
+        quoteId: quote.id,
+        productId: variant.productId,
+        variantId: variant.id,
+        productName: variant.productName,
+        variantName: variant.name,
+        sku: variant.sku,
+        quantity: request.quantity,
+        unitPriceCents: input.unitPriceCents,
+        lineTotalCents: subtotalCents,
+        position: 1,
+      });
+      await tx
+        .update(quoteRequests)
+        .set({ status: 'contacted', handledById: ctx.member.id })
+        .where(eq(quoteRequests.id, request.id));
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'created quote',
+        entityType: 'quote',
+        entityId: quote.id,
+        entityLabel: number,
+      });
+      return { id: quote.id, number, token: token.raw };
+    });
+    return result;
+  });
 
 /**
  * Quote requests (F-5): the public half of demand capture.

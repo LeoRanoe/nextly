@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { and, type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
 import type { QuoteRequestStatus } from '@/lib/schemas';
@@ -176,4 +177,66 @@ export async function listQuoteRequests(
     page,
     perPage,
   );
+}
+
+export type PublicQuote = {
+  id: string;
+  number: string;
+  status: string;
+  customerName: string;
+  customerContact: string;
+  currency: 'USD' | 'SRD';
+  subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  validUntil: string;
+  notes: string | null;
+  items: {
+    productName: string;
+    variantName: string | null;
+    sku: string | null;
+    quantity: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+  }[];
+};
+
+export async function getPublicQuote(token: string): Promise<PublicQuote | null> {
+  if (!isDatabaseConfigured() || !token || token.length < 32) return null;
+  const hash = createHash('sha256').update(token).digest('hex');
+  const [row] = await db.execute<Record<string, string | null>>(sql`
+    SELECT id::text, number, status::text, customer_name, customer_contact,
+           currency::text, subtotal_cents::text, discount_cents::text,
+           total_cents::text, valid_until::text, notes
+      FROM quotes WHERE public_token_hash = ${hash}
+      LIMIT 1
+  `);
+  if (!row) return null;
+  if (row.status === 'void' || row.status === 'expired') return null;
+  const items = await db.execute<Record<string, string | null>>(sql`
+    SELECT product_name, variant_name, sku, quantity::text,
+           unit_price_cents::text, line_total_cents::text
+      FROM quote_items WHERE quote_id = ${row.id} ORDER BY position
+  `);
+  return {
+    id: text(row.id),
+    number: text(row.number),
+    status: text(row.status),
+    customerName: text(row.customer_name, 'Customer'),
+    customerContact: text(row.customer_contact),
+    currency: text(row.currency, 'USD') as 'USD' | 'SRD',
+    subtotalCents: num(row.subtotal_cents),
+    discountCents: num(row.discount_cents),
+    totalCents: num(row.total_cents),
+    validUntil: text(row.valid_until),
+    notes: maybe(row.notes),
+    items: items.map((item) => ({
+      productName: text(item.product_name),
+      variantName: maybe(item.variant_name),
+      sku: maybe(item.sku),
+      quantity: num(item.quantity),
+      unitPriceCents: num(item.unit_price_cents),
+      lineTotalCents: num(item.line_total_cents),
+    })),
+  };
 }

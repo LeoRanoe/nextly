@@ -380,6 +380,7 @@ export type SupplierValues = {
   name: string;
   kind: 'amazon' | 'aliexpress' | 'other';
   website: string;
+  leadTimeDays: number;
   notes: string;
 };
 
@@ -402,6 +403,7 @@ export function SupplierSheet({
   const [name, setName] = useState(initial?.name ?? '');
   const [kind, setKind] = useState<'amazon' | 'aliexpress' | 'other'>(initial?.kind ?? 'other');
   const [website, setWebsite] = useState(initial?.website ?? '');
+  const [leadTimeDays, setLeadTimeDays] = useState(String(initial?.leadTimeDays ?? 28));
   const [notes, setNotes] = useState(initial?.notes ?? '');
 
   // Two hook calls, always both — see the comment in CustomerSheet above.
@@ -453,6 +455,7 @@ export function SupplierSheet({
               name,
               kind,
               website: website || undefined,
+              leadTimeDays: Number(leadTimeDays),
               notes: notes || undefined,
             } as never);
           }}
@@ -484,6 +487,15 @@ export function SupplierSheet({
                 value={website}
                 placeholder="https://"
                 onChange={(event) => setWebsite(event.target.value)}
+              />
+            </Field>
+            <Field label="Lead time" htmlFor="s-lead-time" hint="Days from order to arrival">
+              <Input
+                id="s-lead-time"
+                numeric
+                inputMode="numeric"
+                value={leadTimeDays}
+                onChange={(event) => setLeadTimeDays(event.target.value)}
               />
             </Field>
             <Field label="Notes" htmlFor="s-notes">

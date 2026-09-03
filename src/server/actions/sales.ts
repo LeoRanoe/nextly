@@ -594,6 +594,7 @@ export const confirmSale = writeAction
         .update(sales)
         .set({
           status: 'confirmed',
+          invoiceNumber: sale.invoiceNumber ?? (await nextDocumentNumber(tx, 'INV-')),
           cogsCents,
           grossProfitCents: sale.totalUsdCents - cogsCents,
         })

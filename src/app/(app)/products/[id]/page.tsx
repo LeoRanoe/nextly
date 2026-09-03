@@ -91,6 +91,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
             sku: variant.sku,
             listPrice: toDecimalString(variant.listPriceCents),
             referenceCost: toDecimalString(variant.referenceCostCents),
+            weightGrams: String(variant.weightGrams),
             isActive: variant.isActive,
           })),
         }}

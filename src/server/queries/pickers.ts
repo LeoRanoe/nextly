@@ -27,6 +27,7 @@ export type VariantOption = {
   variantName: string;
   listPriceCents: Cents;
   referenceCostCents: Cents;
+  weightGrams: number;
   onHand: number;
   /** Total cost of the units on hand. Carried so the form can compute the
    *  cost of goods with exactly the arithmetic the server will use, rather
@@ -43,7 +44,7 @@ export async function listVariantOptions(): Promise<VariantOption[]> {
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
       v.id, v.sku, v.name AS variant_name, v.is_active::text AS is_active,
-      v.list_price_cents::text, v.reference_cost_cents::text,
+      v.list_price_cents::text, v.reference_cost_cents::text, v.weight_grams::text,
       p.name AS product_name,
       COALESCE(s.on_hand, 0)::text     AS on_hand,
       COALESCE(s.value_cents, 0)::text AS value_cents
@@ -64,6 +65,7 @@ export async function listVariantOptions(): Promise<VariantOption[]> {
       variantName: text(row.variant_name),
       listPriceCents: num(row.list_price_cents),
       referenceCostCents: num(row.reference_cost_cents),
+      weightGrams: num(row.weight_grams),
       onHand,
       valueCents,
       unitCostCents: onHand > 0 ? valueCents / onHand : null,

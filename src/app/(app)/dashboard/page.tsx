@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { AlertsPanel } from '@/components/overview/alerts-panel';
 import { CashFlowChart } from '@/components/overview/cash-flow-chart';
+import { ImportPipeline } from '@/components/overview/import-pipeline';
 import { InventoryHealth } from '@/components/overview/inventory-health';
 import { MarginLeaders } from '@/components/overview/margin-leaders';
 import { MarginWaterfall } from '@/components/overview/margin-waterfall';
@@ -20,7 +21,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { formatRate } from '@/lib/fx';
 import { isPeriodPreset, type PeriodPreset } from '@/lib/report-period';
-import { getCashFlow, getCurrentRate, getSetupState } from '@/server/queries/overview';
+import {
+  getCashFlow,
+  getCurrentRate,
+  getImportPipeline,
+  getSetupState,
+} from '@/server/queries/overview';
 
 /** Set by POST /api/setup-banner when the checklist is dismissed (F-13). */
 const SETUP_DISMISS_COOKIE = 'setup-checklist-dismissed';
@@ -75,6 +81,21 @@ export default function OverviewPage({ searchParams }: { searchParams: SearchPar
         <Suspense fallback={<PositionStripSkeleton />}>
           <PositionStrip />
         </Suspense>
+
+        <Surface>
+          <SurfaceHeader
+            title="Import pipeline"
+            hint="Amazon, AliExpress and other supplier commitments"
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/purchase-orders">Purchase orders</Link>
+              </Button>
+            }
+          />
+          <Suspense fallback={<Skeleton className="m-4 h-16" />}>
+            <ImportPipelineBlock />
+          </Suspense>
+        </Surface>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <Surface>
@@ -192,6 +213,10 @@ export default function OverviewPage({ searchParams }: { searchParams: SearchPar
 async function CashFlow() {
   const data = await getCashFlow(12);
   return <CashFlowChart data={data} />;
+}
+
+async function ImportPipelineBlock() {
+  return <ImportPipeline data={await getImportPipeline()} />;
 }
 
 /**

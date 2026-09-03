@@ -414,6 +414,33 @@ export async function getMoneyOwed(limit = 6): Promise<MoneyOwed> {
   };
 }
 
+export type ImportPipelineData = {
+  openOrders: number;
+  inboundOrders: number;
+  receivedUnpaid: number;
+  committedUsdCents: Cents;
+};
+
+/** P2P control totals for an importer buying through Amazon and AliExpress. */
+export async function getImportPipeline(): Promise<ImportPipelineData> {
+  if (!isDatabaseConfigured())
+    return { openOrders: 0, inboundOrders: 0, receivedUnpaid: 0, committedUsdCents: 0 };
+  const [row] = await db.execute<Record<string, string | null>>(sql`
+    SELECT
+      COUNT(*) FILTER (WHERE status IN ('ordered','shipped'))::text AS open_orders,
+      COUNT(*) FILTER (WHERE status = 'shipped')::text AS inbound_orders,
+      COUNT(*) FILTER (WHERE status = 'received' AND COALESCE((SELECT SUM(amount_cents) FROM purchase_order_payments pp WHERE pp.purchase_order_id = p.id), 0) < (SELECT COALESCE(SUM(subtotal_cents + overhead_cents), 0) FROM purchase_order_items i WHERE i.purchase_order_id = p.id))::text AS received_unpaid,
+      COALESCE(SUM(CASE WHEN status IN ('draft','ordered','shipped') THEN (SELECT COALESCE(SUM(subtotal_cents + overhead_cents), 0) FROM purchase_order_items i WHERE i.purchase_order_id = p.id) ELSE 0 END), 0)::text AS committed_usd_cents
+    FROM purchase_orders p
+  `);
+  return {
+    openOrders: Number(row?.open_orders ?? 0),
+    inboundOrders: Number(row?.inbound_orders ?? 0),
+    receivedUnpaid: Number(row?.received_unpaid ?? 0),
+    committedUsdCents: Number(row?.committed_usd_cents ?? 0),
+  };
+}
+
 /* ── Setup checklist (F-13) ──────────────────────────────────────────────── */
 
 export type SetupStepCode = 'rate' | 'supplier' | 'product' | 'order' | 'sale';

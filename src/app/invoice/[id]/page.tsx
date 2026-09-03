@@ -68,8 +68,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-ink-4">Invoice</p>
-            <p className="tabular mt-1 text-[18px] font-semibold">{sale.number}</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-ink-4">
+              Invoice / Factuur
+            </p>
+            <p className="tabular mt-1 text-[18px] font-semibold">
+              {sale.invoiceNumber ?? sale.number}
+            </p>
             <p className="tabular mt-1 text-[12px] text-ink-3">{formatDate(sale.soldAt)}</p>
             <p className="text-[12px] text-ink-3">{humanise(sale.status)}</p>
           </div>
@@ -83,6 +87,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-[0.08em] text-ink-4">Payment</p>
             <p className="mt-1 text-ink">{humanise(sale.paymentMethod)}</p>
+            {sale.dueAt ? (
+              <p className="tabular text-[12px] text-ink-3">
+                Due / Vervalt {formatDate(sale.dueAt)}
+              </p>
+            ) : null}
             {currency === 'SRD' ? (
               <p className="tabular text-[12px] text-ink-3">
                 Rate 1 USD = {formatRate(sale.fxRateMicros, 2)} SRD

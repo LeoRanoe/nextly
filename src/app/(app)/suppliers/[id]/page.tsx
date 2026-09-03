@@ -73,6 +73,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
               kind={supplier.kind}
               website={supplier.website}
               notes={supplier.notes}
+              leadTimeDays={supplier.leadTimeDays}
               productCount={supplier.productCount}
               orderCount={supplier.orderCount}
             />

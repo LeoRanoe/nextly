@@ -267,6 +267,8 @@ async function SettingsAction() {
         businessName: settings?.businessName ?? 'Nextly',
         displayCurrency: settings?.displayCurrency ?? 'SRD',
         lowStockThreshold: settings?.lowStockThreshold ?? 5,
+        quoteValidityDays: settings?.quoteValidityDays ?? 14,
+        defaultPaymentDays: settings?.defaultPaymentDays ?? 14,
         legalName: settings?.legalName ?? '',
         addressLine: settings?.addressLine ?? '',
         city: settings?.city ?? '',

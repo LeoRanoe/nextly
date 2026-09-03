@@ -43,7 +43,10 @@ export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
  * SEQUENCE cannot do this — it is non-transactional and leaves holes, and a
  * purchase order series with gaps is the first thing an auditor asks about.
  */
-export async function nextDocumentNumber(tx: Tx, prefix: 'PO-' | 'V'): Promise<string> {
+export async function nextDocumentNumber(
+  tx: Tx,
+  prefix: 'PO-' | 'V' | 'INV-' | 'QT-',
+): Promise<string> {
   const rows = await tx.execute<{ next_document_number: string }>(
     sql`SELECT private.next_document_number(${prefix}) AS next_document_number`,
   );

@@ -35,6 +35,17 @@ export const movementKind = pgEnum('movement_kind', [
 
 export const saleStatus = pgEnum('sale_status', ['draft', 'confirmed', 'void']);
 
+export const quoteStatus = pgEnum('quote_status', [
+  'draft',
+  'sent',
+  'viewed',
+  'accepted',
+  'declined',
+  'expired',
+  'converted',
+  'void',
+]);
+
 /** Where a storefront quote request (F-5) stands. `converted` means an owner
  *  turned it into a draft sale — the request stays as the record of where the
  *  sale came from. There is no `quoted` state on purpose: until prices leave

@@ -986,6 +986,7 @@ export function SupplierActions({
   name,
   kind,
   website,
+  leadTimeDays,
   notes,
   productCount,
   orderCount,
@@ -994,6 +995,7 @@ export function SupplierActions({
   name: string;
   kind: 'amazon' | 'aliexpress' | 'other';
   website: string;
+  leadTimeDays: number;
   notes: string;
   productCount: number;
   orderCount: number;
@@ -1027,7 +1029,7 @@ export function SupplierActions({
       </Menu>
 
       <SupplierSheet
-        initial={{ id, name, kind, website, notes }}
+        initial={{ id, name, kind, website, leadTimeDays, notes }}
         open={editing}
         onOpenChange={setEditing}
       />

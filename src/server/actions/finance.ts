@@ -381,6 +381,8 @@ export const updateSettings = ownerAction
             businessName: input.businessName,
             displayCurrency: input.displayCurrency,
             lowStockThreshold: input.lowStockThreshold,
+            quoteValidityDays: input.quoteValidityDays,
+            defaultPaymentDays: input.defaultPaymentDays,
             ...identity,
           })
           .where(eq(settings.id, existing.id));
@@ -389,6 +391,8 @@ export const updateSettings = ownerAction
           businessName: input.businessName,
           displayCurrency: input.displayCurrency,
           lowStockThreshold: input.lowStockThreshold,
+          quoteValidityDays: input.quoteValidityDays,
+          defaultPaymentDays: input.defaultPaymentDays,
           ...identity,
         });
       }

@@ -74,6 +74,12 @@ export const NAVIGATION: NavGroup[] = [
         keywords: ['po', 'buying', 'receive', 'landed cost', 'freight', 'shipping'],
       },
       {
+        href: '/reorder' as Route,
+        label: 'Reorder advice',
+        Icon: ShoppingCart,
+        keywords: ['forecast', 'recommendations', 'budget', 'restock'],
+      },
+      {
         href: '/inventory',
         label: 'Inventory',
         Icon: Boxes,

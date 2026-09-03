@@ -119,6 +119,8 @@ export type SettingsInitial = {
   businessName: string;
   displayCurrency: string;
   lowStockThreshold: number;
+  quoteValidityDays: number;
+  defaultPaymentDays: number;
   legalName: string;
   addressLine: string;
   city: string;
@@ -138,6 +140,10 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
   const [businessName, setBusinessName] = useState(initial.businessName);
   const [displayCurrency, setDisplayCurrency] = useState(initial.displayCurrency);
   const [lowStockThreshold, setLowStockThreshold] = useState(String(initial.lowStockThreshold));
+  const [quoteValidityDays, setQuoteValidityDays] = useState(String(initial.quoteValidityDays));
+  const [defaultPaymentDays, setDefaultPaymentDays] = useState(
+    String(initial.defaultPaymentDays),
+  );
   const [legalName, setLegalName] = useState(initial.legalName);
   const [addressLine, setAddressLine] = useState(initial.addressLine);
   const [city, setCity] = useState(initial.city);
@@ -190,6 +196,8 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
               businessName,
               displayCurrency: displayCurrency as 'SRD',
               lowStockThreshold: Number(lowStockThreshold),
+              quoteValidityDays: Number(quoteValidityDays),
+              defaultPaymentDays: Number(defaultPaymentDays),
               legalName: legalName || undefined,
               addressLine: addressLine || undefined,
               city: city || undefined,
@@ -231,6 +239,30 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
                   inputMode="numeric"
                   value={lowStockThreshold}
                   onChange={(event) => setLowStockThreshold(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field label="Quote valid for" htmlFor="quoteValidityDays" hint="Days">
+                <Input
+                  id="quoteValidityDays"
+                  numeric
+                  inputMode="numeric"
+                  value={quoteValidityDays}
+                  onChange={(event) => setQuoteValidityDays(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Default payment terms"
+                htmlFor="defaultPaymentDays"
+                hint="Days after invoice"
+              >
+                <Input
+                  id="defaultPaymentDays"
+                  numeric
+                  inputMode="numeric"
+                  value={defaultPaymentDays}
+                  onChange={(event) => setDefaultPaymentDays(event.target.value)}
                 />
               </Field>
             </FieldRow>

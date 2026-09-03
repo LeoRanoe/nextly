@@ -34,6 +34,7 @@ export const suppliers = pgTable(
     name: text().notNull(),
     kind: supplierKind().notNull().default('other'),
     website: text(),
+    leadTimeDays: integer().notNull().default(28),
     notes: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -114,6 +115,7 @@ export const productVariants = pgTable(
     listPriceCents: bigint({ mode: 'number' }).notNull().default(0),
     /** Supplier list price, for reference only. Never used to value stock. */
     referenceCostCents: bigint({ mode: 'number' }).notNull().default(0),
+    weightGrams: integer().notNull().default(0),
     isDefault: boolean().notNull().default(false),
     isActive: boolean().notNull().default(true),
     position: integer().notNull().default(0),

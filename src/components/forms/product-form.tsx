@@ -29,6 +29,7 @@ type VariantRow = {
   sku: string;
   listPrice: string;
   referenceCost: string;
+  weightGrams: string;
   isActive: boolean;
 };
 
@@ -56,6 +57,7 @@ const blankVariant = (): VariantRow => ({
   sku: '',
   listPrice: '',
   referenceCost: '',
+  weightGrams: '0',
   isActive: true,
 });
 
@@ -179,6 +181,7 @@ export function ProductForm({
             sku: variant.sku,
             listPriceCents: variant.listPrice || '0',
             referenceCostCents: variant.referenceCost || '0',
+            weightGrams: Number(variant.weightGrams || 0),
             isActive: variant.isActive,
           })),
         } as Parameters<typeof execute>[0]);
@@ -295,7 +298,7 @@ export function ProductForm({
             {values.variants.map((variant, index) => (
               <div
                 key={variant.key}
-                className="grid gap-2 p-4 sm:grid-cols-[1fr_1fr_110px_110px_32px]"
+                className="grid gap-2 p-4 sm:grid-cols-[1fr_1fr_110px_110px_100px_32px]"
               >
                 <Field label={index === 0 ? 'Option' : ''} htmlFor={`vname-${variant.key}`}>
                   <Input
@@ -342,6 +345,21 @@ export function ProductForm({
                     value={variant.referenceCost}
                     onChange={(event) =>
                       setVariant(variant.key, { referenceCost: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field
+                  label={index === 0 ? 'Weight (g)' : ''}
+                  htmlFor={`vweight-${variant.key}`}
+                >
+                  <Input
+                    id={`vweight-${variant.key}`}
+                    numeric
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={variant.weightGrams}
+                    onChange={(event) =>
+                      setVariant(variant.key, { weightGrams: event.target.value })
                     }
                   />
                 </Field>

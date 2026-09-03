@@ -77,6 +77,7 @@ export type SupplierRow = {
   kind: 'amazon' | 'aliexpress' | 'other';
   website: string;
   notes: string;
+  leadTimeDays: number;
   productCount: number;
   orderCount: number;
   spendCents: Cents;
@@ -117,7 +118,7 @@ export async function listSuppliers(
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      s.id, s.name, s.kind::text AS kind, s.website, s.notes,
+      s.id, s.name, s.kind::text AS kind, s.website, s.notes, s.lead_time_days::text AS lead_time_days,
       (SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id)::text AS product_count,
       (SELECT COUNT(*) FROM purchase_orders o WHERE o.supplier_id = s.id)::text AS order_count,
       COALESCE((
@@ -142,6 +143,7 @@ export async function listSuppliers(
       kind: text(row.kind, 'other') as SupplierRow['kind'],
       website: text(row.website),
       notes: text(row.notes),
+      leadTimeDays: num(row.lead_time_days, 28),
       productCount: num(row.product_count),
       orderCount: num(row.order_count),
       spendCents: num(row.spend_cents),
@@ -169,6 +171,7 @@ export async function getSupplier(id: string): Promise<SupplierDetail | null> {
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT
       s.id, s.name, s.kind::text AS kind, s.website, s.notes,
+      s.lead_time_days::text AS lead_time_days,
       (SELECT COUNT(*) FROM products p WHERE p.supplier_id = s.id)::text AS product_count,
       (SELECT COUNT(*) FROM purchase_orders o WHERE o.supplier_id = s.id)::text AS order_count,
       COALESCE((
@@ -206,6 +209,7 @@ export async function getSupplier(id: string): Promise<SupplierDetail | null> {
     kind: text(row.kind, 'other') as SupplierRow['kind'],
     website: text(row.website),
     notes: text(row.notes),
+    leadTimeDays: num(row.lead_time_days, 28),
     productCount: num(row.product_count),
     orderCount: num(row.order_count),
     spendCents: num(row.spend_cents),
@@ -288,6 +292,11 @@ export type SettingsRow = {
   baseCurrency: string;
   displayCurrency: string;
   lowStockThreshold: number;
+  quoteValidityDays: number;
+  defaultPaymentDays: number;
+  weeklyPurchaseBudgetCents: number | null;
+  reviewHorizonDays: number;
+  safetyStockDays: number;
   legalName: string | null;
   addressLine: string | null;
   city: string | null;
@@ -306,6 +315,8 @@ export async function getSettings(): Promise<SettingsRow | null> {
 
   const [row] = await db.execute<Record<string, string>>(sql`
     SELECT business_name, base_currency, display_currency, low_stock_threshold::text,
+           quote_validity_days::text, default_payment_days::text,
+           weekly_purchase_budget_cents::text, review_horizon_days::text, safety_stock_days::text,
            legal_name, address_line, city, phone, whatsapp, email, tax_id, logo_url, invoice_footer,
            instagram, opening_hours
       FROM settings LIMIT 1
@@ -317,6 +328,12 @@ export async function getSettings(): Promise<SettingsRow | null> {
     baseCurrency: text(row.base_currency, 'USD'),
     displayCurrency: text(row.display_currency, 'SRD'),
     lowStockThreshold: num(row.low_stock_threshold, 5),
+    quoteValidityDays: num(row.quote_validity_days, 14),
+    defaultPaymentDays: num(row.default_payment_days, 14),
+    weeklyPurchaseBudgetCents:
+      row.weekly_purchase_budget_cents == null ? null : num(row.weekly_purchase_budget_cents),
+    reviewHorizonDays: num(row.review_horizon_days, 14),
+    safetyStockDays: num(row.safety_stock_days, 7),
     legalName: row.legal_name ?? null,
     addressLine: row.address_line ?? null,
     city: row.city ?? null,
@@ -352,6 +369,7 @@ export type ProductDetail = {
     sku: string;
     listPriceCents: Cents;
     referenceCostCents: Cents;
+    weightGrams: number;
     isActive: boolean;
     onHand: number;
     valueCents: Cents;
@@ -385,6 +403,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   const [variants, images] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT v.id, v.name, v.sku, v.list_price_cents::text, v.reference_cost_cents::text,
+             v.weight_grams::text AS weight_grams,
              v.is_active::text AS is_active,
              COALESCE(s.on_hand, 0)::text     AS on_hand,
              COALESCE(s.value_cents, 0)::text AS value_cents
@@ -422,6 +441,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       sku: text(variant.sku),
       listPriceCents: num(variant.list_price_cents),
       referenceCostCents: num(variant.reference_cost_cents),
+      weightGrams: num(variant.weight_grams),
       isActive: bool(variant.is_active),
       onHand: num(variant.on_hand),
       valueCents: num(variant.value_cents),

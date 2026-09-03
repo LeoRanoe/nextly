@@ -169,6 +169,14 @@ async function assertPurchasableVariants(tx: Tx, variantIds: string[]): Promise<
   }
 }
 
+async function weightsForVariants(tx: Tx, ids: string[]) {
+  const rows = await tx
+    .select({ id: productVariants.id, weightGrams: productVariants.weightGrams })
+    .from(productVariants)
+    .where(inArray(productVariants.id, ids));
+  return new Map(rows.map((row) => [row.id, row.weightGrams]));
+}
+
 export const createPurchaseOrder = writeAction
   .metadata({ action: 'created', entity: 'purchase order' })
   .inputSchema(purchaseOrderSchema)
@@ -180,6 +188,10 @@ export const createPurchaseOrder = writeAction
       );
       const rateMicros = await rateForRecord(input.orderedAt, tx);
       const number = await nextDocumentNumber(tx, 'PO-');
+      const weights = await weightsForVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
 
       const [order] = await tx
         .insert(purchaseOrders)
@@ -208,6 +220,7 @@ export const createPurchaseOrder = writeAction
         input.items.map((item, index) => ({
           purchaseOrderId: order.id,
           variantId: item.variantId,
+          weightGrams: weights.get(item.variantId) ?? 0,
           quantity: item.quantity,
           quantityReceived: 0,
           subtotalCents: item.subtotalCents,
@@ -280,6 +293,10 @@ export const updatePurchaseOrder = writeAction
         );
       }
       const rateMicros = await rateForRecord(input.orderedAt, tx);
+      const weights = await weightsForVariants(
+        tx,
+        input.items.map((item) => item.variantId),
+      );
 
       await tx
         .update(purchaseOrders)
@@ -306,6 +323,7 @@ export const updatePurchaseOrder = writeAction
         input.items.map((item, index) => ({
           purchaseOrderId: input.id,
           variantId: item.variantId,
+          weightGrams: weights.get(item.variantId) ?? 0,
           quantity: item.quantity,
           quantityReceived: 0,
           subtotalCents: item.subtotalCents,

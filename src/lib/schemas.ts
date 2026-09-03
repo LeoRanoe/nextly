@@ -99,6 +99,7 @@ export const variantSchema = z.object({
   sku: z.string().trim().min(1, 'Required').max(64),
   listPriceCents: moneyInput,
   referenceCostCents: moneyInput,
+  weightGrams: z.coerce.number().int().min(0).max(10_000_000).default(0),
   isActive: z.boolean().default(true),
 });
 
@@ -150,6 +151,7 @@ export const supplierSchema = z.object({
     .transform((value) => (value === '' ? undefined : value))
     .optional(),
   notes: optionalText,
+  leadTimeDays: z.coerce.number().int().min(1).max(365).default(28),
 });
 
 export const customerSchema = z.object({
@@ -387,6 +389,8 @@ export const settingsSchema = z.object({
   businessName: shortText,
   displayCurrency: currency,
   lowStockThreshold: z.coerce.number().int().min(0).max(10_000),
+  quoteValidityDays: z.coerce.number().int().min(1).max(365),
+  defaultPaymentDays: z.coerce.number().int().min(0).max(365),
   // Business identity (F-3). Optional free text — an invoice prints whatever
   // is filled in. `whatsapp` is stored as typed; the click-to-chat link strips
   // non-digits at render time so a spaced or dashed number still works.
@@ -413,6 +417,14 @@ export const memberSchema = z.object({
 });
 
 /* ── Quote requests (F-5) ────────────────────────────────────────────────── */
+
+export const quoteCreateSchema = z.object({
+  requestId: uuid,
+  variantId: uuid,
+  unitPriceCents: positiveMoney,
+  discountCents: moneyInput.default(0),
+  notes: optionalText,
+});
 
 /** Submitted by a signed-out visitor from a product page. Deliberately
  *  strict-but-simple: name and a way to reach them required, free text capped

@@ -18,6 +18,7 @@ import { maybe, num, text } from './row';
 export type SaleDetail = {
   id: string;
   number: string;
+  invoiceNumber: string | null;
   status: 'draft' | 'confirmed' | 'void';
   customerId: string | null;
   customerName: string | null;
@@ -31,6 +32,7 @@ export type SaleDetail = {
   grossProfitCents: Cents;
   paymentMethod: string;
   soldAt: string;
+  dueAt: string | null;
   notes: string | null;
   items: {
     id: string;
@@ -91,12 +93,12 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
 
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      s.id, s.number, s.status::text, s.customer_id, c.name AS customer_name,
+      s.id, s.number, s.invoice_number, s.status::text, s.customer_id, c.name AS customer_name,
       s.currency::text, s.fx_rate_micros::text,
       s.total_cents::text, s.total_usd_cents::text, s.discount_cents::text,
       s.discount_reason,
       s.cogs_cents::text, s.gross_profit_cents::text,
-      s.payment_method::text, s.sold_at::text, s.notes,
+      s.payment_method::text, s.sold_at::text, s.due_at::text, s.notes,
       COALESCE((
         SELECT SUM(CASE WHEN l.direction = 'in' THEN l.amount_cents ELSE -l.amount_cents END)
           FROM ledger_entries l
@@ -181,6 +183,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
   return {
     id: text(row.id),
     number: text(row.number),
+    invoiceNumber: maybe(row.invoice_number),
     status: text(row.status) as SaleDetail['status'],
     customerId: maybe(row.customer_id),
     customerName: maybe(row.customer_name),
@@ -194,6 +197,7 @@ export async function getSale(id: string): Promise<SaleDetail | null> {
     grossProfitCents: num(row.gross_profit_cents),
     paymentMethod: text(row.payment_method),
     soldAt: text(row.sold_at),
+    dueAt: maybe(row.due_at),
     notes: maybe(row.notes),
     items: items.map((item) => ({
       id: text(item.id),

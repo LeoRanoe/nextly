@@ -148,6 +148,20 @@
       "when": 1788394261730,
       "tag": "0020_sturdy_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788394500000,
+      "tag": "0021_commercial_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788394600000,
+      "tag": "0022_planning_and_inventory_intelligence",
+      "breakpoints": true
     }
   ]
 }

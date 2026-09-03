@@ -42,6 +42,7 @@ export const purchaseOrders = pgTable(
     orderedAt: timestamp({ withTimezone: true }),
     expectedAt: timestamp({ withTimezone: true }),
     receivedAt: timestamp({ withTimezone: true }),
+    dueAt: timestamp({ withTimezone: true }),
 
     reference: text(),
     notes: text(),
@@ -75,6 +76,8 @@ export const purchaseOrderItems = pgTable(
     variantId: uuid()
       .notNull()
       .references(() => productVariants.id, { onDelete: 'restrict' }),
+    /** Catalog weight copied at order creation so later edits never rewrite logistics history. */
+    weightGrams: integer().notNull().default(0),
 
     quantity: integer().notNull(),
     quantityReceived: integer().notNull().default(0),
