@@ -5,6 +5,7 @@ import { Sparkline } from '@/components/charts/sparkline';
 import { Button } from '@/components/ui/button';
 import { Money, Percent } from '@/components/ui/money';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
+import { formatDate } from '@/lib/format';
 import { formatRate } from '@/lib/fx';
 import type { FxExposure } from '@/server/queries/reports';
 
@@ -40,13 +41,7 @@ export function FxExposureReport({ exposure }: { exposure: FxExposure }) {
     exposure.srdCashShare > 0;
 
   if (!hasSrd && !expanded) {
-    const since = exposure.srdEarliestFrom
-      ? new Intl.DateTimeFormat('en-US', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        }).format(new Date(`${exposure.srdEarliestFrom}T00:00:00Z`))
-      : null;
+    const since = exposure.srdEarliestFrom ? formatDate(exposure.srdEarliestFrom) : null;
     return (
       <Surface>
         <SurfaceHeader title="FX exposure" hint={rateLabel} />
