@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { connection } from 'next/server';
 import { InvoiceActions } from '@/components/invoice/invoice-actions';
 import { InvoicePaper } from '@/components/invoice/invoice-paper';
 import { formatMoney } from '@/lib/money';
@@ -11,6 +12,7 @@ import { getSettings } from '@/server/queries/reference';
 export const metadata: Metadata = { title: 'Invoice' };
 export const instant = false;
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  await connection();
   await requireMember();
   const { id } = await params;
   const [sale, settings] = await Promise.all([getSale(id), getSettings()]);
