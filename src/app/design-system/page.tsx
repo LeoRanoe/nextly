@@ -1,4 +1,3 @@
-import { notFound } from 'next/navigation';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { Badge, Dot } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,13 +12,11 @@ export const metadata = { title: 'Design system' };
 /**
  * Living documentation for the Instrument design language.
  *
- * Not shipped to production. Its job is to make every token and primitive
+ * Reachable in every environment. Its job is to make every token and primitive
  * visible in both themes at once, so a regression is obvious rather than
  * something you discover three screens deep.
  */
 export default function DesignSystemPage() {
-  if (process.env.NODE_ENV === 'production') notFound();
-
   const rate = parseRate('38.5');
 
   return (

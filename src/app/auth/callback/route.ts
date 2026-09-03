@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { logServerError, requestIdFrom, withRequestId } from '@/lib/observability';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -11,21 +12,36 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
+  const requestId = requestIdFrom(request);
   const code = searchParams.get('code');
   const requested = searchParams.get('next');
   const next =
     requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
 
   if (!code) {
-    return NextResponse.redirect(new URL('/auth/error?reason=missing-code', origin));
+    return withRequestId(
+      NextResponse.redirect(new URL('/auth/error?reason=missing-code', origin)),
+      requestId,
+    );
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-  if (error) {
-    return NextResponse.redirect(new URL('/auth/error?reason=exchange-failed', origin));
+    if (error) {
+      return withRequestId(
+        NextResponse.redirect(new URL('/auth/error?reason=exchange-failed', origin)),
+        requestId,
+      );
+    }
+  } catch (error) {
+    logServerError('auth.callback', requestId, error);
+    return withRequestId(
+      NextResponse.redirect(new URL('/auth/error?reason=service-unavailable', origin)),
+      requestId,
+    );
   }
 
-  return NextResponse.redirect(new URL(next, origin));
+  return withRequestId(NextResponse.redirect(new URL(next, origin)), requestId);
 }

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { isMigrationEnvironmentValid, isServerEnvironmentValid } from '@/lib/env';
 import { dateInput, moneyInput, saleRefundSchema } from '@/lib/schemas';
 
 describe('dateInput', () => {
@@ -27,5 +28,41 @@ describe('money validation', () => {
         reason: 'Customer credit',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('runtime environment validation', () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalDirectUrl = process.env.DIRECT_URL;
+
+  afterEach(() => {
+    if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalDirectUrl === undefined) delete process.env.DIRECT_URL;
+    else process.env.DIRECT_URL = originalDirectUrl;
+  });
+
+  it('accepts the required Supabase pooler format', () => {
+    process.env.DATABASE_URL =
+      'postgresql://postgres.example:password@aws-1-us-east-1.pooler.supabase.com:6543/postgres';
+    expect(isServerEnvironmentValid()).toBe(true);
+  });
+
+  it('rejects a direct or malformed runtime connection', () => {
+    process.env.DATABASE_URL =
+      'postgresql://postgres:password@db.example.supabase.co:5432/postgres';
+    expect(isServerEnvironmentValid()).toBe(false);
+    process.env.DATABASE_URL = 'not-a-database-url';
+    expect(isServerEnvironmentValid()).toBe(false);
+  });
+
+  it('keeps runtime readiness independent from the migration-only direct URL', () => {
+    process.env.DATABASE_URL =
+      'postgresql://postgres.example:password@aws-1-us-east-1.pooler.supabase.com:6543/postgres';
+    process.env.DIRECT_URL =
+      'postgresql://postgres:password@db.example.supabase.co:5432/postgres';
+
+    expect(isServerEnvironmentValid()).toBe(true);
+    expect(isMigrationEnvironmentValid()).toBe(false);
   });
 });

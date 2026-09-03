@@ -2,7 +2,7 @@ import { Database } from 'lucide-react';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Wordmark } from '@/components/shell/wordmark';
-import { isDatabaseConfigured } from '@/lib/env';
+import { isDatabaseConfigured, isServerEnvironmentValid } from '@/lib/env';
 
 export const metadata: Metadata = { title: 'Setup' };
 
@@ -14,7 +14,9 @@ export const metadata: Metadata = { title: 'Setup' };
  * trace, and better than a sign-in form that could never succeed.
  */
 export default function SetupPage() {
-  if (isDatabaseConfigured()) redirect('/dashboard');
+  const databaseConfigured = isDatabaseConfigured();
+  const environmentValid = isServerEnvironmentValid();
+  if (databaseConfigured && environmentValid) redirect('/dashboard');
 
   return (
     <div className="grid min-h-dvh place-items-center px-6 py-12">
@@ -25,11 +27,12 @@ export default function SetupPage() {
           <Database className="size-5" />
         </div>
         <h1 className="mt-4 font-medium text-[18px] text-ink tracking-[-0.02em]">
-          Connect the database
+          {databaseConfigured ? 'Check the database configuration' : 'Connect the database'}
         </h1>
         <p className="mt-2 text-[13px] text-ink-3 leading-relaxed">
-          The Supabase project is created and migrated, and the Master Sheet has already been
-          imported. Two connection strings are still missing.
+          {databaseConfigured
+            ? 'The database connection settings are present but do not match the required Supabase pooler format.'
+            : 'The Supabase project is created and migrated, and the Master Sheet has already been imported. Two connection strings are still missing.'}
         </p>
 
         <ol className="mt-6 space-y-4">
@@ -48,7 +51,14 @@ export default function SetupPage() {
             </p>
           </Step>
 
-          <Step index={2} title="Copy two connection strings into .env.local">
+          <Step
+            index={2}
+            title={
+              databaseConfigured
+                ? 'Replace the connection strings in .env.local'
+                : 'Copy two connection strings into .env.local'
+            }
+          >
             <dl className="mt-1 space-y-1.5">
               <Pair
                 name="DATABASE_URL"

@@ -9,14 +9,44 @@ import { z } from 'zod';
  * loudly and say exactly which variable is missing.
  */
 
+function isPoolerConnection(value: string, port: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'postgres:' || url.protocol === 'postgresql:') &&
+      url.port === port &&
+      url.hostname.endsWith('.pooler.supabase.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+const databaseUrlSchema = z
+  .string()
+  .url('DATABASE_URL must be a PostgreSQL connection URL')
+  .refine(
+    (value) => isPoolerConnection(value, '6543'),
+    'DATABASE_URL must use the Supabase transaction pooler on port 6543',
+  );
+
+const directUrlSchema = z
+  .string()
+  .url('DIRECT_URL must be a PostgreSQL connection URL')
+  .refine(
+    (value) => isPoolerConnection(value, '5432'),
+    'DIRECT_URL must use the Supabase session pooler on port 5432',
+  );
+
 const serverSchema = z.object({
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (Supabase transaction pooler)'),
-  DIRECT_URL: z.string().min(1).optional(),
+  DATABASE_URL: databaseUrlSchema,
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
   CRON_SECRET: z.string().min(32).optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
+
+const migrationSchema = z.object({ DIRECT_URL: directUrlSchema });
 
 const publicSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
@@ -59,6 +89,16 @@ export function serverEnv(): ServerEnv {
   if (!parsed.success) fail('server', parsed.error);
   serverCache = parsed.data;
   return serverCache;
+}
+
+/** Non-throwing validation for setup and readiness screens. */
+export function isServerEnvironmentValid(): boolean {
+  return serverSchema.safeParse(present(process.env)).success;
+}
+
+/** Migration tooling uses the session pooler; the app itself does not. */
+export function isMigrationEnvironmentValid(): boolean {
+  return migrationSchema.safeParse(present({ DIRECT_URL: process.env.DIRECT_URL })).success;
 }
 
 export function publicEnv(): PublicEnv {

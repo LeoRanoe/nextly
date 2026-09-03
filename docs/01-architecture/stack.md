@@ -89,7 +89,7 @@ src/
     (app)/            authenticated dashboard, rooted at /dashboard; instant = false
     (store)/           the storefront at / and /p/[slug]; partial prerender (ADR-0010)
     login/  no-access/  auth/   public, partially prerendered
-    design-system/    living style documentation, 404 in production
+    design-system/    living style documentation, reachable in every environment
     api/blob/upload/   authorises client-side Vercel Blob uploads
     robots.ts  sitemap.ts       scoped to the storefront only
   components/

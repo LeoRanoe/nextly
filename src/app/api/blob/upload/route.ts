@@ -1,7 +1,9 @@
 import { type HandleUploadBody, handleUpload } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
-import { requireWrite } from '@/server/auth';
+import { logServerError, requestIdFrom, withRequestId } from '@/lib/observability';
+import { requireApiWrite } from '@/server/auth';
 import { db } from '@/server/db/client';
+import { ApiError } from '@/server/errors';
 import { recordProductImage } from '@/server/services/media';
 
 /**
@@ -24,10 +26,10 @@ import { recordProductImage } from '@/server/services/media';
 type ClientPayload = { productId: string; width: number; height: number; alt?: string };
 
 function parseClientPayload(raw: string | null): ClientPayload {
-  if (!raw) throw new Error('Missing upload payload.');
+  if (!raw) throw new ApiError('Missing upload payload.', 400);
   const parsed = JSON.parse(raw) as Partial<ClientPayload>;
   if (!parsed.productId || !parsed.width || !parsed.height) {
-    throw new Error('Upload payload is missing productId, width or height.');
+    throw new ApiError('Upload payload is missing productId, width or height.', 400);
   }
   return {
     productId: parsed.productId,
@@ -38,21 +40,24 @@ function parseClientPayload(raw: string | null): ClientPayload {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const body = (await request.json()) as HandleUploadBody;
+  const requestId = requestIdFrom(request);
 
   try {
+    let body: HandleUploadBody;
+    try {
+      body = (await request.json()) as HandleUploadBody;
+    } catch {
+      throw new ApiError('Invalid upload request body.', 400);
+    }
     const result = await handleUpload({
       body,
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
         // The only place this upload is authorised. For the case that
         // matters here — a signed-in viewer with no write access — this
-        // throws ActionError and the catch below turns it into a clean 400.
-        // A genuinely signed-out request redirects instead (requireMember's
-        // usual behaviour), which is an acceptable edge case: the upload
-        // button this call comes from only renders inside the (app) shell,
-        // which has already required a session to reach it.
-        await requireWrite();
+        // API auth returns JSON-compatible status errors rather than page
+        // redirects, including for signed-out and read-only members.
+        await requireApiWrite();
         const payload = parseClientPayload(clientPayload);
 
         return {
@@ -76,11 +81,19 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
     });
 
-    return NextResponse.json(result);
+    return withRequestId(NextResponse.json(result), requestId);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Upload failed.' },
-      { status: 400 },
+    if (error instanceof ApiError) {
+      return withRequestId(
+        NextResponse.json({ error: error.message }, { status: error.status }),
+        requestId,
+      );
+    }
+
+    logServerError('api.blob-upload', requestId, error);
+    return withRequestId(
+      NextResponse.json({ error: 'Upload is temporarily unavailable.' }, { status: 503 }),
+      requestId,
     );
   }
 }

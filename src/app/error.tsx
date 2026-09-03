@@ -20,7 +20,7 @@ export default function RootError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[error boundary]', error);
+    console.error('[error boundary]', { digest: error.digest, message: error.message });
   }, [error]);
 
   return (
@@ -34,14 +34,14 @@ export default function RootError({
           Nextly could not load this page
         </h1>
         <p className="mt-2 text-[13px] text-ink-3 leading-relaxed">
-          Try again once. If it keeps happening, mention the error code to support
+          Try again once. If it keeps happening, mention the error code
           {error.digest ? (
             <>
               {' '}
-              under <span className="tabular text-ink-2">{error.digest}</span>
+              <span className="tabular text-ink-2">{error.digest}</span>
             </>
-          ) : null}
-          .
+          ) : null}{' '}
+          to support.
         </p>
         <div className="mt-6">
           <Button variant="primary" onClick={reset}>

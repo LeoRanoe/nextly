@@ -23,7 +23,7 @@ export default function AppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[app error boundary]', error);
+    console.error('[app error boundary]', { digest: error.digest, message: error.message });
   }, [error]);
 
   return (
@@ -33,15 +33,14 @@ export default function AppError({
       </div>
       <p className="mt-3 font-medium text-[14px] text-ink">Nextly could not load this page</p>
       <p className="mt-1 max-w-[42ch] text-[13px] text-ink-3 leading-relaxed">
-        Try again once. If it keeps happening, mention the error code to support
+        Try again once. If it keeps happening, mention the error code
         {error.digest ? (
           <>
-            ; if it keeps happening, mention{' '}
+            {' '}
             <span className="tabular text-ink-2">{error.digest}</span>
           </>
-        ) : (
-          '.'
-        )}
+        ) : null}{' '}
+        to support.
       </p>
       <div className="mt-4">
         <Button variant="primary" onClick={reset}>

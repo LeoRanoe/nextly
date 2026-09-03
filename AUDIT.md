@@ -873,7 +873,7 @@ test covering the full buy → stock → sell path. The gaps are operational.
 | E2E coverage | Partial | Smoke test covers the happy path. Add returns, void, oversell, multi-line sales, and a viewer-role permission test. |
 | Report arithmetic tests | Absent | Money primitives are well tested; `getProfitAndLoss` and `periodRange` are not. P0-4 and P0-6 would both have been caught. |
 | Importer tests | Absent | The importer caused every P0 in §01 and has no coverage. |
-| `/design-system` | Guarded | `notFound()` in production. Correct. |
+| `/design-system` | Public | Reachable in development and production. |
 | Dashboard indexing | Correct | Root layout noindex, store layout overrides, `robots.ts` consistent. |
 | Storefront cost leakage | Correct | `catalog.ts` selects no cost figure anywhere. Verified. |
 | Concurrency on stock | Correct | `lockValuation` takes `FOR UPDATE`. Two tabs cannot double-spend the same units. |

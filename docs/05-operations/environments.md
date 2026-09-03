@@ -180,8 +180,10 @@ Environment variables to set in the Vercel project:
 | `NEXT_PUBLIC_SUPABASE_URL` | all |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | all |
 | `NEXT_PUBLIC_APP_URL` | per environment (production URL, preview URL) |
+| `SUPABASE_SECRET_KEY` | all, server-only |
 | `DATABASE_URL` | all |
 | `DIRECT_URL` | all |
+| `CRON_SECRET` | all, at least 32 random characters |
 | `BLOB_READ_WRITE_TOKEN` | injected by the Blob integration |
 
 **The build does not need the database.** Nothing is cached at build time, so
@@ -199,6 +201,16 @@ reached for Postgres.
 
 Then add the deployed origin to Supabase's allowed redirect URLs
 (Authentication → URL Configuration), or sign-in links will bounce.
+
+Verify the deployment before opening it to users:
+
+```bash
+curl -i https://your-nextly-origin.example/api/health
+```
+
+The endpoint must return `200` with `status: "ready"`. A `503` response is
+intentional and distinguishes an unconfigured, invalid, or unreachable runtime
+from a successful deployment; it never includes credentials or database details.
 
 ---
 

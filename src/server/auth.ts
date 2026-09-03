@@ -3,10 +3,11 @@ import { eq, isNull, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { isDatabaseConfigured } from '@/lib/env';
+import { logServerError } from '@/lib/observability';
 import { createClient } from '@/lib/supabase/server';
 import { db } from './db/client';
 import { members } from './db/schema';
-import { ActionError } from './errors';
+import { ActionError, ApiError } from './errors';
 
 export type Member = typeof members.$inferSelect;
 
@@ -73,15 +74,31 @@ export const getCurrentMember = cache(async (): Promise<Member | null> => {
  * never invited must not be bounced back to a form they already completed;
  * they get told what actually happened.
  */
-export async function requireMember(): Promise<Member> {
+export async function requireMember(requestId = 'server-action'): Promise<Member> {
   if (!isDatabaseConfigured()) redirect('/setup');
 
-  const member = await getCurrentMember();
+  let member: Member | null = null;
+  let serviceUnavailable = false;
+  try {
+    member = await getCurrentMember();
+  } catch (error) {
+    logServerError('auth.member-check', requestId, error);
+    serviceUnavailable = true;
+  }
+
+  if (serviceUnavailable) redirect('/auth/error?reason=service-unavailable');
   if (member) return member;
 
   // Two separate calls, not a ternary: typedRoutes resolves each literal
   // against the route map, and a union of literals defeats it.
-  const user = await getAuthUser();
+  let user: User | null = null;
+  try {
+    user = await getAuthUser();
+  } catch (error) {
+    logServerError('auth.user-check', requestId, error);
+    serviceUnavailable = true;
+  }
+  if (serviceUnavailable) redirect('/auth/error?reason=service-unavailable');
   if (user) redirect('/no-access');
   redirect('/login');
 }
@@ -107,5 +124,23 @@ export async function requireOwner(): Promise<Member> {
   if (member.role !== 'owner') {
     throw new ActionError('Only owners can perform this action.');
   }
+  return member;
+}
+
+/** Page guards redirect; API guards return status-bearing JSON errors instead. */
+export async function requireApiMember(): Promise<Member> {
+  if (!isDatabaseConfigured()) {
+    throw new ApiError('Database is not configured.', 503);
+  }
+
+  const member = await getCurrentMember();
+  if (member) return member;
+
+  throw new ApiError('Unauthorized.', 401);
+}
+
+export async function requireApiWrite(): Promise<Member> {
+  const member = await requireApiMember();
+  if (member.role === 'viewer') throw new ApiError('Forbidden.', 403);
   return member;
 }

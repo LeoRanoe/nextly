@@ -1,8 +1,10 @@
+import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 import { MemberProvider } from '@/components/providers/member-provider';
 import { SetupBanner } from '@/components/shell/setup-banner';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
+import { REQUEST_ID_HEADER } from '@/lib/observability';
 import { requireMember } from '@/server/auth';
 
 /**
@@ -31,7 +33,8 @@ import { requireMember } from '@/server/auth';
  */
 export const instant = false;
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const member = await requireMember();
+  const requestId = (await headers()).get(REQUEST_ID_HEADER) ?? 'app-layout';
+  const member = await requireMember(requestId);
   const currentMember = { fullName: member.fullName, email: member.email, role: member.role };
 
   return (

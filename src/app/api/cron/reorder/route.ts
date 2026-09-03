@@ -1,5 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { isServerEnvironmentValid } from '@/lib/env';
+import { logServerError, requestIdFrom, withRequestId } from '@/lib/observability';
 import { startOfReorderWeek } from '@/lib/reorder';
 import { db } from '@/server/db/client';
 import { getReorderRecommendations } from '@/server/queries/reorder';
@@ -20,17 +22,24 @@ function matchesSecret(request: Request, expected: string): boolean {
  * snapshot; ordering remains an explicit human action in the review queue.
  */
 export async function GET(request: Request) {
+  const requestId = requestIdFrom(request);
   const secret = process.env.CRON_SECRET;
   if (!secret || secret.length < 32) {
-    return NextResponse.json({ error: 'Cron is not configured' }, { status: 503 });
+    return withRequestId(
+      NextResponse.json({ error: 'Cron is not configured' }, { status: 503 }),
+      requestId,
+    );
   }
   if (!matchesSecret(request, secret)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return withRequestId(
+      NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+      requestId,
+    );
   }
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json(
-      { ok: false, error: 'Database is not configured' },
-      { status: 503 },
+  if (!process.env.DATABASE_URL || !isServerEnvironmentValid()) {
+    return withRequestId(
+      NextResponse.json({ ok: false, error: 'Database is not configured' }, { status: 503 }),
+      requestId,
     );
   }
 
@@ -44,14 +53,17 @@ export async function GET(request: Request) {
         mode: 'idempotent',
       }),
     );
-    return NextResponse.json({
-      ok: true,
-      runId: result.id,
-      duplicate: !result.created && !result.replaced,
-      count: recommendations.length,
-    });
+    return withRequestId(
+      NextResponse.json({
+        ok: true,
+        runId: result.id,
+        duplicate: !result.created && !result.replaced,
+        count: recommendations.length,
+      }),
+      requestId,
+    );
   } catch (error) {
-    console.error('[cron] reorder failed', error);
+    logServerError('api.cron-reorder', requestId, error);
     try {
       await db.transaction((tx) =>
         recordReorderFailure(
@@ -61,11 +73,11 @@ export async function GET(request: Request) {
         ),
       );
     } catch (failureError) {
-      console.error('[cron] could not record reorder failure', failureError);
+      logServerError('api.cron-reorder.record-failure', requestId, failureError);
     }
-    return NextResponse.json(
-      { ok: false, error: 'Recommendation run failed' },
-      { status: 500 },
+    return withRequestId(
+      NextResponse.json({ ok: false, error: 'Recommendation run failed' }, { status: 500 }),
+      requestId,
     );
   }
 }

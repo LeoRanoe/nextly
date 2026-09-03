@@ -12,3 +12,14 @@ export class ActionError extends Error {
     this.name = 'ActionError';
   }
 }
+
+/** A safe, status-bearing error for route handlers that must return JSON. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: 400 | 401 | 403 | 404 | 503,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}

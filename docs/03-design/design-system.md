@@ -2,7 +2,7 @@
 
 The Nextly design language. Dense, technical, near-monochrome.
 
-Live reference: run `pnpm dev` and open **`/design-system`**. It renders every
+Live reference: open **`/design-system`** in any environment. It renders every
 token and primitive in both themes and 404s in production.
 
 ---

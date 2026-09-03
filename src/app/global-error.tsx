@@ -11,6 +11,7 @@
  * something legible when everything above it has already failed.
  */
 export default function GlobalError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -42,8 +43,8 @@ export default function GlobalError({
               color: '#9aa7b2',
             }}
           >
-            Try again once. If it keeps happening, mention the error code to support. The error
-            has been logged.
+            Try again once. If it keeps happening, mention the error code
+            {error.digest ? ` ${error.digest}` : ''} to support. The error has been logged.
           </p>
           <button
             type="button"

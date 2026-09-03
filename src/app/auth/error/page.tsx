@@ -13,6 +13,8 @@ const REASONS: Record<string, string> = {
     'That link did not carry a sign-in code. Some email clients rewrite links and break them.',
   'exchange-failed':
     'That link has already been used, or it expired. Sign-in links last one hour.',
+  'service-unavailable':
+    'The sign-in service is temporarily unavailable. Wait a moment and request a fresh link.',
 };
 
 const FALLBACK =

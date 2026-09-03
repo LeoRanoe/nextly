@@ -37,8 +37,8 @@ A dense, technical, near-monochrome language called **Instrument**.
 
 - `src/styles/tokens.css` is the only place a colour is defined.
 - `<Money>` is the only way an amount reaches the screen.
-- `/design-system` renders every token and primitive in both themes, and 404s in
-  production.
+- `/design-system` renders every token and primitive in both themes and is
+  reachable in every environment.
 - The wordmark is a deliberately provisional type lockup plus a signal glyph. A
   generated logo would have been the fastest possible route to looking
   templated, and this is one file to delete when real identity work happens.

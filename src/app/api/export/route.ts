@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { type CsvColumn, toCsv } from '@/lib/csv';
-import { isDatabaseConfigured } from '@/lib/env';
-import { requireMember } from '@/server/auth';
+import { logServerError, requestIdFrom, withRequestId } from '@/lib/observability';
+import { requireApiMember } from '@/server/auth';
 import { db } from '@/server/db/client';
+import { ApiError } from '@/server/errors';
 
 const MAX_ROWS = 100_000;
 
@@ -617,26 +618,31 @@ async function exportRows(entity: ExportEntity, term: string | null): Promise<un
  * links are server-rendered anchors in each list's toolbar, so the current
  * search terms ride along in the query string and no client JS is involved.
  *
- * Auth lives in `requireMember`, which redirects (/login or /no-access) — legal
- * here because this is a route handler, not an action.
+ * Auth uses the API guard, which returns JSON status codes rather than redirecting
+ * a download request to an HTML login page.
  *
  * Exports are read-only, member-only snapshots. They intentionally exclude
  * secrets, public token hashes and private cost details that are not needed
  * for an operational spreadsheet.
  */
 export async function GET(request: Request): Promise<Response> {
-  if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: 'Database is not configured.' }, { status: 503 });
-  }
+  const requestId = requestIdFrom(request);
 
-  await requireMember();
+  try {
+    await requireApiMember();
+  } catch (error) {
+    return apiErrorResponse(error, requestId, 'api.export.auth');
+  }
 
   const url = new URL(request.url);
   const value = url.searchParams.get('entity');
   if (!isExportEntity(value)) {
-    return NextResponse.json(
-      { error: `Choose one of: ${Object.keys(EXPORTS).join(', ')}.` },
-      { status: 400 },
+    return withRequestId(
+      NextResponse.json(
+        { error: `Choose one of: ${Object.keys(EXPORTS).join(', ')}.` },
+        { status: 400 },
+      ),
+      requestId,
     );
   }
 
@@ -656,16 +662,40 @@ export async function GET(request: Request): Promise<Response> {
     const body = toCsv(rows, columns);
     const filename = `nextly-${definition.filename}-${new Date().toISOString().slice(0, 10)}.csv`;
 
-    return new NextResponse(body, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'private, no-store',
-        'X-Export-Row-Count': String(rows.length),
-      },
-    });
+    return withRequestId(
+      new NextResponse(body, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'private, no-store',
+          'X-Export-Row-Count': String(rows.length),
+        },
+      }),
+      requestId,
+    );
   } catch (error) {
-    console.error(`[export] ${value}`, error);
-    return NextResponse.json({ error: 'The export could not be generated.' }, { status: 500 });
+    return apiErrorResponse(
+      error,
+      requestId,
+      'api.export',
+      'The export is temporarily unavailable.',
+    );
   }
+}
+
+function apiErrorResponse(
+  error: unknown,
+  requestId: string,
+  scope: string,
+  fallback = 'The request could not be completed.',
+): NextResponse {
+  if (error instanceof ApiError) {
+    return withRequestId(
+      NextResponse.json({ error: error.message }, { status: error.status }),
+      requestId,
+    );
+  }
+
+  logServerError(scope, requestId, error);
+  return withRequestId(NextResponse.json({ error: fallback }, { status: 503 }), requestId);
 }
