@@ -30,30 +30,38 @@ declare global {
 
 function createDb() {
   const { DATABASE_URL, NODE_ENV } = serverEnv();
-  const sql =
-    globalThis.__nextlySql ??
-    postgres(DATABASE_URL, {
-      prepare: false,
-      // Supabase's transaction pooler does not support the startup type
-      // prefetch that postgres.js performs by default. Without this, the
-      // first parameterised query can remain open in Supavisor and the page
-      // waits until the platform timeout.
-      fetch_types: false,
-      // Vercel can run many function instances at once. A pool of ten per
-      // instance overwhelms a small Supabase pooler and leaves requests
-      // waiting for a lease until the platform's timeout. Keep the pool
-      // deliberately small; the queries are short and the app has a handful
-      // of concurrent users, not a long-lived application server.
-      max: NODE_ENV === 'production' ? 2 : 4,
-      idle_timeout: NODE_ENV === 'production' ? 5 : 20,
-      connect_timeout: NODE_ENV === 'production' ? 5 : 10,
-      max_lifetime: NODE_ENV === 'production' ? 300 : undefined,
-      connection: {
-        application_name: 'nextly',
-        statement_timeout: NODE_ENV === 'production' ? 15_000 : 0,
-        idle_in_transaction_session_timeout: NODE_ENV === 'production' ? 15_000 : 0,
-      },
-    });
+  const connectionOptions: Parameters<typeof postgres>[1] = {
+    prepare: false,
+    // Supabase's transaction pooler does not support the startup type
+    // prefetch that postgres.js performs by default. Without this, the
+    // first parameterised query can remain open in Supavisor and the page
+    // waits until the platform timeout.
+    fetch_types: false,
+    // Vercel can run many function instances at once. A pool of ten per
+    // instance can overwhelm a small Supabase pooler and leave requests
+    // waiting for a lease until the platform's timeout. Keep the pool
+    // deliberately small; the queries are short and the app has a handful
+    // of concurrent users, not a long-lived application server.
+    max: NODE_ENV === 'production' ? 2 : 4,
+    idle_timeout: NODE_ENV === 'production' ? 5 : 20,
+    connect_timeout: NODE_ENV === 'production' ? 5 : 10,
+    max_lifetime: NODE_ENV === 'production' ? 300 : undefined,
+    connection: {
+      application_name: 'nextly',
+      statement_timeout: NODE_ENV === 'production' ? 15_000 : 0,
+      idle_in_transaction_session_timeout: NODE_ENV === 'production' ? 15_000 : 0,
+    },
+  };
+
+  if (NODE_ENV === 'production') {
+    // Supavisor transaction mode currently has an open issue around
+    // pipelined transactions: when React starts several server queries at
+    // once, a reply can be dropped and postgres.js waits forever. The option
+    // is supported by postgres.js at runtime but is not in its public type.
+    Object.assign(connectionOptions, { max_pipeline: 0 });
+  }
+
+  const sql = globalThis.__nextlySql ?? postgres(DATABASE_URL, connectionOptions);
   if (NODE_ENV !== 'production') globalThis.__nextlySql = sql;
   return drizzle(sql, { schema, casing: 'snake_case' });
 }
