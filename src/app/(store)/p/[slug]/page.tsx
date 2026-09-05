@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getCatalogProduct } from '@/server/queries/catalog';
 import { getCurrentRate } from '@/server/queries/overview';
 import { getSettings } from '@/server/queries/reference';
+import { fromBase } from '@/lib/fx';
+import { formatMoney } from '@/lib/money';
 
 type Params = Promise<{ slug: string }>;
 
@@ -62,6 +64,9 @@ async function Loader({ params }: { params: Params }) {
     .map((variant) => variant.listPriceCents)
     .filter((cents) => cents > 0);
   const minPrice = pricedVariants.length > 0 ? Math.min(...pricedVariants) : 0;
+  const orderVariant = product.variants[0];
+  const orderPrice = orderVariant?.listPriceCents ?? minPrice;
+  const orderPriceText = srdRate && srdRate > 0 ? `${formatMoney(fromBase(orderPrice, srdRate), 'SRD', { bare: true })} SRD` : formatMoney(orderPrice, 'USD');
   const maxPrice = pricedVariants.length > 0 ? Math.max(...pricedVariants) : 0;
   const onHand = product.variants.reduce((total, variant) => total + variant.onHand, 0);
   const inStock = onHand > 0;
@@ -203,7 +208,7 @@ async function Loader({ params }: { params: Params }) {
           <div className="mt-4">
             <WhatsAppCta
               number={whatsapp}
-              message={`Hi Nextly, I’d like to ${inStock ? 'order' : 'ask about restocking'} the ${product.name}${product.variants[0] ? ` – ${product.variants[0].name}` : ''}${product.variants[0]?.sku ? ` (SKU ${product.variants[0].sku})` : ''}. I saw it listed from USD ${(minPrice / 100).toFixed(2)}${inStock ? ' and currently in stock' : ''}.`}
+              message={`Hi Nextly, I’d like to ${inStock ? 'order' : 'ask about restocking'} the ${product.name}${orderVariant ? ` – ${orderVariant.name}` : ''}${orderVariant?.sku ? ` (SKU ${orderVariant.sku})` : ''}. I saw it listed for ${orderPriceText}${inStock ? ' and currently in stock' : ''}.`}
               label={inStock ? 'Order on WhatsApp' : 'Ask about restock'}
               className="h-11 rounded-full px-6 text-[14px]"
             />
