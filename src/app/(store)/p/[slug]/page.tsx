@@ -203,9 +203,7 @@ async function Loader({ params }: { params: Params }) {
           <div className="mt-4">
             <WhatsAppCta
               number={whatsapp}
-              message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
-                product.variants.length === 1 ? ` (${product.variants[0]?.name})` : ''
-              }${product.code ? ` (SKU ${product.code})` : ''}`}
+              message={`Hi Nextly, I’d like to ${inStock ? 'order' : 'ask about restocking'} the ${product.name}${product.variants[0] ? ` – ${product.variants[0].name}` : ''}${product.variants[0]?.sku ? ` (SKU ${product.variants[0].sku})` : ''}. I saw it listed from USD ${(minPrice / 100).toFixed(2)}${inStock ? ' and currently in stock' : ''}.`}
               label={inStock ? 'Order on WhatsApp' : 'Ask about restock'}
               className="h-11 rounded-full px-6 text-[14px]"
             />

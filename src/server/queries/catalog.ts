@@ -242,6 +242,7 @@ export type CatalogProduct = {
   variants: {
     id: string;
     name: string;
+    sku: string;
     listPriceCents: Cents;
     onHand: number;
   }[];
@@ -270,12 +271,12 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
 
   const [variants, images, related] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
-      SELECT v.id, v.name, v.list_price_cents::text,
+      SELECT v.id, v.name, v.sku, v.list_price_cents::text,
              COALESCE(s.on_hand, 0)::text AS on_hand
         FROM product_variants v
         LEFT JOIN v_stock_levels s ON s.variant_id = v.id
        WHERE v.product_id = ${row.id} AND v.is_active
-       ORDER BY v.position
+       ORDER BY v.is_default DESC, v.position
     `),
     db.execute<Record<string, string | null>>(sql`
       SELECT rp.name, rp.slug, rp.summary, pr.relationship_type
@@ -325,6 +326,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
     variants: variants.map((variant) => ({
       id: text(variant.id),
       name: text(variant.name),
+      sku: text(variant.sku),
       listPriceCents: num(variant.list_price_cents),
       onHand: num(variant.on_hand),
     })),
