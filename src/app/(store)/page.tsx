@@ -10,6 +10,7 @@ import { CategoryPills } from '@/components/store/category-pills';
 import { ProductCard } from '@/components/store/product-card';
 import { StoreHero, StoreValues } from '@/components/store/store-hero';
 import { StorePrice } from '@/components/store/store-price';
+import { CatalogAvailability } from '@/components/store/catalog-availability';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { RawSearchParams } from '@/lib/list-params';
@@ -117,7 +118,8 @@ async function CatalogToolbar() {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <ListSearch placeholder="Search products" size="md" />
-      <div className="ml-auto">
+      <div className="ml-auto flex gap-2">
+        <CatalogAvailability />
         <CatalogSort />
       </div>
     </div>
