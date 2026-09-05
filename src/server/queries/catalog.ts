@@ -40,6 +40,8 @@ export type CatalogListItem = {
   newUntil: string | null;
   /** Units on hand across the product's active variants. */
   onHand: number;
+  incoming: number;
+  expectedAt: string | null;
   minPriceCents: Cents;
   maxPriceCents: Cents;
   image: CatalogImage | null;
@@ -89,6 +91,8 @@ export async function listCatalogProducts(
           JOIN v_stock_levels s ON s.variant_id = v.id
          WHERE v.product_id = p.id AND v.is_active
       ), 0)::text AS on_hand,
+      COALESCE((SELECT SUM(poi.quantity - poi.quantity_received) FROM purchase_order_items poi JOIN purchase_orders po ON po.id = poi.purchase_order_id JOIN product_variants iv ON iv.id = poi.variant_id WHERE iv.product_id = p.id AND po.status IN ('ordered', 'shipped')), 0)::text AS incoming,
+      (SELECT MIN(po.expected_at)::text FROM purchase_order_items poi JOIN purchase_orders po ON po.id = poi.purchase_order_id JOIN product_variants iv ON iv.id = poi.variant_id WHERE iv.product_id = p.id AND po.status IN ('ordered', 'shipped') AND po.expected_at IS NOT NULL) AS expected_at,
       COALESCE(price.min_price, 0)::text AS min_price,
       COALESCE(price.max_price, 0)::text AS max_price,
       img.url AS image_url, img.width::text AS image_width,
@@ -134,6 +138,8 @@ export async function listCatalogProducts(
     compatibility: parseCompatibility(row.compatibility ?? null),
     newUntil: maybe(row.new_until),
     onHand: num(row.on_hand),
+    incoming: num(row.incoming),
+    expectedAt: maybe(row.expected_at),
     minPriceCents: num(row.min_price),
     maxPriceCents: num(row.max_price),
     image: row.image_url

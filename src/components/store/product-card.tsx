@@ -58,7 +58,7 @@ export function ProductCard({
               : 'bg-store-navy/80 text-white backdrop-blur-sm'
           }`}
         >
-          {inStock ? `${product.onHand} in stock` : 'Sold out'}
+          {inStock ? `${product.onHand} in stock` : product.incoming > 0 ? `${product.incoming} on the way` : 'Sold out'}
         </span>
         {isNew && inStock ? (
           <span className="pointer-events-none absolute top-3 right-3 z-10 rounded-control bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
@@ -113,6 +113,7 @@ export function ProductCard({
             {product.summary}
           </p>
         ) : null}
+        {!inStock && product.incoming > 0 ? <p className="text-[11px] text-ink-3">{product.expectedAt ? `Expected around ${new Intl.DateTimeFormat('en-SR', { day: 'numeric', month: 'short' }).format(new Date(product.expectedAt))}` : 'Incoming stock confirmed'}</p> : null}
         {product.compatibility.platforms.length || product.compatibility.protocols.length ? (
           <div className="flex flex-wrap gap-1 pt-1">
             {[...product.compatibility.platforms, ...product.compatibility.protocols]
