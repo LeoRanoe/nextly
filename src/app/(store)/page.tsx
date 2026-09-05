@@ -88,7 +88,7 @@ function PillsSkeleton() {
 async function CatalogToolbar() {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <ListSearch placeholder="Search products" />
+      <ListSearch placeholder="Search products" size="md" />
       <div className="ml-auto">
         <CatalogSort />
       </div>
@@ -99,8 +99,8 @@ async function CatalogToolbar() {
 function ToolbarSkeleton() {
   return (
     <div className="flex flex-wrap items-center gap-2" aria-hidden="true">
-      <Skeleton className="h-8 min-w-[200px] flex-1 sm:max-w-[280px]" />
-      <Skeleton className="ml-auto h-8 w-[160px]" />
+      <Skeleton className="h-11 min-w-[200px] flex-1 rounded-full sm:max-w-[280px]" />
+      <Skeleton className="ml-auto h-11 w-[180px] rounded-full" />
     </div>
   );
 }

@@ -53,9 +53,15 @@ async function Loader({ params }: { params: Params }) {
 
   const srdRate = rate?.rateMicros;
   const whatsapp = settings?.whatsapp ?? null;
-  const prices = product.variants.map((variant) => variant.listPriceCents);
-  const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-  const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+  // Aggregate range excludes unpriced (draft) variants — same rule as the
+  // grid's LATERAL in queries/catalog.ts. The Options list below still shows
+  // every variant's own price untouched, zero included: that is real
+  // per-variant data broken out, not a headline figure.
+  const pricedVariants = product.variants
+    .map((variant) => variant.listPriceCents)
+    .filter((cents) => cents > 0);
+  const minPrice = pricedVariants.length > 0 ? Math.min(...pricedVariants) : 0;
+  const maxPrice = pricedVariants.length > 0 ? Math.max(...pricedVariants) : 0;
   const onHand = product.variants.reduce((total, variant) => total + variant.onHand, 0);
   const inStock = onHand > 0;
   const paragraphs = product.description

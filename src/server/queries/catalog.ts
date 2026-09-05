@@ -95,10 +95,15 @@ export async function listCatalogProducts(
        ORDER BY i.is_primary DESC, i.position
        LIMIT 1
     ) img ON true
+    -- Zero-priced variants are draft/unpriced siblings of a real one; a
+    -- published product is guaranteed at least one variant with a real price
+    -- (assertCatalogPublishable, server/actions/products.ts), so excluding
+    -- non-positive prices here never leaves a product with no price at all —
+    -- it just stops a $0 draft variant from winning the "from" figure.
     LEFT JOIN LATERAL (
       SELECT MIN(v.list_price_cents) AS min_price, MAX(v.list_price_cents) AS max_price
         FROM product_variants v
-       WHERE v.product_id = p.id AND v.is_active
+       WHERE v.product_id = p.id AND v.is_active AND v.list_price_cents > 0
     ) price ON true
     WHERE p.catalog_published AND p.status = 'active'
       AND (${category}::text IS NULL OR c.slug = ${category})

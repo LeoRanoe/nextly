@@ -24,21 +24,53 @@ export function ListToolbar({ children }: { children: ReactNode }) {
   );
 }
 
+/** `sm` is the dashboard's dense default (unchanged from before this variant
+ *  existed); `md` is sized for the storefront's open Northlight controls
+ *  (see docs/03-design/design-system.md's Instrument-vs-Northlight table). */
+const SEARCH_SIZES = {
+  sm: {
+    input: 'h-8 rounded-control border-line py-1.5 pr-7 pl-8 text-[13px]',
+    icon: 'left-2.5 size-3.5',
+    clear: 'right-1.5 size-5',
+    clearIcon: 'size-3.5',
+  },
+  md: {
+    input: 'h-11 rounded-full border-line-subtle py-2 pr-9 pl-10 text-[14px]',
+    icon: 'left-3.5 size-4',
+    clear: 'right-2.5 size-6',
+    clearIcon: 'size-4',
+  },
+} as const;
+
 /**
  * Free-text search, bound to `?q=`. Throttled so a keystroke does not fire a
  * navigation per character, and `shallow: false` so the *server* re-renders
  * — that round trip is the entire mechanism, there is no client-side
  * filtering to fall back on.
  */
-export function ListSearch({ placeholder = 'Search' }: { placeholder?: string }) {
+export function ListSearch({
+  placeholder = 'Search',
+  size = 'sm',
+  className,
+}: {
+  placeholder?: string;
+  size?: keyof typeof SEARCH_SIZES;
+  className?: string;
+}) {
   const [{ q }, setState] = useQueryStates(
     { q: parseAsString.withDefault(''), page: parseAsString },
     { shallow: false, throttleMs: 300, history: 'replace' },
   );
+  const sizeClasses = SEARCH_SIZES[size];
 
   return (
     <div className="relative min-w-[200px] flex-1 sm:max-w-[280px]">
-      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-ink-4" />
+      <Search
+        className={cn(
+          'pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-4',
+          sizeClasses.icon,
+        )}
+      />
       <input
         type="search"
         value={q}
@@ -50,8 +82,10 @@ export function ListSearch({ placeholder = 'Search' }: { placeholder?: string })
           setState({ q: value || null, page: null });
         }}
         className={cn(
-          'h-8 w-full rounded-control border border-line bg-raised py-1.5 pr-7 pl-8 text-[13px] text-ink',
+          'w-full border bg-raised text-ink',
           'placeholder:text-ink-4 focus-visible:border-accent-border focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
+          sizeClasses.input,
+          className,
         )}
       />
       {q ? (
@@ -59,9 +93,12 @@ export function ListSearch({ placeholder = 'Search' }: { placeholder?: string })
           type="button"
           aria-label="Clear search"
           onClick={() => setState({ q: null, page: null })}
-          className="absolute top-1/2 right-1.5 grid size-5 -translate-y-1/2 place-items-center rounded-control text-ink-4 hover:bg-hover hover:text-ink"
+          className={cn(
+            'absolute top-1/2 -translate-y-1/2 grid place-items-center rounded-control text-ink-4 hover:bg-hover hover:text-ink',
+            sizeClasses.clear,
+          )}
         >
-          <X className="size-3.5" />
+          <X className={sizeClasses.clearIcon} />
         </button>
       ) : null}
     </div>

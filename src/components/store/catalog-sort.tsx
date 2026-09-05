@@ -30,7 +30,7 @@ export function CatalogSort() {
       aria-label="Sort by"
       value={sort}
       onChange={(event) => setState({ sort: event.target.value as CatalogSortValue })}
-      className="h-8 w-auto min-w-[160px] text-[12px]"
+      className="h-11 w-auto min-w-[180px] rounded-full border-line-subtle pl-4 text-[14px]"
     >
       {CATALOG_SORTS.map((value) => (
         <option key={value} value={value}>
