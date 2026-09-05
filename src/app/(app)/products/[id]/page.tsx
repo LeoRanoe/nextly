@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ProductForm } from '@/components/forms/product-form';
 import { ProductImages } from '@/components/forms/product-images';
+import { ProductRelationships } from '@/components/forms/product-relationships';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ import { formatDate } from '@/lib/format';
 import { toDecimalString } from '@/lib/money';
 import type { WarrantyState } from '@/lib/warranty';
 import { listBrandOptions, listCategoryOptions, listSupplierOptions } from '@/server/queries/pickers';
-import { getProduct } from '@/server/queries/reference';
+import { getProduct, listProductRelationshipOptions, listProductRelationships } from '@/server/queries/reference';
 import { listProductWarrantyItems } from '@/server/queries/warranty';
 
 export const metadata: Metadata = { title: 'Product' };
@@ -50,6 +51,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
   ]);
 
   if (!product) notFound();
+  const [relationships, relationshipOptions] = await Promise.all([listProductRelationships(id), listProductRelationshipOptions(id)]);
 
   // The warranty months comes from the product itself, so this has to wait
   // for it — passing the loaded value keeps the section below from disagreeing
@@ -68,6 +70,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
         </div>
       ) : null}
       <ProductImages productId={product.id} initial={product.images} />
+      <ProductRelationships productId={product.id} relationships={relationships} options={relationshipOptions} />
       <ProductForm
         categories={categories}
         suppliers={suppliers}

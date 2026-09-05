@@ -540,6 +540,18 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   };
 }
 
+export type ProductRelationshipRow = { id: string; relatedProductId: string; relatedProductName: string; relationshipType: 'accessory' | 'works_with' | 'alternative' | 'cheaper_alternative' | 'premium_alternative' | 'required_accessory' };
+export async function listProductRelationships(productId: string): Promise<ProductRelationshipRow[]> {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`SELECT pr.id, pr.related_product_id, rp.name AS related_product_name, pr.relationship_type::text FROM product_relationships pr JOIN products rp ON rp.id = pr.related_product_id WHERE pr.product_id = ${productId} ORDER BY pr.position, rp.name`);
+  return rows.map((row) => ({ id: text(row.id), relatedProductId: text(row.related_product_id), relatedProductName: text(row.related_product_name), relationshipType: text(row.relationship_type) as ProductRelationshipRow['relationshipType'] }));
+}
+export async function listProductRelationshipOptions(productId: string): Promise<{ id: string; name: string }[]> {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`SELECT id, name FROM products WHERE id <> ${productId} AND status <> 'archived' ORDER BY name LIMIT 500`);
+  return rows.map((row) => ({ id: text(row.id), name: text(row.name) }));
+}
+
 function parseBuyerRequirements(value: string | null | undefined): ProductDetail['buyerRequirements'] {
   const raw = parseObject(value);
   const stringList = Array.isArray(raw.wifiBands) ? raw.wifiBands.filter((item): item is string => typeof item === 'string') : [];
