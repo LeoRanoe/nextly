@@ -3,9 +3,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { EmptyState } from '@/components/patterns/empty-state';
-import { ListFilter, ListSearch, ListToolbar } from '@/components/patterns/list-toolbar';
+import { ListSearch } from '@/components/patterns/list-toolbar';
 import { CatalogSort } from '@/components/store/catalog-sort';
+import { CategoryPills } from '@/components/store/category-pills';
 import { ProductCard } from '@/components/store/product-card';
+import { StoreHero, StoreValues } from '@/components/store/store-hero';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { RawSearchParams } from '@/lib/list-params';
@@ -18,9 +20,9 @@ import { getCurrentRate } from '@/server/queries/overview';
 import { getSettings } from '@/server/queries/reference';
 
 export const metadata: Metadata = {
-  title: 'Catalog',
+  title: 'Smart home store — Catalog',
   description:
-    'Connected devices, imported and sold in Paramaribo. Priced in USD, shown in SRD at the current rate.',
+    'Smart home devices, imported and in stock in Paramaribo, Suriname. Priced in SRD at the current rate — ask, order and collect on WhatsApp.',
 };
 
 const CATALOG_SORTS = ['newest', 'name', 'price-asc', 'price-desc'];
@@ -30,11 +32,13 @@ function isCatalogSort(value: string | undefined): value is CatalogSortValue {
 }
 
 /**
- * The catalog. The site's home page — see docs/adr/0010-storefront-at-root.md.
+ * The storefront home — Fairphone's shape, in Northlight.
  *
- * `searchParams` is passed down unawaited so the header and the toolbar's
- * shell stay part of the static prerender; only `CatalogGrid`, which
- * actually needs the query, is dynamic.
+ * Promise first (the hero), then the catalogue with its categories as
+ * pills, then the three things this shop can honestly promise (the value
+ * band). `searchParams` is passed down unawaited so the hero and the
+ * toolbar's shell stay part of the static prerender; only the pieces that
+ * read live data are Suspense-wrapped and stream.
  */
 export default function CatalogPage({
   searchParams,
@@ -43,55 +47,60 @@ export default function CatalogPage({
 }) {
   return (
     <>
-      <header className="mb-6">
-        <h1 className="font-medium text-[20px] text-ink tracking-[-0.02em]">
-          Devices, imported and in stock
-        </h1>
-        <p className="mt-1 max-w-[62ch] text-[13px] text-ink-3 leading-relaxed">
-          Connected devices, imported and sold in Paramaribo. What shows as in stock is on the
-          shelf right now — the same ledger the business runs on, read out loud.
-        </p>
-      </header>
+      <StoreHero />
 
-      <Suspense fallback={<ToolbarSkeleton />}>
-        <CatalogToolbar />
-      </Suspense>
+      <section id="catalog" className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 lg:px-6">
+        <div className="mb-6 flex flex-col gap-4">
+          <Suspense fallback={<PillsSkeleton />}>
+            <CatalogPills />
+          </Suspense>
+          <Suspense fallback={<ToolbarSkeleton />}>
+            <CatalogToolbar />
+          </Suspense>
+        </div>
 
-      <div className="mt-4">
         <Suspense fallback={<CatalogSkeleton />}>
           <CatalogGrid searchParams={searchParams} />
         </Suspense>
-      </div>
+
+        <StoreValues />
+      </section>
     </>
   );
 }
 
-async function CatalogToolbar() {
+async function CatalogPills() {
   const categories = await listCatalogCategories();
+  if (categories.length === 0) return null;
+  return <CategoryPills categories={categories} />;
+}
+
+function PillsSkeleton() {
   return (
-    <ListToolbar>
+    <div className="flex gap-2" aria-hidden="true">
+      <Skeleton className="h-8 w-24 rounded-full" />
+      <Skeleton className="h-8 w-28 rounded-full" />
+      <Skeleton className="h-8 w-20 rounded-full" />
+    </div>
+  );
+}
+
+async function CatalogToolbar() {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
       <ListSearch placeholder="Search products" />
-      {categories.length > 0 ? (
-        <ListFilter
-          param="category"
-          label="Category"
-          options={categories.map((category) => ({
-            value: category.slug,
-            label: `${category.name} (${category.count})`,
-          }))}
-        />
-      ) : null}
-      <CatalogSort />
-    </ListToolbar>
+      <div className="ml-auto">
+        <CatalogSort />
+      </div>
+    </div>
   );
 }
 
 function ToolbarSkeleton() {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-line-subtle border-b p-3">
+    <div className="flex flex-wrap items-center gap-2" aria-hidden="true">
       <Skeleton className="h-8 min-w-[200px] flex-1 sm:max-w-[280px]" />
-      <Skeleton className="h-8 w-[120px]" />
-      <Skeleton className="h-8 w-[160px]" />
+      <Skeleton className="ml-auto h-8 w-[160px]" />
     </div>
   );
 }
@@ -132,7 +141,7 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {products.map((product) => (
         <ProductCard
           key={product.id}
@@ -145,21 +154,20 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   );
 }
 
-/** Matches the card geometry — image field, three rows — so streaming
+/** Matches the card geometry — image field, four rows — so streaming
  *  causes no shift. */
 function CatalogSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-hidden="true">
       {['a', 'b', 'c', 'd'].map((key) => (
-        <div
-          key={key}
-          className="overflow-hidden rounded-card border border-line-subtle bg-raised"
-        >
+        <div key={key} className="store-card overflow-hidden">
           <Skeleton className="aspect-[4/3] w-full rounded-none" />
-          <div className="space-y-2 p-4">
-            <Skeleton className="h-[14px] w-2/3" />
+          <div className="space-y-2 p-5 pt-4">
+            <Skeleton className="h-[11px] w-16" />
+            <Skeleton className="h-[15px] w-2/3" />
             <Skeleton className="h-[12px] w-full" />
-            <Skeleton className="h-[15px] w-24" />
+            <Skeleton className="h-[18px] w-24" />
+            <Skeleton className="mt-2 h-9 w-full rounded-full" />
           </div>
         </div>
       ))}

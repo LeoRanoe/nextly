@@ -14,15 +14,17 @@ export const metadata: Metadata = { title: 'Not found' };
  */
 export default function StoreNotFound() {
   return (
-    <EmptyState
-      Icon={PackageSearch}
-      title="That product isn't here"
-      description="It may have been renamed or taken off the catalog. Browse everything currently available instead."
-      action={
-        <Button asChild variant="primary" size="sm">
-          <Link href="/">Back to the catalog</Link>
-        </Button>
-      }
-    />
+    <div className="mx-auto w-full max-w-6xl px-4 py-10 lg:px-6">
+      <EmptyState
+        Icon={PackageSearch}
+        title="That product isn't here"
+        description="It may have been renamed or taken off the catalog. Browse everything currently available instead."
+        action={
+          <Button asChild variant="primary" size="sm">
+            <Link href="/">Back to the catalog</Link>
+          </Button>
+        }
+      />
+    </div>
   );
 }

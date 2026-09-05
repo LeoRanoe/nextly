@@ -168,6 +168,40 @@ Nothing bounces. Nothing pulses except a loading skeleton.
 
 ---
 
+## The storefront skin — "Northlight"
+
+The dashboard is dense and near-monochrome because it is read, not sold
+from. The public shop has the opposite job, so it gets its own skin, taken
+from Fairphone's playbook: the product always sits on a soft colour FIELD —
+a light-blue wash (`store-field`, `store-hero-field`) — never on chrome, and
+the page is white and open rather than tinted and dense.
+
+Scoped, not forked. `.nx-store` on the `(store)` layout root redefines the
+same `--nx-*` custom properties the whole app consumes; because
+`@theme inline` keeps the Tailwind utilities pointing at live `var()`
+references, every existing component re-skins with zero code changes, and
+the dashboard is untouched. Light only — the store layout already forces the
+light theme.
+
+Northlight's own rules, on top of Instrument's:
+
+| | Instrument (dashboard) | Northlight (storefront) |
+|---|---|---|
+| Canvas | tinted base `hsl(205 30% 98.5%)` | pure white; light-blue only as fields |
+| Accent | cyan `#37CAEC` darkened | navy `#125488` (the brand's deep end) |
+| Bright note | accent = cyan | `#37CAEC` returns as highlight: NEW pills, stock dots, footer CTA |
+| Cards | hairline border, 10px radius, one shadow | `store-card`: 16px radius, lift-on-hover, product on a colour field |
+| CTAs | 28/32/36px dense controls | pill (`rounded-full`) 36–44px — a shop invites, a tool confirms |
+| Type | 13px body, weight 500 max | up to 54px/600 hero, 15–16px body |
+| Closing move | — | one navy promise band above the footer (`StoreFooterBanner`) |
+
+Storefront-specific tokens (`--nx-store-bright`, `--nx-store-navy` and
+friends) live in the same `.nx-store` block in `tokens.css`, mapped through
+`@theme inline` as `store-bright` / `store-navy` utilities with light-theme
+fallbacks. Rule 6 still holds: nothing defines a colour anywhere else.
+
+---
+
 ## The wordmark is provisional
 
 `components/shell/wordmark.tsx` is a type lockup plus a signal glyph — three

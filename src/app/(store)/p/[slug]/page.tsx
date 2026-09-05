@@ -27,7 +27,13 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default function CatalogProductPage({ params }: { params: Params }) {
   return (
-    <Suspense fallback={<Skeleton className="h-[480px] rounded-card" />}>
+    <Suspense
+      fallback={
+        <div className="mx-auto w-full max-w-6xl px-4 py-10 lg:px-6">
+          <Skeleton className="h-[480px] rounded-card" />
+        </div>
+      }
+    >
       <Loader params={params} />
     </Suspense>
   );
@@ -83,7 +89,7 @@ async function Loader({ params }: { params: Params }) {
   const jsonLdText = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
 
   return (
-    <article>
+    <article className="mx-auto w-full max-w-6xl px-4 py-10 lg:px-6">
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD must be emitted as a script element; the serialised value escapes '<' above.
@@ -120,8 +126,8 @@ async function Loader({ params }: { params: Params }) {
               key={image.url}
               className={
                 index === 0
-                  ? 'relative aspect-square overflow-hidden rounded-card border border-line-subtle bg-inset'
-                  : 'relative aspect-[4/3] overflow-hidden rounded-card border border-line-subtle bg-inset'
+                  ? 'store-field relative aspect-square overflow-hidden rounded-[16px]'
+                  : 'store-field relative aspect-[4/3] overflow-hidden rounded-[16px]'
               }
             >
               <Image
@@ -134,7 +140,7 @@ async function Loader({ params }: { params: Params }) {
                     : '(max-width: 1024px) 100vw, 27vw'
                 }
                 priority={index === 0}
-                className="object-contain p-4"
+                className="object-contain p-6"
                 {...(image.blurDataUrl
                   ? { placeholder: 'blur' as const, blurDataURL: image.blurDataUrl }
                   : {})}
@@ -145,15 +151,23 @@ async function Loader({ params }: { params: Params }) {
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={inStock ? 'positive' : 'neutral'}>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.04em] ${
+                inStock ? 'bg-store-bright-soft text-accent' : 'bg-inset text-ink-3'
+              }`}
+            >
+              <span
+                className={`size-1.5 rounded-full ${inStock ? 'bg-store-bright' : 'bg-ink-4'}`}
+                aria-hidden="true"
+              />
               {inStock
                 ? `${onHand} in stock — collect today`
                 : 'Sold out — ask about the next shipment'}
-            </Badge>
+            </span>
             <span className="tabular text-[11px] text-ink-4">{product.code}</span>
           </div>
 
-          <h1 className="mt-2 font-medium text-[22px] text-ink tracking-[-0.02em]">
+          <h1 className="mt-3 text-[28px] font-semibold text-ink leading-tight tracking-[-0.02em]">
             {product.name}
           </h1>
 
@@ -177,6 +191,7 @@ async function Loader({ params }: { params: Params }) {
                 product.variants.length === 1 ? ` (${product.variants[0]?.name})` : ''
               }${product.code ? ` — SKU ${product.code}` : ''}`}
               label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
+              className="h-11 rounded-full px-6 text-[14px]"
             />
           </div>
 

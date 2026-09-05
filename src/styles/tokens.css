@@ -119,3 +119,65 @@
 
   color-scheme: dark;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Storefront skin — "Northlight"
+   ──────────────────────────────────────────────────────────────────────────
+   The public shop is not the dashboard. Where Instrument is dense and
+   near-monochrome, the storefront is open, white and cool: a light-blue
+   tinted canvas under the product moments (the Fairphone move — product on a
+   soft colour field, never on chrome), navy #125488 as the interactive
+   accent, and the bright cyan #37CAEC reserved for highlights a visitor
+   should notice (stock pills, the hero underline).
+
+   Scoped under `.nx-store` on the store layout root: every utility inside
+   the storefront re-skins through the live var references `@theme inline`
+   keeps, with zero changes to dashboard components. Light only — the store
+   layout forces the light theme (see (store)/layout.tsx).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.nx-store {
+  /* ── Surfaces — white base, light-blue fields ───────────────────────── */
+  --nx-bg-sunken: hsl(204 58% 96.5%);
+  --nx-bg-base: hsl(0 0% 100%);
+  --nx-bg-raised: hsl(0 0% 100%);
+  --nx-bg-overlay: hsl(0 0% 100%);
+  --nx-bg-inset: hsl(204 66% 96.5%);
+  --nx-bg-hover: hsl(204 58% 94%);
+  --nx-bg-active: hsl(204 56% 91%);
+
+  /* ── Borders — cooler, lighter hairlines ────────────────────────────── */
+  --nx-border-subtle: hsl(206 42% 91%);
+  --nx-border: hsl(206 36% 85%);
+  --nx-border-strong: hsl(206 30% 71%);
+
+  /* ── Text — navy-tinted ink ─────────────────────────────────────────── */
+  --nx-text: hsl(208 50% 12%);
+  --nx-text-secondary: hsl(208 22% 36%);
+  --nx-text-tertiary: hsl(208 16% 48%);
+  --nx-text-faint: hsl(208 14% 60%);
+
+  /* ── Accent — the brand navy, cool and confident on white ───────────── */
+  --nx-accent: hsl(206 77% 30%); /* #125488 */
+  --nx-accent-hover: hsl(206 77% 24%);
+  --nx-accent-fg: hsl(0 0% 100%);
+  --nx-accent-muted: hsl(203 85% 94%);
+  --nx-accent-border: hsl(203 70% 82%);
+  --nx-ring: hsl(199 88% 50%);
+
+  /* ── Highlight cyan — the one bright note, used sparingly ───────────── */
+  --nx-store-bright: hsl(191 83% 57%); /* #37CAEC */
+  --nx-store-bright-soft: hsl(191 80% 94%);
+
+  /* ── Navy — the footer's cool contrast block and hero ink ───────────── */
+  --nx-store-navy: hsl(208 50% 12%);
+  --nx-store-navy-soft: hsl(208 36% 22%);
+  --nx-store-navy-line: hsl(208 30% 32%);
+
+  /* ── Elevation — softer and airier than the dashboard's single step ─── */
+  --nx-shadow-raised:
+    0 2px 6px -2px hsl(206 60% 30% / 0.08), 0 10px 28px -10px hsl(206 60% 30% / 0.12);
+  --nx-shadow-overlay:
+    0 6px 16px -4px hsl(206 60% 24% / 0.12), 0 20px 48px -12px hsl(206 60% 24% / 0.16);
+  --nx-highlight: transparent;
+}

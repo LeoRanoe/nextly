@@ -40,6 +40,9 @@ export type CatalogListItem = {
   minPriceCents: Cents;
   maxPriceCents: Cents;
   image: CatalogImage | null;
+  /** Publish-adjacent signal: the product row's creation instant, used to
+   *  flag recent arrivals ("NEW") in the grid. */
+  createdAt: string;
 };
 
 export type CatalogSort = 'newest' | 'name' | 'price-asc' | 'price-desc';
@@ -70,7 +73,7 @@ export async function listCatalogProducts(
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      p.id, p.name, p.slug, p.summary,
+      p.id, p.name, p.slug, p.summary, p.created_at::text AS created_at,
       c.name AS category_name, c.slug AS category_slug,
       COALESCE((
         SELECT SUM(s.on_hand)
@@ -122,6 +125,7 @@ export async function listCatalogProducts(
           blurDataUrl: maybe(row.image_blur),
         }
       : null,
+    createdAt: text(row.created_at),
   }));
 }
 

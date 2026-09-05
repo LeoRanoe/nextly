@@ -51,6 +51,15 @@
   --color-chart-grid: var(--nx-chart-grid);
   --color-chart-axis: var(--nx-chart-axis);
 
+  /* Storefront-only palette ("Northlight", defined on .nx-store in
+     tokens.css). Fallbacks keep the utilities valid if ever used outside
+     the store shell — they resolve to the light-theme values. */
+  --color-store-bright: var(--nx-store-bright, hsl(191 83% 57%));
+  --color-store-bright-soft: var(--nx-store-bright-soft, hsl(191 80% 94%));
+  --color-store-navy: var(--nx-store-navy, hsl(208 50% 12%));
+  --color-store-navy-soft: var(--nx-store-navy-soft, hsl(208 36% 22%));
+  --color-store-navy-line: var(--nx-store-navy-line, hsl(208 30% 32%));
+
   /* Restrained radii. Nothing is rounded-2xl. */
   --radius-row: 2px;
   --radius-control: 6px;
@@ -163,6 +172,42 @@
     box-shadow:
       var(--nx-shadow-raised),
       inset 0 1px 0 0 var(--nx-highlight);
+  }
+
+  /* ── Storefront "Northlight" ────────────────────────────────────────────
+     Fairphone's trick, adapted: the product always sits on a soft colour
+     FIELD — never on chrome — and the colour is the brand's own light blue.
+     These are the three fields and the one card shape that carry it. */
+
+  /* The per-card image field: a cool wash, brightest at the top. */
+  .store-field {
+    background:
+      radial-gradient(130% 110% at 50% -10%, var(--nx-store-bright-soft) 0%, transparent 62%),
+      var(--nx-bg-inset);
+  }
+
+  /* The homepage hero field: deeper wash, fades to white at the bottom. */
+  .store-hero-field {
+    background:
+      radial-gradient(95% 85% at 50% 12%, hsl(193 82% 91%) 0%, transparent 68%),
+      linear-gradient(180deg, var(--nx-bg-sunken) 0%, hsl(0 0% 100%) 100%);
+  }
+
+  /* The product card itself: borderless Fairphone-style tile that lifts. */
+  .store-card {
+    background-color: var(--nx-bg-raised);
+    border: 1px solid var(--nx-border-subtle);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px hsl(206 60% 30% / 0.04);
+    transition:
+      box-shadow 200ms var(--ease-out-instrument),
+      translate 200ms var(--ease-out-instrument),
+      border-color 200ms var(--ease-out-instrument);
+  }
+  .store-card:hover {
+    border-color: var(--nx-border);
+    box-shadow: var(--nx-shadow-raised);
+    translate: 0 -2px;
   }
 }
 
