@@ -237,6 +237,7 @@ export type CatalogProduct = {
   boxContents: string[];
   nextlyTake: string | null;
   faqItems: { question: string; answer: string }[];
+  warrantyMonths: number;
   restockNotificationsEnabled: boolean;
   variants: {
     id: string;
@@ -257,7 +258,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
       p.seo_title, p.seo_description, c.name AS category_name, c.slug AS category_slug,
       b.name AS brand_name, p.model_number, p.key_features::text, p.best_for::text,
       p.compatibility::text, p.buyer_requirements::text, p.box_contents::text, p.nextly_take,
-      p.faq_items::text, p.restock_notifications_enabled::text
+      p.faq_items::text, p.restock_notifications_enabled::text, p.warranty_months::text
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN brands b ON b.id = p.brand_id
@@ -319,6 +320,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
     boxContents: parseStringArray(row.box_contents ?? null),
     nextlyTake: maybe(row.nextly_take),
     faqItems: parseFaqItems(row.faq_items ?? null),
+    warrantyMonths: num(row.warranty_months),
     restockNotificationsEnabled: bool(row.restock_notifications_enabled),
     variants: variants.map((variant) => ({
       id: text(variant.id),
