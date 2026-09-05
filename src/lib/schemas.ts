@@ -202,6 +202,9 @@ export const productRelationshipSchema = z.object({
   position: z.coerce.number().int().min(0).max(10_000).default(0),
 }).refine((value) => value.productId !== value.relatedProductId, { message: 'A product cannot relate to itself.', path: ['relatedProductId'] });
 
+export const storefrontCollectionSchema = z.object({ name: shortText, slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), description: optionalText, imageUrl: z.union([z.string().trim().url(), z.literal('')]).transform((value) => value || undefined).optional(), active: z.boolean().default(true), homepageVisible: z.boolean().default(false), position: z.coerce.number().int().min(0).max(10_000).default(0) });
+export const storefrontCollectionProductSchema = z.object({ collectionId: uuid, productId: uuid, position: z.coerce.number().int().min(0).max(10_000).default(0) });
+
 export const categorySchema = z.object({
   name: shortText,
   slug: z
