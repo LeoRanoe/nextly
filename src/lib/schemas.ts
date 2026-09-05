@@ -195,6 +195,13 @@ export const restockRequestStatusSchema = z.object({
   status: z.enum(['waiting', 'contacted', 'converted', 'cancelled']),
 });
 
+export const productRelationshipSchema = z.object({
+  productId: uuid,
+  relatedProductId: uuid,
+  relationshipType: z.enum(['accessory', 'works_with', 'alternative', 'cheaper_alternative', 'premium_alternative', 'required_accessory']),
+  position: z.coerce.number().int().min(0).max(10_000).default(0),
+}).refine((value) => value.productId !== value.relatedProductId, { message: 'A product cannot relate to itself.', path: ['relatedProductId'] });
+
 export const categorySchema = z.object({
   name: shortText,
   slug: z
