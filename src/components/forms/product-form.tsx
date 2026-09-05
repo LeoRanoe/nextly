@@ -32,6 +32,8 @@ type VariantRow = {
   weightGrams: string;
   isStrategic: boolean;
   isActive: boolean;
+  barcode: string;
+  attributes: { key: string; value: string }[];
 };
 
 export type ProductFormValues = {
@@ -41,9 +43,21 @@ export type ProductFormValues = {
   slug: string;
   categoryId: string | null;
   supplierId: string | null;
+  brandId: string | null;
   sourceUrl: string;
   summary: string;
   description: string;
+  modelNumber: string;
+  keyFeatures: string;
+  bestFor: string;
+  platforms: string;
+  protocols: string;
+  ecosystems: string;
+  boxContents: string;
+  nextlyTake: string;
+  featured: boolean;
+  showWhenOutOfStock: boolean;
+  restockNotificationsEnabled: boolean;
   status: 'draft' | 'active' | 'archived';
   /** F-6: months of warranty from the day of sale; '0' means none. */
   warrantyMonths: string;
@@ -61,6 +75,8 @@ const blankVariant = (): VariantRow => ({
   weightGrams: '0',
   isStrategic: false,
   isActive: true,
+  barcode: '',
+  attributes: [],
 });
 
 /** The blank form. Not exported: it constructs client-only state (a random
@@ -72,9 +88,11 @@ const emptyProduct = (): ProductFormValues => ({
   slug: '',
   categoryId: null,
   supplierId: null,
+  brandId: null,
   sourceUrl: '',
   summary: '',
   description: '',
+  modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', featured: false, showWhenOutOfStock: true, restockNotificationsEnabled: false,
   status: 'active',
   warrantyMonths: '0',
   catalogPublished: false,
@@ -95,6 +113,10 @@ function slugify(value: string): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
   );
+}
+
+function toLines(value: string): string[] {
+  return value.split('\n').map((item) => item.trim()).filter(Boolean);
 }
 
 export function ProductForm({
@@ -170,9 +192,15 @@ export function ProductForm({
           slug: values.slug || slugify(values.name),
           categoryId: values.categoryId,
           supplierId: values.supplierId,
+          brandId: values.brandId,
           sourceUrl: values.sourceUrl || '',
           summary: values.summary || undefined,
           description: values.description || undefined,
+          modelNumber: values.modelNumber || undefined,
+          keyFeatures: toLines(values.keyFeatures), bestFor: toLines(values.bestFor),
+          compatibility: { platforms: toLines(values.platforms), protocols: toLines(values.protocols), ecosystems: toLines(values.ecosystems) },
+          boxContents: toLines(values.boxContents), nextlyTake: values.nextlyTake || undefined,
+          featured: values.featured, showWhenOutOfStock: values.showWhenOutOfStock, restockNotificationsEnabled: values.restockNotificationsEnabled,
           status: values.status,
           warrantyMonths: values.warrantyMonths || '0',
           catalogPublished: values.catalogPublished,
@@ -186,6 +214,8 @@ export function ProductForm({
             weightGrams: Number(variant.weightGrams || 0),
             isStrategic: variant.isStrategic,
             isActive: variant.isActive,
+            barcode: variant.barcode || undefined,
+            attributes: Object.fromEntries(variant.attributes.filter((attribute) => attribute.key.trim() && attribute.value.trim()).map((attribute) => [attribute.key.trim(), attribute.value.trim()])),
           })),
         } as Parameters<typeof execute>[0]);
       }}
@@ -339,6 +369,9 @@ export function ProductForm({
                     }
                   />
                 </Field>
+                <Field label={index === 0 ? 'Barcode' : ''} htmlFor={`vbarcode-${variant.key}`}>
+                  <Input id={`vbarcode-${variant.key}`} value={variant.barcode} placeholder="Optional" onChange={(event) => setVariant(variant.key, { barcode: event.target.value })} />
+                </Field>
                 <Field label={index === 0 ? 'List cost' : ''} htmlFor={`vcost-${variant.key}`}>
                   <Input
                     id={`vcost-${variant.key}`}
@@ -394,6 +427,11 @@ export function ProductForm({
                     <Trash2 className="size-3.5" />
                   </Button>
                 </div>
+                <div className="sm:col-span-3">
+                  <p className="mb-1 text-[11px] text-ink-4">Attributes</p>
+                  {variant.attributes.map((attribute, attributeIndex) => <div key={`${variant.key}-${attributeIndex}`} className="mb-1 flex gap-1"><Input value={attribute.key} placeholder="colour" onChange={(event) => setVariant(variant.key, { attributes: variant.attributes.map((item, i) => i === attributeIndex ? { ...item, key: event.target.value } : item) })} /><Input value={attribute.value} placeholder="Black" onChange={(event) => setVariant(variant.key, { attributes: variant.attributes.map((item, i) => i === attributeIndex ? { ...item, value: event.target.value } : item) })} /><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove attribute" onClick={() => setVariant(variant.key, { attributes: variant.attributes.filter((_, i) => i !== attributeIndex) })}><Trash2 className="size-3" /></Button></div>)}
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setVariant(variant.key, { attributes: [...variant.attributes, { key: '', value: '' }] })}>Add attribute</Button>
+                </div>
               </div>
             ))}
           </div>
@@ -421,6 +459,23 @@ export function ProductForm({
                 onChange={(event) => set('description', event.target.value)}
               />
             </Field>
+            <FieldRow>
+              <Field label="Model number" htmlFor="modelNumber"><Input id="modelNumber" value={values.modelNumber} onChange={(event) => set('modelNumber', event.target.value)} /></Field>
+              <Field label="Nextly’s take" htmlFor="nextlyTake"><Input id="nextlyTake" value={values.nextlyTake} onChange={(event) => set('nextlyTake', event.target.value)} /></Field>
+            </FieldRow>
+            <Field label="Key features" htmlFor="keyFeatures" hint="One per line"><Textarea id="keyFeatures" value={values.keyFeatures} onChange={(event) => set('keyFeatures', event.target.value)} /></Field>
+            <Field label="Best for" htmlFor="bestFor" hint="One per line"><Textarea id="bestFor" value={values.bestFor} onChange={(event) => set('bestFor', event.target.value)} /></Field>
+            <Field label="What’s in the box" htmlFor="boxContents" hint="One item per line"><Textarea id="boxContents" value={values.boxContents} onChange={(event) => set('boxContents', event.target.value)} /></Field>
+            <FieldRow>
+              <Field label="Platforms" htmlFor="platforms" hint="One per line"><Textarea id="platforms" value={values.platforms} placeholder="Amazon Alexa&#10;Google Home" onChange={(event) => set('platforms', event.target.value)} /></Field>
+              <Field label="Protocols" htmlFor="protocols" hint="One per line"><Textarea id="protocols" value={values.protocols} placeholder="Wi-Fi&#10;Matter" onChange={(event) => set('protocols', event.target.value)} /></Field>
+            </FieldRow>
+            <Field label="Ecosystems" htmlFor="ecosystems" hint="One per line"><Textarea id="ecosystems" value={values.ecosystems} placeholder="Home Assistant" onChange={(event) => set('ecosystems', event.target.value)} /></Field>
+            <div className="flex flex-wrap gap-4 text-[12px] text-ink-2">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={values.featured} onChange={(event) => set('featured', event.target.checked)} /> Featured product</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={values.showWhenOutOfStock} onChange={(event) => set('showWhenOutOfStock', event.target.checked)} /> Show when sold out</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={values.restockNotificationsEnabled} onChange={(event) => set('restockNotificationsEnabled', event.target.checked)} /> Enable restock notification</label>
+            </div>
             <Field label="Internal notes" htmlFor="notes" hint="Never shown publicly">
               <Textarea
                 id="notes"

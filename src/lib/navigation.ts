@@ -3,6 +3,7 @@ import {
   Coins,
   FileText,
   LayoutDashboard,
+  Store,
   type LucideIcon,
   MessageSquareText,
   Package,
@@ -105,6 +106,10 @@ export const NAVIGATION: NavGroup[] = [
         keywords: ['quote', 'enquiry', 'inquiry', 'storefront', 'leads'],
       },
     ],
+  },
+  {
+    label: 'Storefront',
+    items: [{ href: '/storefront' as Route, label: 'Storefront', Icon: Store, keywords: ['catalog', 'restock', 'public site'] }],
   },
   {
     label: 'Finance',

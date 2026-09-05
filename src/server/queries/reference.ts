@@ -7,6 +7,24 @@ import { db } from '../db/client';
 import { clampPage, clampPerPage, type Page, toPage } from './paginate';
 import { bool, maybe, num, text } from './row';
 
+function parseObject(value: string | null | undefined): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+  } catch { return {}; }
+}
+function parseStringArray(value: string | null | undefined): string[] {
+  try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []; } catch { return []; }
+}
+function parseCompatibility(value: string | null | undefined) {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '{}');
+    const record = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    return { platforms: Array.isArray(record.platforms) ? record.platforms.filter((item): item is string => typeof item === 'string') : [], protocols: Array.isArray(record.protocols) ? record.protocols.filter((item): item is string => typeof item === 'string') : [], ecosystems: Array.isArray(record.ecosystems) ? record.ecosystems.filter((item): item is string => typeof item === 'string') : [] };
+  } catch { return { platforms: [], protocols: [], ecosystems: [] }; }
+}
+
 /**
  * The `isDatabaseConfigured()` guard on each function below is a SETUP state,
  * not an outage. Only an ABSENT connection string returns empty; a failing
@@ -363,9 +381,19 @@ export type ProductDetail = {
   slug: string;
   categoryId: string | null;
   supplierId: string | null;
+  brandId: string | null;
   sourceUrl: string | null;
   summary: string | null;
   description: string | null;
+  modelNumber: string | null;
+  keyFeatures: string[];
+  bestFor: string[];
+  compatibility: { platforms: string[]; protocols: string[]; ecosystems: string[] };
+  boxContents: string[];
+  nextlyTake: string | null;
+  featured: boolean;
+  showWhenOutOfStock: boolean;
+  restockNotificationsEnabled: boolean;
   status: 'draft' | 'active' | 'archived';
   /** F-6: months of cover from the day of sale; 0 means none. */
   warrantyMonths: number;
@@ -380,6 +408,8 @@ export type ProductDetail = {
     weightGrams: number;
     isStrategic: boolean;
     isActive: boolean;
+    barcode: string | null;
+    attributes: Record<string, string>;
     onHand: number;
     valueCents: Cents;
   }[];
@@ -400,8 +430,10 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   if (!isDatabaseConfigured()) return null;
 
   const [row] = await db.execute<Record<string, string | null>>(sql`
-    SELECT id, code, name, slug, category_id, supplier_id, source_url,
-           summary, description, status::text AS status,
+    SELECT id, code, name, slug, category_id, supplier_id, brand_id, source_url,
+           summary, description, model_number, key_features::text, best_for::text,
+           compatibility::text, box_contents::text, nextly_take, featured::text,
+           show_when_out_of_stock::text, restock_notifications_enabled::text, status::text AS status,
            warranty_months::text AS warranty_months,
            catalog_published::text AS catalog_published, notes
       FROM products WHERE id = ${id} LIMIT 1
@@ -411,7 +443,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
 
   const [variants, images] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
-      SELECT v.id, v.name, v.sku, v.list_price_cents::text, v.reference_cost_cents::text,
+      SELECT v.id, v.name, v.sku, v.barcode, v.attributes::text, v.list_price_cents::text, v.reference_cost_cents::text,
               v.weight_grams::text AS weight_grams,
               v.is_strategic::text AS is_strategic,
              v.is_active::text AS is_active,
@@ -438,9 +470,19 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     slug: text(row.slug),
     categoryId: maybe(row.category_id),
     supplierId: maybe(row.supplier_id),
+    brandId: maybe(row.brand_id),
     sourceUrl: maybe(row.source_url),
     summary: maybe(row.summary),
     description: maybe(row.description),
+    modelNumber: maybe(row.model_number),
+    keyFeatures: parseStringArray(row.key_features),
+    bestFor: parseStringArray(row.best_for),
+    compatibility: parseCompatibility(row.compatibility),
+    boxContents: parseStringArray(row.box_contents),
+    nextlyTake: maybe(row.nextly_take),
+    featured: bool(row.featured),
+    showWhenOutOfStock: bool(row.show_when_out_of_stock),
+    restockNotificationsEnabled: bool(row.restock_notifications_enabled),
     status: text(row.status) as ProductDetail['status'],
     warrantyMonths: num(row.warranty_months),
     catalogPublished: bool(row.catalog_published),
@@ -454,6 +496,8 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       weightGrams: num(variant.weight_grams),
       isStrategic: bool(variant.is_strategic),
       isActive: bool(variant.is_active),
+      barcode: maybe(variant.barcode),
+      attributes: parseObject(variant.attributes),
       onHand: num(variant.on_hand),
       valueCents: num(variant.value_cents),
     })),
