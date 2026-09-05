@@ -194,6 +194,7 @@ export const restockRequestStatusSchema = z.object({
   id: uuid,
   status: z.enum(['waiting', 'contacted', 'converted', 'cancelled']),
 });
+export type RestockRequestStatus = z.infer<typeof restockRequestStatusSchema>['status'];
 
 export const productRelationshipSchema = z.object({
   productId: uuid,

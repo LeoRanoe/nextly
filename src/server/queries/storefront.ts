@@ -28,5 +28,5 @@ export async function listRestockRequests() {
       LEFT JOIN product_variants v ON v.id = r.variant_id
      ORDER BY r.created_at DESC
   `);
-  return rows.map((row) => ({ id: text(row.id), contact: text(row.contact), channel: text(row.channel), status: text(row.status), productName: text(row.product_name), variantName: maybe(row.variant_name) }));
+  return rows.map((row) => ({ id: text(row.id), contact: text(row.contact), channel: text(row.channel), status: text(row.status) as 'waiting' | 'contacted' | 'converted' | 'cancelled', createdAt: text(row.created_at), productName: text(row.product_name), variantName: maybe(row.variant_name) }));
 }
