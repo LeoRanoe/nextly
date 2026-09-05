@@ -158,8 +158,8 @@ async function Loader({ params }: { params: Params }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.04em] ${
-                inStock ? 'bg-store-bright-soft text-accent' : 'bg-inset text-ink-3'
+              className={`inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.04em] ${
+                inStock ? 'text-accent' : 'text-ink-3'
               }`}
             >
               <span

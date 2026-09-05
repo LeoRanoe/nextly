@@ -61,7 +61,7 @@ export function ProductCard({
          *  `pointer-events-none` so it never steals a click from the card's
          *  stretched link underneath — it's a label, not a control. */}
         <span
-          className={`pointer-events-none absolute top-3 left-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
+          className={`pointer-events-none absolute top-3 left-3 z-10 rounded-control px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
             inStock
               ? 'bg-white/85 text-accent backdrop-blur-sm'
               : 'bg-store-navy/80 text-white backdrop-blur-sm'
@@ -70,7 +70,7 @@ export function ProductCard({
           {inStock ? `${product.onHand} in stock` : 'Sold out'}
         </span>
         {isNew && inStock ? (
-          <span className="pointer-events-none absolute top-3 right-3 z-10 rounded-full bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
+          <span className="pointer-events-none absolute top-3 right-3 z-10 rounded-control bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
             New
           </span>
         ) : null}

@@ -178,23 +178,18 @@
      Fairphone's trick, adapted: the product always sits on a soft colour
      FIELD — never on chrome — and the colour is the brand's own baby
      blue. These are the three fields and the one card shape that carry
-     it. A soft radial wash, not a flat texture: for IoT hardware
-     specifically, a gentle blue glow reads as "signal" / "connected"
-     ambient light, not the generic-gradient tell it would be as loud
-     gradient text — used here as a quiet background field instead. */
+     it. Flat colour, no gradient glow — tried as a soft radial wash and
+     reverted per direct feedback ("don't like the blue glow behind the
+     images"). */
 
-  /* The per-card image field: a cool wash, brightest at the top. */
+  /* The per-card image field: a flat, quiet wash. */
   .store-field {
-    background:
-      radial-gradient(130% 110% at 50% -10%, var(--nx-store-bright-soft) 0%, transparent 62%),
-      var(--nx-bg-inset);
+    background-color: var(--nx-bg-inset);
   }
 
-  /* The homepage hero field: deeper wash, fades to white at the bottom. */
+  /* The homepage hero field: the deeper "sunken" tone, same flat treatment. */
   .store-hero-field {
-    background:
-      radial-gradient(95% 85% at 50% 12%, hsl(199 82% 91%) 0%, transparent 68%),
-      linear-gradient(180deg, var(--nx-bg-sunken) 0%, hsl(0 0% 100%) 100%);
+    background-color: var(--nx-bg-sunken);
   }
 
   /* The product card itself: borderless Fairphone-style tile that lifts. */

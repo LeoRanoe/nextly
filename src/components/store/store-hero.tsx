@@ -17,7 +17,7 @@ export function StoreHero() {
   return (
     <section className="store-hero-field mb-10 w-full px-4 pt-16 pb-14 lg:px-6 lg:pt-20 lg:pb-16">
       <div className="mx-auto max-w-3xl text-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-border bg-white/70 px-3 py-1 text-[11px] font-semibold text-accent tracking-[0.06em] uppercase backdrop-blur-sm">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accent tracking-[0.06em] uppercase">
           <span className="size-1.5 rounded-full bg-store-bright" aria-hidden="true" />
           Smart home · Paramaribo, Suriname
         </span>
@@ -33,7 +33,7 @@ export function StoreHero() {
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           <a
             href="#catalog"
-            className="inline-flex h-11 items-center rounded-full bg-accent px-6 text-[14px] font-medium text-accent-fg shadow-[inset_0_1px_0_0_rgb(255_255_255/0.18)] transition-colors duration-150 ease-out-instrument hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="inline-flex h-12 items-center rounded-full bg-accent px-7 text-[15px] font-bold text-accent-fg shadow-lg shadow-accent/25 transition-all duration-150 ease-out-instrument hover:bg-accent-hover hover:shadow-xl hover:shadow-accent/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             Browse the catalog
           </a>
@@ -136,7 +136,7 @@ export function StoreFooterBanner() {
         </div>
         <Link
           href="/"
-          className="inline-flex h-9 items-center rounded-full bg-store-bright px-5 text-[13px] font-semibold text-store-navy transition-[filter] duration-150 ease-out-instrument hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="inline-flex h-10 items-center rounded-full bg-store-bright px-6 text-[13px] font-bold text-store-navy shadow-lg shadow-black/20 transition-[filter] duration-150 ease-out-instrument hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           Browse the catalog
         </Link>

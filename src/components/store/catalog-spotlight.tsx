@@ -72,7 +72,7 @@ function FeaturedProduct({
     <div className="store-card grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       <div className="store-field relative aspect-square lg:aspect-auto">
         <span
-          className={`absolute top-4 left-4 z-10 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
+          className={`absolute top-4 left-4 z-10 rounded-control px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
             inStock
               ? 'bg-white/85 text-accent backdrop-blur-sm'
               : 'bg-store-navy/80 text-white backdrop-blur-sm'
