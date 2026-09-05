@@ -51,3 +51,14 @@ export async function listStorefrontCollectionsForDashboard() {
     productCount: num(row.product_count),
   }));
 }
+
+export async function listProductStorefrontCollections(productId: string) {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`SELECT c.id, c.name, c.slug, cp.position::text FROM storefront_collection_products cp JOIN storefront_collections c ON c.id = cp.collection_id WHERE cp.product_id = ${productId} ORDER BY cp.position, c.name`);
+  return rows.map((row) => ({ id: text(row.id), name: text(row.name), slug: text(row.slug), position: num(row.position) }));
+}
+export async function listStorefrontCollectionOptions() {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`SELECT id, name FROM storefront_collections ORDER BY position, name`);
+  return rows.map((row) => ({ id: text(row.id), name: text(row.name) }));
+}
