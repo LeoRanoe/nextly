@@ -491,6 +491,13 @@ export const settingsSchema = z.object({
   // handle however it likes; the footer only renders what is filled in.
   instagram: optionalText,
   openingHours: optionalText,
+  pickupEnabled: z.boolean().default(false), pickupLabel: optionalText, pickupDetails: optionalText,
+  sameDayPickupEnabled: z.boolean().default(false), pickupCutoffTime: optionalText,
+  deliveryEnabled: z.boolean().default(false), deliveryDetails: optionalText, deliveryAreas: optionalText,
+  deliveryFeeDisplay: optionalText, deliveryEstimateDisplay: optionalText,
+  paymentMethods: z.array(z.object({ name: shortText, details: optionalText })).max(10).default([]),
+  announcement: optionalText, heroTitle: optionalText, heroBody: optionalText, supportTitle: optionalText, supportBody: optionalText,
+  defaultNewArrivalDays: z.coerce.number().int().min(1).max(365).default(30),
 });
 
 export const memberSchema = z.object({

@@ -372,6 +372,13 @@ export const updateSettings = ownerAction
         invoiceFooter: input.invoiceFooter ?? null,
         instagram: input.instagram ?? null,
         openingHours: input.openingHours ?? null,
+        pickupEnabled: input.pickupEnabled, pickupLabel: input.pickupLabel ?? null, pickupDetails: input.pickupDetails ?? null,
+        sameDayPickupEnabled: input.sameDayPickupEnabled, pickupCutoffTime: input.pickupCutoffTime ?? null,
+        deliveryEnabled: input.deliveryEnabled, deliveryDetails: input.deliveryDetails ?? null, deliveryAreas: input.deliveryAreas ?? null,
+        deliveryFeeDisplay: input.deliveryFeeDisplay ?? null, deliveryEstimateDisplay: input.deliveryEstimateDisplay ?? null,
+        paymentMethods: input.paymentMethods, announcement: input.announcement ?? null, heroTitle: input.heroTitle ?? null,
+        heroBody: input.heroBody ?? null, supportTitle: input.supportTitle ?? null, supportBody: input.supportBody ?? null,
+        defaultNewArrivalDays: input.defaultNewArrivalDays,
       };
 
       if (existing) {

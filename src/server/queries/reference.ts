@@ -329,6 +329,9 @@ export type SettingsRow = {
   invoiceFooter: string | null;
   instagram: string | null;
   openingHours: string | null;
+  pickupEnabled: boolean; pickupLabel: string | null; pickupDetails: string | null; sameDayPickupEnabled: boolean; pickupCutoffTime: string | null;
+  deliveryEnabled: boolean; deliveryDetails: string | null; deliveryAreas: string | null; deliveryFeeDisplay: string | null; deliveryEstimateDisplay: string | null;
+  announcement: string | null; heroTitle: string | null; heroBody: string | null; supportTitle: string | null; supportBody: string | null; defaultNewArrivalDays: number;
 };
 
 export async function getSettings(): Promise<SettingsRow | null> {
@@ -341,7 +344,9 @@ export async function getSettings(): Promise<SettingsRow | null> {
            target_bundle_margin_bp::text, default_bundle_discount_bp::text,
            default_supplier_lead_time_days::text,
            legal_name, address_line, city, phone, whatsapp, email, tax_id, logo_url, invoice_footer,
-           instagram, opening_hours
+           instagram, opening_hours, pickup_enabled::text, pickup_label, pickup_details, same_day_pickup_enabled::text, pickup_cutoff_time,
+           delivery_enabled::text, delivery_details, delivery_areas, delivery_fee_display, delivery_estimate_display,
+           announcement, hero_title, hero_body, support_title, support_body, default_new_arrival_days::text
       FROM settings LIMIT 1
   `);
 
@@ -371,6 +376,9 @@ export async function getSettings(): Promise<SettingsRow | null> {
     invoiceFooter: row.invoice_footer ?? null,
     instagram: row.instagram ?? null,
     openingHours: row.opening_hours ?? null,
+    pickupEnabled: bool(row.pickup_enabled), pickupLabel: row.pickup_label ?? null, pickupDetails: row.pickup_details ?? null, sameDayPickupEnabled: bool(row.same_day_pickup_enabled), pickupCutoffTime: row.pickup_cutoff_time ?? null,
+    deliveryEnabled: bool(row.delivery_enabled), deliveryDetails: row.delivery_details ?? null, deliveryAreas: row.delivery_areas ?? null, deliveryFeeDisplay: row.delivery_fee_display ?? null, deliveryEstimateDisplay: row.delivery_estimate_display ?? null,
+    announcement: row.announcement ?? null, heroTitle: row.hero_title ?? null, heroBody: row.hero_body ?? null, supportTitle: row.support_title ?? null, supportBody: row.support_body ?? null, defaultNewArrivalDays: num(row.default_new_arrival_days, 30),
   };
 }
 
