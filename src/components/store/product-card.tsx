@@ -2,6 +2,7 @@ import { Package } from 'lucide-react';
 import type { Route } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { cn } from '@/lib/cn';
 import type { RateMicros } from '@/lib/fx';
 import type { CatalogListItem } from '@/server/queries/catalog';
 import { StorePrice } from './store-price';
@@ -33,24 +34,34 @@ export function ProductCard({
   product,
   srdRate,
   whatsapp,
+  size = 'default',
 }: {
   product: CatalogListItem;
   srdRate?: RateMicros;
   whatsapp: string | null;
+  /** `spotlight` is the larger, more spacious format used for the 2-3 item
+   *  catalog-spotlight layout (`catalog-spotlight.tsx`) — everything else
+   *  renders the standard grid tile unchanged. */
+  size?: 'default' | 'spotlight';
 }) {
   const inStock = product.onHand > 0;
   const hasRange = product.maxPriceCents > product.minPriceCents;
   const isNew = isRecent(product.createdAt);
+  const spotlight = size === 'spotlight';
 
   return (
-    <Link
-      href={`/p/${product.slug}` as Route}
-      className="store-card group flex flex-col overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
-      <div className="store-field relative aspect-[4/3] overflow-hidden">
-        {/* Availability pill floats over the field, Fairphone-style. */}
+    <div className="store-card group relative flex flex-col overflow-hidden">
+      <div
+        className={cn(
+          'store-field relative overflow-hidden',
+          spotlight ? 'aspect-square' : 'aspect-[4/3]',
+        )}
+      >
+        {/* Availability pill floats over the field, Fairphone-style.
+         *  `pointer-events-none` so it never steals a click from the card's
+         *  stretched link underneath — it's a label, not a control. */}
         <span
-          className={`absolute top-3 left-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
+          className={`pointer-events-none absolute top-3 left-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
             inStock
               ? 'bg-white/85 text-accent backdrop-blur-sm'
               : 'bg-store-navy/80 text-white backdrop-blur-sm'
@@ -59,7 +70,7 @@ export function ProductCard({
           {inStock ? `${product.onHand} in stock` : 'Sold out'}
         </span>
         {isNew && inStock ? (
-          <span className="absolute top-3 right-3 z-10 rounded-full bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
+          <span className="pointer-events-none absolute top-3 right-3 z-10 rounded-full bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
             New
           </span>
         ) : null}
@@ -69,7 +80,10 @@ export function ProductCard({
             alt={product.image.alt ?? product.name}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="object-contain p-6 transition-transform duration-300 ease-out-instrument group-hover:scale-[1.04]"
+            className={cn(
+              'object-contain transition-transform duration-300 ease-out-instrument group-hover:scale-[1.04]',
+              spotlight ? 'p-10' : 'p-6',
+            )}
             {...(product.image.blurDataUrl
               ? { placeholder: 'blur' as const, blurDataURL: product.image.blurDataUrl }
               : {})}
@@ -81,15 +95,28 @@ export function ProductCard({
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-5 pt-4">
+      <div className={cn('flex flex-1 flex-col gap-1.5', spotlight ? 'p-6 pt-5' : 'p-5 pt-4')}>
         {product.categoryName ? (
           <p className="text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
             {product.categoryName}
           </p>
         ) : null}
-        <p className="text-[15px] font-semibold text-ink leading-snug tracking-[-0.01em]">
+        {/* The card's "stretched link": its own box only wraps the name
+         *  text (so the accessible name is the real, visible title), but
+         *  `after:absolute after:inset-0` extends its hit area to the
+         *  whole card via the nearest positioned ancestor (`.store-card`
+         *  above). `WhatsAppCta` below stacks on top of that with its own
+         *  `relative z-10` to remain independently clickable. */}
+        <Link
+          href={`/p/${product.slug}` as Route}
+          className={cn(
+            'font-semibold text-ink leading-snug tracking-[-0.01em] after:absolute after:inset-0',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            spotlight ? 'text-[17px]' : 'text-[15px]',
+          )}
+        >
           {product.name}
-        </p>
+        </Link>
         {product.summary ? (
           <p className="line-clamp-2 text-[13px] text-ink-3 leading-relaxed">
             {product.summary}
@@ -100,7 +127,7 @@ export function ProductCard({
           <StorePrice
             usdCents={product.minPriceCents}
             srdRate={srdRate}
-            size="md"
+            size={spotlight ? 'lg' : 'md'}
             prefix={hasRange ? 'from' : undefined}
           />
         </div>
@@ -111,10 +138,9 @@ export function ProductCard({
           }`}
           label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
           size="md"
-          stopPropagation
-          className="mt-2 self-stretch rounded-full"
+          className={cn('relative z-10 mt-2 self-stretch rounded-full', spotlight && 'h-10')}
         />
       </div>
-    </Link>
+    </div>
   );
 }

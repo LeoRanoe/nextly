@@ -14,6 +14,8 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/design-system',
   '/robots.txt',
   '/sitemap.xml',
+  '/icon',
+  '/opengraph-image',
 ]);
 
 const PUBLIC_PREFIX_PATHS = ['/auth', '/p', '/d/invoice', '/d/quote'];
@@ -25,6 +27,8 @@ const DATABASE_FREE_EXACT_PATHS = new Set([
   '/design-system',
   '/robots.txt',
   '/sitemap.xml',
+  '/icon',
+  '/opengraph-image',
 ]);
 
 const DATABASE_FREE_PREFIX_PATHS = ['/auth'];

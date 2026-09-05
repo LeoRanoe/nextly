@@ -13,6 +13,8 @@ describe('route access policy', () => {
       '/design-system',
       '/robots.txt',
       '/sitemap.xml',
+      '/icon',
+      '/opengraph-image',
       '/p/camera',
       '/d/invoice/token',
       '/d/quote/token',
@@ -43,6 +45,8 @@ describe('route access policy', () => {
       '/design-system',
       '/robots.txt',
       '/sitemap.xml',
+      '/icon',
+      '/opengraph-image',
     ]) {
       expect(isDatabaseFreePath(pathname), pathname).toBe(true);
     }

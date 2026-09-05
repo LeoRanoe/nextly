@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ListSearch } from '@/components/patterns/list-toolbar';
 import { CatalogSort } from '@/components/store/catalog-sort';
+import { CatalogSpotlight } from '@/components/store/catalog-spotlight';
 import { CategoryPills } from '@/components/store/category-pills';
 import { ProductCard } from '@/components/store/product-card';
 import { StoreHero, StoreValues } from '@/components/store/store-hero';
@@ -71,7 +72,9 @@ export default function CatalogPage({
 
 async function CatalogPills() {
   const categories = await listCatalogCategories();
-  if (categories.length === 0) return null;
+  // A single real category next to "Everything" filters nothing — the row
+  // only earns its place once there's an actual choice to make.
+  if (categories.length < 2) return null;
   return <CategoryPills categories={categories} />;
 }
 
@@ -140,6 +143,19 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
     );
   }
 
+  // A young catalog forced into a grid built for dozens is what makes it
+  // read as empty rather than curated — below this size it gets the more
+  // spacious, editorial spotlight treatment instead (`catalog-spotlight.tsx`).
+  if (products.length <= 3) {
+    return (
+      <CatalogSpotlight
+        products={products}
+        srdRate={rate?.rateMicros}
+        whatsapp={settings?.whatsapp ?? null}
+      />
+    );
+  }
+
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {products.map((product) => (
@@ -154,23 +170,29 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   );
 }
 
-/** Matches the card geometry — image field, four rows — so streaming
- *  causes no shift. */
+/** Shaped after the spotlight's one-product feature rather than the 4+ grid
+ *  — today's catalog (and the near-term one) is far more likely to land
+ *  there. Crossing the 4-item threshold costs one acceptable one-time
+ *  reflow rather than an extra pre-count query or new client state just to
+ *  pick the right skeleton. */
 function CatalogSkeleton() {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-hidden="true">
-      {['a', 'b', 'c', 'd'].map((key) => (
-        <div key={key} className="store-card overflow-hidden">
-          <Skeleton className="aspect-[4/3] w-full rounded-none" />
-          <div className="space-y-2 p-5 pt-4">
-            <Skeleton className="h-[11px] w-16" />
-            <Skeleton className="h-[15px] w-2/3" />
-            <Skeleton className="h-[12px] w-full" />
-            <Skeleton className="h-[18px] w-24" />
-            <Skeleton className="mt-2 h-9 w-full rounded-full" />
-          </div>
+    <div
+      className="store-card grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]"
+      aria-hidden="true"
+    >
+      <Skeleton className="aspect-square w-full rounded-none lg:aspect-auto" />
+      <div className="space-y-3 p-8 lg:p-12">
+        <Skeleton className="h-[11px] w-24" />
+        <Skeleton className="h-[26px] w-3/4" />
+        <Skeleton className="h-[14px] w-full" />
+        <Skeleton className="h-[14px] w-2/3" />
+        <Skeleton className="mt-2 h-[30px] w-32" />
+        <div className="mt-3 flex gap-3">
+          <Skeleton className="h-11 w-40 rounded-full" />
+          <Skeleton className="h-4 w-28" />
         </div>
-      ))}
+      </div>
     </div>
   );
 }

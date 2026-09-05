@@ -173,7 +173,16 @@ async function Loader({ params }: { params: Params }) {
             <span className="tabular text-[11px] text-ink-4">{product.code}</span>
           </div>
 
-          <h1 className="mt-3 text-[28px] font-semibold text-ink leading-tight tracking-[-0.02em]">
+          {product.categoryName ? (
+            <p className="mt-3 text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
+              {product.categoryName}
+            </p>
+          ) : null}
+          <h1
+            className={`text-[28px] font-semibold text-ink leading-tight tracking-[-0.02em] ${
+              product.categoryName ? 'mt-1' : 'mt-3'
+            }`}
+          >
             {product.name}
           </h1>
 
@@ -228,7 +237,7 @@ async function Loader({ params }: { params: Params }) {
 
           {product.variants.length > 1 ? (
             <section className="mt-6">
-              <h2 className="mb-2 font-medium text-[11px] text-ink-3 uppercase tracking-[0.08em]">
+              <h2 className="mb-2 font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
                 Options
               </h2>
               <ul className="divide-y divide-line-subtle overflow-hidden rounded-card border border-line-subtle bg-raised">
@@ -256,7 +265,7 @@ async function Loader({ params }: { params: Params }) {
 
           {specs.length > 0 ? (
             <section className="mt-6">
-              <h2 className="mb-2 font-medium text-[11px] text-ink-3 uppercase tracking-[0.08em]">
+              <h2 className="mb-2 font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
                 Specifications
               </h2>
               <dl className="divide-y divide-line-subtle overflow-hidden rounded-card border border-line-subtle bg-raised">

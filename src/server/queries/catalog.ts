@@ -60,16 +60,19 @@ const CATALOG_SORT_CLAUSES: Record<CatalogSort, ReturnType<typeof sql>> = {
 };
 
 export async function listCatalogProducts(
-  params: { q?: string; category?: string; sort?: CatalogSort } = {},
+  params: { q?: string; category?: string; sort?: CatalogSort; limit?: number } = {},
 ): Promise<CatalogListItem[]> {
   if (!isDatabaseConfigured()) return [];
 
   // Normalised to `null`, never `undefined`: postgres.js rejects an
   // `undefined` bind parameter outright, and `null` is what "no filter"
-  // means to the `IS NULL OR ...` clauses below anyway.
+  // means to the `IS NULL OR ...` clauses below anyway. A `NULL` limit reads
+  // as "no limit" to Postgres, so the hero's "newest one" read and the
+  // grid's "every match" read share this one query with no branching SQL.
   const category = params.category?.trim() || null;
   const likeQuery = params.q?.trim() ? `%${params.q.trim()}%` : null;
   const order = CATALOG_SORT_CLAUSES[params.sort ?? 'newest'];
+  const limit = params.limit ?? null;
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
@@ -109,6 +112,7 @@ export async function listCatalogProducts(
       AND (${category}::text IS NULL OR c.slug = ${category})
       AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery})
     ORDER BY ${order}
+    LIMIT ${limit}
   `);
 
   return rows.map((row) => ({
