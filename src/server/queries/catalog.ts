@@ -179,6 +179,24 @@ export async function listCatalogCategories(): Promise<CatalogCategory[]> {
 }
 
 export type StorefrontCollection = { name: string; slug: string; description: string | null; imageUrl: string | null; productCount: number };
+export type CatalogBundle = { id: string; slug: string; name: string; summary: string | null; priceCents: Cents; availability: number };
+
+/** Public bundle read model: availability is the limiting component quantity,
+ * never a manually maintained stock number and never a cost calculation. */
+export async function listCatalogBundles(limit = 6): Promise<CatalogBundle[]> {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT b.id, b.slug, b.name, b.summary, b.price_cents::text,
+           MIN(FLOOR(COALESCE(s.on_hand, 0)::numeric / NULLIF(bc.quantity, 0)))::text AS availability
+      FROM bundles b JOIN bundle_components bc ON bc.bundle_id = b.id
+      LEFT JOIN v_stock_levels s ON s.variant_id = bc.variant_id
+     WHERE b.catalog_published AND b.is_active AND b.slug IS NOT NULL
+     GROUP BY b.id
+     ORDER BY b.featured DESC, b.position, b.name
+     LIMIT ${limit}
+  `);
+  return rows.map((row) => ({ id: text(row.id), slug: text(row.slug), name: text(row.name), summary: maybe(row.summary), priceCents: num(row.price_cents), availability: num(row.availability) }));
+}
 /** Intent-led collections are separate from categories and only appear once
  * they contain something a visitor can actually buy. */
 export async function listHomepageCollections(): Promise<StorefrontCollection[]> {
