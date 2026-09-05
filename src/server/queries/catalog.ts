@@ -225,6 +225,7 @@ export type CatalogProduct = {
     onHand: number;
   }[];
   images: (CatalogImage & { isPrimary: boolean })[];
+  related: { name: string; slug: string; relationshipType: string; summary: string | null }[];
 };
 
 export async function getCatalogProduct(slug: string): Promise<CatalogProduct | null> {
@@ -246,7 +247,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
 
   if (!row) return null;
 
-  const [variants, images] = await Promise.all([
+  const [variants, images, related] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT v.id, v.name, v.list_price_cents::text,
              COALESCE(s.on_hand, 0)::text AS on_hand
@@ -254,6 +255,12 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
         LEFT JOIN v_stock_levels s ON s.variant_id = v.id
        WHERE v.product_id = ${row.id} AND v.is_active
        ORDER BY v.position
+    `),
+    db.execute<Record<string, string | null>>(sql`
+      SELECT rp.name, rp.slug, rp.summary, pr.relationship_type
+        FROM product_relationships pr JOIN products rp ON rp.id = pr.related_product_id
+       WHERE pr.product_id = ${row.id} AND rp.catalog_published AND rp.status = 'active'
+       ORDER BY pr.position, rp.name
     `),
     db.execute<Record<string, string | null>>(sql`
       SELECT url, width::text, height::text, alt, blur_data_url,
@@ -307,6 +314,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
       blurDataUrl: maybe(image.blur_data_url),
       isPrimary: bool(image.is_primary),
     })),
+    related: related.map((item) => ({ name: text(item.name), slug: text(item.slug), summary: maybe(item.summary), relationshipType: text(item.relationship_type) })),
   };
 }
 

@@ -304,6 +304,7 @@ async function Loader({ params }: { params: Params }) {
               </dl>
             </section>
           ) : null}
+          {product.related.length ? <section className="mt-8 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Works well with</h2><div className="mt-3 space-y-2">{product.related.map((item) => <Link key={`${item.relationshipType}-${item.slug}`} href={`/p/${item.slug}`} className="block text-[13px] text-ink hover:text-accent hover:underline"><span className="font-medium">{item.name}</span>{item.summary ? <span className="text-ink-3"> · {item.summary}</span> : null}</Link>)}</div></section> : null}
         </div>
       </div>
     </article>
