@@ -47,6 +47,7 @@ export type ProductFormValues = {
   sourceUrl: string;
   summary: string;
   description: string;
+  specs: { key: string; value: string }[];
   modelNumber: string;
   keyFeatures: string;
   bestFor: string;
@@ -101,7 +102,7 @@ const emptyProduct = (): ProductFormValues => ({
   categoryId: null,
   supplierId: null,
   brandId: null,
-  sourceUrl: '',
+  sourceUrl: '', specs: [],
   summary: '',
   description: '',
   modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', hubRequired: false, hubName: '', appRequired: false, appName: '', wifiRequired: false, wifiBands: '', indoorOutdoor: '', powerSource: '', installationNotes: '', faqItems: [], featured: false, featuredPosition: '', newUntil: '', showWhenOutOfStock: true, restockNotificationsEnabled: false,
@@ -212,6 +213,7 @@ export function ProductForm({
           sourceUrl: values.sourceUrl || '',
           summary: values.summary || undefined,
           description: values.description || undefined,
+          specs: Object.fromEntries(values.specs.filter((spec) => spec.key.trim() && spec.value.trim()).map((spec) => [spec.key.trim(), spec.value.trim()])),
           modelNumber: values.modelNumber || undefined,
           keyFeatures: toLines(values.keyFeatures), bestFor: toLines(values.bestFor),
           compatibility: { platforms: toLines(values.platforms), protocols: toLines(values.protocols), ecosystems: toLines(values.ecosystems) },
@@ -480,6 +482,7 @@ export function ProductForm({
                 onChange={(event) => set('description', event.target.value)}
               />
             </Field>
+            <div className="border-t border-line-subtle pt-3"><div className="mb-2 flex items-center justify-between"><p className="text-[13px] font-medium text-ink">Specifications</p><Button type="button" size="sm" variant="ghost" onClick={() => set('specs', [...values.specs, { key: '', value: '' }])}>Add specification</Button></div>{values.specs.map((spec, index) => <div key={index} className="mb-2 flex gap-2"><Input value={spec.key} placeholder="e.g. Resolution" onChange={(event) => set('specs', values.specs.map((item, i) => i === index ? { ...item, key: event.target.value } : item))} /><Input value={spec.value} placeholder="e.g. 1080p" onChange={(event) => set('specs', values.specs.map((item, i) => i === index ? { ...item, value: event.target.value } : item))} /><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove specification" onClick={() => set('specs', values.specs.filter((_, i) => i !== index))}><Trash2 className="size-3" /></Button></div>)}</div>
             <FieldRow>
               <Field label="Model number" htmlFor="modelNumber"><Input id="modelNumber" value={values.modelNumber} onChange={(event) => set('modelNumber', event.target.value)} /></Field>
               <Field label="Nextly’s take" htmlFor="nextlyTake"><Input id="nextlyTake" value={values.nextlyTake} onChange={(event) => set('nextlyTake', event.target.value)} /></Field>

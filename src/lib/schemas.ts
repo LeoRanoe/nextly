@@ -155,6 +155,7 @@ export const productSchema = z.object({
     .optional(),
   summary: optionalText,
   description: optionalText,
+  specs: z.record(z.string().trim().min(1).max(100), z.string().trim().min(1).max(500)).default({}),
   modelNumber: optionalText,
   keyFeatures: stringList,
   bestFor: stringList,

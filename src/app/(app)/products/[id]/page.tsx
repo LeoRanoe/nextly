@@ -89,6 +89,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
           sourceUrl: product.sourceUrl ?? '',
           summary: product.summary ?? '',
           description: product.description ?? '',
+          specs: Object.entries(product.specs).map(([key, value]) => ({ key, value })),
           modelNumber: product.modelNumber ?? '',
           keyFeatures: product.keyFeatures.join('\n'),
           bestFor: product.bestFor.join('\n'),

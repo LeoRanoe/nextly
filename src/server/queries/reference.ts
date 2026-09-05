@@ -407,6 +407,7 @@ export type ProductDetail = {
   sourceUrl: string | null;
   summary: string | null;
   description: string | null;
+  specs: Record<string, string>;
   modelNumber: string | null;
   keyFeatures: string[];
   bestFor: string[];
@@ -457,7 +458,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
 
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT id, code, name, slug, category_id, supplier_id, brand_id, source_url,
-           summary, description, model_number, key_features::text, best_for::text,
+           summary, description, specs::text, model_number, key_features::text, best_for::text,
            compatibility::text, buyer_requirements::text, box_contents::text, nextly_take, faq_items::text, featured::text,
            featured_position::text, new_until::text, show_when_out_of_stock::text, restock_notifications_enabled::text, status::text AS status,
            warranty_months::text AS warranty_months,
@@ -500,6 +501,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     sourceUrl: maybe(row.source_url),
     summary: maybe(row.summary),
     description: maybe(row.description),
+    specs: parseObject(row.specs),
     modelNumber: maybe(row.model_number),
     keyFeatures: parseStringArray(row.key_features),
     bestFor: parseStringArray(row.best_for),
