@@ -137,51 +137,54 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 .nx-store {
-  /* ── Surfaces — warm cream base, parchment fields ────────────────────
-     Retinted from the original cool light-blue Northlight palette: same
-     structure (near-white base, one tinted "field" wash, one accent), a
-     warm amber/brass hue throughout instead of blue. See docs/03-design/
-     design-system.md's Northlight section for the full rationale. */
-  --nx-bg-sunken: hsl(38 28% 93%);
-  --nx-bg-base: hsl(40 30% 97%);
-  --nx-bg-raised: hsl(40 35% 99%);
-  --nx-bg-overlay: hsl(40 35% 99%);
-  --nx-bg-inset: hsl(35 32% 94%);
-  --nx-bg-hover: hsl(36 28% 91%);
-  --nx-bg-active: hsl(36 26% 87%);
+  /* ── Surfaces — white base, light-blue fields ─────────────────────────
+     Back to a blue family after a warm-amber detour: this is IoT/smart-
+     home hardware, and blue is the category's near-universal signal for
+     "connected" — the amber retint read as artisanal/organic rather than
+     tech, which fought the product instead of selling it. The accent
+     itself is a lighter, softer blue than the original dark navy (named
+     "baby blue" directly) rather than a full revert. */
+  --nx-bg-sunken: hsl(204 58% 96.5%);
+  --nx-bg-base: hsl(0 0% 100%);
+  --nx-bg-raised: hsl(0 0% 100%);
+  --nx-bg-overlay: hsl(0 0% 100%);
+  --nx-bg-inset: hsl(204 66% 96.5%);
+  --nx-bg-hover: hsl(204 58% 94%);
+  --nx-bg-active: hsl(204 56% 91%);
 
-  /* ── Borders — warm, paper-toned hairlines ───────────────────────────── */
-  --nx-border-subtle: hsl(35 20% 88%);
-  --nx-border: hsl(35 18% 78%);
-  --nx-border-strong: hsl(35 15% 62%);
+  /* ── Borders — cooler, lighter hairlines ────────────────────────────── */
+  --nx-border-subtle: hsl(206 42% 91%);
+  --nx-border: hsl(206 36% 85%);
+  --nx-border-strong: hsl(206 30% 71%);
 
-  /* ── Text — warm near-black ink ───────────────────────────────────────── */
-  --nx-text: hsl(30 20% 14%);
-  --nx-text-secondary: hsl(30 12% 36%);
-  --nx-text-tertiary: hsl(30 10% 48%);
-  --nx-text-faint: hsl(30 9% 60%);
+  /* ── Text — navy-tinted ink ─────────────────────────────────────────── */
+  --nx-text: hsl(208 50% 12%);
+  --nx-text-secondary: hsl(208 22% 36%);
+  --nx-text-tertiary: hsl(208 16% 48%);
+  --nx-text-faint: hsl(208 14% 60%);
 
-  /* ── Accent — warm amber/brass, confident on cream ───────────────────── */
-  --nx-accent: hsl(38 72% 38%);
-  --nx-accent-hover: hsl(38 72% 31%);
+  /* ── Accent — a soft "baby blue", confident on white but noticeably
+     lighter than a corporate navy ──────────────────────────────────────── */
+  --nx-accent: hsl(205 75% 45%);
+  --nx-accent-hover: hsl(205 75% 38%);
   --nx-accent-fg: hsl(0 0% 100%);
-  --nx-accent-muted: hsl(42 65% 93%);
-  --nx-accent-border: hsl(40 55% 75%);
-  --nx-ring: hsl(38 75% 42%);
+  --nx-accent-muted: hsl(205 70% 94%);
+  --nx-accent-border: hsl(205 60% 80%);
+  --nx-ring: hsl(205 80% 50%);
 
-  /* ── Highlight — a brighter step of the same amber, used sparingly ───── */
-  --nx-store-bright: hsl(38 85% 55%);
-  --nx-store-bright-soft: hsl(42 70% 92%);
+  /* ── Highlight — the actual pastel "baby blue", used sparingly ───────── */
+  --nx-store-bright: hsl(199 85% 65%);
+  --nx-store-bright-soft: hsl(199 80% 93%);
 
-  /* ── Espresso — the footer's warm contrast block and hero ink ────────── */
-  --nx-store-navy: hsl(30 25% 14%);
-  --nx-store-navy-soft: hsl(30 20% 24%);
-  --nx-store-navy-line: hsl(30 18% 34%);
+  /* ── Navy — the footer's cool contrast block and hero ink ───────────── */
+  --nx-store-navy: hsl(208 50% 12%);
+  --nx-store-navy-soft: hsl(208 36% 22%);
+  --nx-store-navy-line: hsl(208 30% 32%);
 
-  /* ── Elevation — shadows tinted warm, matching the rest of the palette ── */
+  /* ── Elevation — softer and airier than the dashboard's single step ─── */
   --nx-shadow-raised:
-    0 2px 6px -2px hsl(30 45% 25% / 0.1), 0 10px 28px -10px hsl(30 45% 25% / 0.14);
+    0 2px 6px -2px hsl(206 60% 30% / 0.08), 0 10px 28px -10px hsl(206 60% 30% / 0.12);
   --nx-shadow-overlay:
-    0 6px 16px -4px hsl(30 45% 20% / 0.14), 0 20px 48px -12px hsl(30 45% 20% / 0.18);
+    0 6px 16px -4px hsl(206 60% 24% / 0.12), 0 20px 48px -12px hsl(206 60% 24% / 0.16);
   --nx-highlight: transparent;
 }

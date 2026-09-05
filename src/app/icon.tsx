@@ -6,7 +6,7 @@ export const contentType = 'image/png';
 /**
  * Root-scoped so both the dashboard and storefront tabs get a real icon
  * instead of the browser default — there was none at all before this.
- * Colours are the "Northlight" espresso and bright amber (`styles/tokens.css`'s
+ * Colours are the "Northlight" navy and baby blue (`styles/tokens.css`'s
  * `.nx-store` block) copied as literal hex: Satori (the renderer behind
  * `ImageResponse`) can't read live CSS custom properties, so these must be
  * kept in sync by hand if that palette ever changes.
@@ -20,7 +20,7 @@ export default function Icon() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#2d241b',
+        background: '#0f202e',
         borderRadius: 7,
       }}
     >
@@ -30,7 +30,7 @@ export default function Icon() {
           width: 12,
           height: 12,
           borderRadius: '50%',
-          background: '#eea62b',
+          background: '#5ac2f2',
         }}
       />
     </div>,

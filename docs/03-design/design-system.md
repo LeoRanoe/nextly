@@ -173,16 +173,17 @@ Nothing bounces. Nothing pulses except a loading skeleton.
 The dashboard is dense and near-monochrome because it is read, not sold
 from. The public shop has the opposite job, so it gets its own skin, taken
 from Fairphone's playbook: the product always sits on a soft colour FIELD —
-a warm parchment wash (`store-field`, `store-hero-field`) — never on
-chrome, and the page is a warm cream and open rather than tinted and dense.
+a light-blue wash (`store-field`, `store-hero-field`) — never on chrome, and
+the page is white and open rather than tinted and dense.
 
-Warm, not cool: the original version of this skin used a light-blue wash
-with a navy/cyan accent — closer to a generic SaaS-tech palette than a shop
-selling physical hardware. Retinted to a warm amber/brass accent on a cream
-canvas, with the soft fields carrying a faint paper-grain texture instead
-of a gradient glow, for a more print-catalog, less screen-glow feel. Same
-structure (one neutral base, one accent, one brighter highlight step of
-that accent), different hue and surface treatment.
+Blue, deliberately: this shop sells IoT hardware, and blue is the
+category's near-universal signal for "connected." A warm amber palette was
+tried briefly and reverted — it read as artisanal/organic rather than
+tech, fighting the product instead of selling it. The accent is a lighter,
+softer blue than the original dark navy ("baby blue," directly) rather
+than a plain revert; the soft radial wash behind product photos stays, on
+purpose — for hardware like this, a gentle blue glow reads as ambient
+"signal" light, not a decorative gradient.
 
 Scoped, not forked. `.nx-store` on the `(store)` layout root redefines the
 same `--nx-*` custom properties the whole app consumes; because
@@ -197,20 +198,18 @@ Northlight's own rules, on top of Instrument's:
 
 | | Instrument (dashboard) | Northlight (storefront) |
 |---|---|---|
-| Canvas | tinted base `hsl(205 30% 98.5%)` | warm cream `hsl(40 30% 97%)`; parchment only as fields |
-| Accent | cyan `#37CAEC` darkened | amber/brass `#A7741B` |
-| Bright note | accent = cyan | `#EEA62B` returns as highlight: NEW pills, stock dots, footer CTA |
+| Canvas | tinted base `hsl(205 30% 98.5%)` | pure white; light-blue only as fields |
+| Accent | cyan `#37CAEC` darkened | a softer "baby blue" `hsl(205 75% 45%)`, lighter than a corporate navy |
+| Bright note | accent = cyan | `hsl(199 85% 65%)` returns as highlight: NEW pills, stock dots, footer CTA |
 | Cards | hairline border, 10px radius, one shadow | `store-card`: 16px radius, lift-on-hover, product on a colour field |
 | CTAs | 28/32/36px dense controls | pill (`rounded-full`) 36–44px — a shop invites, a tool confirms |
 | Type | 13px body, weight 500 max | up to 54px/600 hero, 15–16px body |
-| Closing move | — | one espresso-dark promise band above the footer (`StoreFooterBanner`) |
+| Closing move | — | one navy promise band above the footer (`StoreFooterBanner`) |
 
 Storefront-specific tokens (`--nx-store-bright`, `--nx-store-navy` and
-friends — the latter now an espresso brown, not literal navy; renamed in
-prose here but not in code, to keep the diff to the retint itself) live in
-the same `.nx-store` block in `tokens.css`, mapped through `@theme inline`
-as `store-bright` / `store-navy` utilities with light-theme fallbacks.
-Rule 6 still holds: nothing defines a colour anywhere else.
+friends) live in the same `.nx-store` block in `tokens.css`, mapped through
+`@theme inline` as `store-bright` / `store-navy` utilities with light-theme
+fallbacks. Rule 6 still holds: nothing defines a colour anywhere else.
 
 ---
 

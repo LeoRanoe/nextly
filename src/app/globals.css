@@ -176,27 +176,25 @@
 
   /* ── Storefront "Northlight" ────────────────────────────────────────────
      Fairphone's trick, adapted: the product always sits on a soft colour
-     FIELD — never on chrome — and the colour is the brand's own warm
-     amber. These are the three fields and the one card shape that carry
-     it. Flat colour plus a faint paper-grain texture, deliberately not a
-     gradient glow — a print-catalog surface, not a screen-glow one. */
+     FIELD — never on chrome — and the colour is the brand's own baby
+     blue. These are the three fields and the one card shape that carry
+     it. A soft radial wash, not a flat texture: for IoT hardware
+     specifically, a gentle blue glow reads as "signal" / "connected"
+     ambient light, not the generic-gradient tell it would be as loud
+     gradient text — used here as a quiet background field instead. */
 
-  /* The per-card image field and the homepage hero field share the exact
-     same barely-visible noise texture (a tiled SVG turbulence filter, not
-     an image asset) — one flat "paper" material at two tones, not two
-     different textures. Each declares it directly: a bare custom property
-     can't sit here unattached to a selector, and this asset is static
-     (unrelated to theming), so a shared `var()` would add a layer of
-     indirection for no benefit over just repeating the one declaration. */
+  /* The per-card image field: a cool wash, brightest at the top. */
   .store-field {
-    background-color: var(--nx-bg-inset);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+    background:
+      radial-gradient(130% 110% at 50% -10%, var(--nx-store-bright-soft) 0%, transparent 62%),
+      var(--nx-bg-inset);
   }
 
-  /* The homepage hero field: the deeper "sunken" tone, same grain. */
+  /* The homepage hero field: deeper wash, fades to white at the bottom. */
   .store-hero-field {
-    background-color: var(--nx-bg-sunken);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+    background:
+      radial-gradient(95% 85% at 50% 12%, hsl(199 82% 91%) 0%, transparent 68%),
+      linear-gradient(180deg, var(--nx-bg-sunken) 0%, hsl(0 0% 100%) 100%);
   }
 
   /* The product card itself: borderless Fairphone-style tile that lifts. */
@@ -204,7 +202,7 @@
     background-color: var(--nx-bg-raised);
     border: 1px solid var(--nx-border-subtle);
     border-radius: 16px;
-    box-shadow: 0 1px 2px hsl(30 45% 25% / 0.05);
+    box-shadow: 0 1px 2px hsl(206 60% 30% / 0.04);
     transition:
       box-shadow 200ms var(--ease-out-instrument),
       translate 200ms var(--ease-out-instrument),
