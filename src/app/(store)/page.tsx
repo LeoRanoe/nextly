@@ -21,9 +21,9 @@ import { getCurrentRate } from '@/server/queries/overview';
 import { getSettings } from '@/server/queries/reference';
 
 export const metadata: Metadata = {
-  title: 'Smart home store — Catalog',
+  title: 'Smart home catalog',
   description:
-    'Smart home devices, imported and in stock in Paramaribo, Suriname. Priced in SRD at the current rate — ask, order and collect on WhatsApp.',
+    'Smart home devices, imported and in stock in Paramaribo, Suriname. Priced in SRD at the current rate. Ask, order and collect on WhatsApp.',
 };
 
 const CATALOG_SORTS = ['newest', 'name', 'price-asc', 'price-desc'];
@@ -130,7 +130,7 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
         description={
           filtered
             ? `No products match ${q ? `"${q}"` : 'that filter'}. Try a different search or clear the category.`
-            : 'Products appear here the moment they are published to the catalog — price, pictures and availability straight from the books.'
+            : 'Products appear here the moment they are published to the catalog, with price, pictures and availability straight from the books.'
         }
         action={
           filtered ? (

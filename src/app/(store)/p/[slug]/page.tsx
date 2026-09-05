@@ -167,8 +167,8 @@ async function Loader({ params }: { params: Params }) {
                 aria-hidden="true"
               />
               {inStock
-                ? `${onHand} in stock — collect today`
-                : 'Sold out — ask about the next shipment'}
+                ? `${onHand} in stock, collect today`
+                : 'Sold out, ask about the next shipment'}
             </span>
             <span className="tabular text-[11px] text-ink-4">{product.code}</span>
           </div>
@@ -204,7 +204,7 @@ async function Loader({ params }: { params: Params }) {
               number={whatsapp}
               message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
                 product.variants.length === 1 ? ` (${product.variants[0]?.name})` : ''
-              }${product.code ? ` — SKU ${product.code}` : ''}`}
+              }${product.code ? ` (SKU ${product.code})` : ''}`}
               label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
               className="h-11 rounded-full px-6 text-[14px]"
             />

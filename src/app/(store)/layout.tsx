@@ -128,7 +128,7 @@ export default async function StoreLayout({ children }: { children: ReactNode })
             <div className="min-w-0">
               <Wordmark />
               <p className="mt-3 max-w-[40ch] text-[13px] text-ink-3 leading-relaxed">
-                {settings?.businessName ?? 'Nextly'} — connected devices, imported and sold in
+                {settings?.businessName ?? 'Nextly'} imports and sells connected devices in
                 Paramaribo. What shows as in stock is on the shelf right now.
               </p>
             </div>

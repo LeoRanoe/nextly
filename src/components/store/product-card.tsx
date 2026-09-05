@@ -134,7 +134,7 @@ export function ProductCard({
         <WhatsAppCta
           number={whatsapp}
           message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
-            inStock ? ' — is het op voorraad?' : ' — wanneer komt de volgende levering?'
+            inStock ? '. Is het op voorraad?' : '. Wanneer komt de volgende levering?'
           }`}
           label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
           size="md"

@@ -37,7 +37,7 @@ export function StoreHero() {
           </h1>
           <p className="mx-auto mt-4 max-w-[52ch] text-[15px] text-ink-2 leading-relaxed sm:text-[16px] lg:mx-0">
             Connected devices for your home, imported and stocked in Paramaribo. What shows as
-            in stock is on the shelf right now — priced in SRD, ready to collect today.
+            in stock is on the shelf right now, priced in SRD and ready to collect today.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
             <a
@@ -185,7 +185,7 @@ function HeroProductEmpty() {
         <div className="store-field flex aspect-square flex-col items-center justify-center gap-3 px-10 text-center">
           <Package className="size-9 text-ink-4" aria-hidden="true" />
           <p className="text-[13px] text-ink-3 leading-relaxed">
-            New arrivals land here first — nothing published yet.
+            New arrivals land here first. Nothing published yet.
           </p>
         </div>
       </div>
@@ -209,7 +209,7 @@ export function StoreValues() {
           </p>
           <p className="mt-3 text-[26px] font-semibold text-ink leading-[1.15] tracking-[-0.02em] sm:text-[32px]">
             On the shelf, not on a promise. Availability comes straight from the same ledger the
-            business runs on — if the card says in stock, it is physically here in Paramaribo.
+            business runs on. If the card says in stock, it is physically here in Paramaribo.
           </p>
         </div>
 
@@ -228,7 +228,7 @@ export function StoreValues() {
               One message away
             </dt>
             <dd className="mt-1.5 text-[14px] text-ink-2 leading-relaxed">
-              No checkout maze. Ask, order and collect — one WhatsApp message.
+              No checkout maze. Ask, order and collect in one WhatsApp message.
             </dd>
           </div>
         </dl>

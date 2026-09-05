@@ -39,7 +39,7 @@ export function WhatsAppCta({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`${label} — opens WhatsApp`}
+      aria-label={`${label} (opens WhatsApp)`}
       className={cn(
         'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium whitespace-nowrap',
         'bg-[#25D366] text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.22)]',
