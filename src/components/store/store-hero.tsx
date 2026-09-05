@@ -74,7 +74,10 @@ function HeroCtaFallback() {
  *  cards: the strongest promise (real stock) earns real typographic weight,
  *  the other two sit as plain supporting facts. Static: no data, no copy
  *  that can drift from the settings row. */
-export function StoreValues() {
+export async function StoreValues() {
+  const settings = await getSettings();
+  const supportTitle = settings?.supportTitle?.trim() || 'Not sure if something works with your setup?';
+  const supportBody = settings?.supportBody?.trim() || 'Tell us what you already use and we’ll help you choose.';
   return (
     <section className="mt-16 border-line-subtle border-t pt-12">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start lg:gap-16">
@@ -100,10 +103,10 @@ export function StoreValues() {
           </div>
           <div className="border-line-subtle border-t pt-6">
             <dt className="text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
-              One message away
+              {supportTitle}
             </dt>
             <dd className="mt-1.5 text-[14px] text-ink-2 leading-relaxed">
-              No checkout maze. Ask, order and collect in one WhatsApp message.
+              {supportBody}
             </dd>
           </div>
         </dl>
