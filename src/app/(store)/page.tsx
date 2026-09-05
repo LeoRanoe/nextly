@@ -138,17 +138,18 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   const q = typeof raw.q === 'string' ? raw.q : undefined;
   const category = typeof raw.category === 'string' ? raw.category : undefined;
   const collection = typeof raw.collection === 'string' ? raw.collection : undefined;
+  const availability = raw.availability === 'in-stock' || raw.availability === 'incoming' ? raw.availability : undefined;
   const sortRaw = typeof raw.sort === 'string' ? raw.sort : undefined;
   const sort = isCatalogSort(sortRaw) ? sortRaw : undefined;
 
   const [products, rate, settings] = await Promise.all([
-    listCatalogProducts({ q, category, collection, sort }),
+    listCatalogProducts({ q, category, collection, availability, sort }),
     getCurrentRate(),
     getSettings(),
   ]);
 
   if (products.length === 0) {
-    const filtered = Boolean(q || category || collection);
+    const filtered = Boolean(q || category || collection || availability);
     return (
       <EmptyState
         Icon={filtered ? PackageSearch : Package}

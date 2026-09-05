@@ -65,7 +65,7 @@ const CATALOG_SORT_CLAUSES: Record<CatalogSort, ReturnType<typeof sql>> = {
 };
 
 export async function listCatalogProducts(
-  params: { q?: string; category?: string; collection?: string; sort?: CatalogSort; limit?: number } = {},
+  params: { q?: string; category?: string; collection?: string; availability?: 'in-stock' | 'incoming'; sort?: CatalogSort; limit?: number } = {},
 ): Promise<CatalogListItem[]> {
   if (!isDatabaseConfigured()) return [];
 
@@ -76,6 +76,7 @@ export async function listCatalogProducts(
   // grid's "every match" read share this one query with no branching SQL.
   const category = params.category?.trim() || null;
   const collection = params.collection?.trim() || null;
+  const availability = params.availability ?? null;
   const likeQuery = params.q?.trim() ? `%${params.q.trim()}%` : null;
   const order = CATALOG_SORT_CLAUSES[params.sort ?? 'newest'];
   const limit = params.limit ?? null;
@@ -122,6 +123,7 @@ export async function listCatalogProducts(
       AND (p.show_when_out_of_stock OR EXISTS (SELECT 1 FROM product_variants sv JOIN v_stock_levels ss ON ss.variant_id = sv.id WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0))
       AND (${category}::text IS NULL OR c.slug = ${category})
       AND (${collection}::text IS NULL OR EXISTS (SELECT 1 FROM storefront_collection_products fcp JOIN storefront_collections fc ON fc.id = fcp.collection_id WHERE fcp.product_id = p.id AND fc.active AND fc.slug = ${collection}))
+      AND (${availability}::text IS NULL OR (${availability} = 'in-stock' AND EXISTS (SELECT 1 FROM product_variants av JOIN v_stock_levels ast ON ast.variant_id = av.id WHERE av.product_id = p.id AND av.is_active AND ast.on_hand > 0)) OR (${availability} = 'incoming' AND EXISTS (SELECT 1 FROM purchase_order_items ai JOIN purchase_orders ao ON ao.id = ai.purchase_order_id JOIN product_variants av ON av.id = ai.variant_id WHERE av.product_id = p.id AND ao.status IN ('ordered', 'shipped') AND ai.quantity > ai.quantity_received)))
       AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery} OR p.model_number ILIKE ${likeQuery} OR b.name ILIKE ${likeQuery} OR p.key_features::text ILIKE ${likeQuery} OR p.compatibility::text ILIKE ${likeQuery})
     ORDER BY ${order}
     LIMIT ${limit}
