@@ -243,6 +243,7 @@ async function Loader({ params }: { params: Params }) {
           {product.keyFeatures.length ? <ListSection title="Key features" values={product.keyFeatures} /> : null}
           {product.nextlyTake ? <section className="mt-6 border-l-2 border-store-bright pl-4"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Nextly’s take</h2><p className="mt-2 text-[13px] text-ink-2 leading-relaxed">{product.nextlyTake}</p></section> : null}
           {product.boxContents.length ? <ListSection title="What’s in the box" values={product.boxContents} /> : null}
+          <GettingOrder settings={settings} />
 
           {paragraphs.length > 0 ? (
             <div className="mt-5 space-y-3">
@@ -314,6 +315,7 @@ function Compatibility({ label, values }: { label: string; values: string[] }) {
   return <div className="mt-3"><p className="mb-1.5 text-[12px] text-ink-3">{label}</p><div className="flex flex-wrap gap-1.5">{values.map((value) => <span key={value} className="rounded-control border border-line px-2 py-1 text-[11px] text-ink">{value}</span>)}</div></div>;
 }
 function ListSection({ title, values }: { title: string; values: string[] }) { return <section className="mt-6"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">{title}</h2><ul className="mt-2 space-y-1 text-[13px] text-ink-2">{values.map((value) => <li key={value}>• {value}</li>)}</ul></section>; }
+function GettingOrder({ settings }: { settings: Awaited<ReturnType<typeof getSettings>> }) { const methods = settings?.paymentMethods ?? []; if (!settings?.pickupEnabled && !settings?.deliveryEnabled && !methods.length) return null; return <section className="mt-6 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Getting your order</h2>{settings?.pickupEnabled ? <p className="mt-2 text-[13px] text-ink-2"><strong>Pickup.</strong> {[settings.pickupLabel, settings.pickupDetails, settings.sameDayPickupEnabled ? `Same-day pickup${settings.pickupCutoffTime ? ` before ${settings.pickupCutoffTime}` : ''}.` : null].filter(Boolean).join(' ')}</p> : null}{settings?.deliveryEnabled ? <p className="mt-2 text-[13px] text-ink-2"><strong>Delivery.</strong> {[settings.deliveryDetails, settings.deliveryAreas, settings.deliveryFeeDisplay, settings.deliveryEstimateDisplay].filter(Boolean).join(' ')}</p> : null}{methods.length ? <p className="mt-2 text-[13px] text-ink-2"><strong>Payment.</strong> {methods.map((method) => method.details ? `${method.name} (${method.details})` : method.name).join(' · ')}</p> : null}</section>; }
 function Requirements({ values }: { values: Record<string, unknown> }) {
   const labels: Record<string, string> = { hubName: 'Hub', appName: 'App', wifiBands: 'Wi-Fi bands', subscription: 'Subscription', indoorOutdoor: 'Use', powerSource: 'Power', batteryType: 'Battery', installationNotes: 'Installation', regionalNotes: 'Regional notes' };
   const entries = Object.entries(values).filter(([key, value]) => labels[key] && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0));
