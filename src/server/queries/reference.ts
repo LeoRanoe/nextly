@@ -416,6 +416,8 @@ export type ProductDetail = {
   buyerRequirements: { hubRequired?: boolean; hubName?: string; appRequired?: boolean; appName?: string; wifiRequired?: boolean; wifiBands: string[]; indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor'; powerSource?: string; installationNotes?: string };
   faqItems: { question: string; answer: string }[];
   featured: boolean;
+  featuredPosition: number | null;
+  newUntil: string | null;
   showWhenOutOfStock: boolean;
   restockNotificationsEnabled: boolean;
   status: 'draft' | 'active' | 'archived';
@@ -457,7 +459,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     SELECT id, code, name, slug, category_id, supplier_id, brand_id, source_url,
            summary, description, model_number, key_features::text, best_for::text,
            compatibility::text, buyer_requirements::text, box_contents::text, nextly_take, faq_items::text, featured::text,
-           show_when_out_of_stock::text, restock_notifications_enabled::text, status::text AS status,
+           featured_position::text, new_until::text, show_when_out_of_stock::text, restock_notifications_enabled::text, status::text AS status,
            warranty_months::text AS warranty_months,
            catalog_published::text AS catalog_published, notes
       FROM products WHERE id = ${id} LIMIT 1
@@ -507,6 +509,8 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     nextlyTake: maybe(row.nextly_take),
     faqItems: parseFaqItems(row.faq_items),
     featured: bool(row.featured),
+    featuredPosition: row.featured_position == null ? null : num(row.featured_position),
+    newUntil: maybe(row.new_until),
     showWhenOutOfStock: bool(row.show_when_out_of_stock),
     restockNotificationsEnabled: bool(row.restock_notifications_enabled),
     status: text(row.status) as ProductDetail['status'],

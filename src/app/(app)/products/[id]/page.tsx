@@ -99,6 +99,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
           nextlyTake: product.nextlyTake ?? '',
           hubRequired: product.buyerRequirements.hubRequired ?? false, hubName: product.buyerRequirements.hubName ?? '', appRequired: product.buyerRequirements.appRequired ?? false, appName: product.buyerRequirements.appName ?? '', wifiRequired: product.buyerRequirements.wifiRequired ?? false, wifiBands: product.buyerRequirements.wifiBands.join('\n'), indoorOutdoor: product.buyerRequirements.indoorOutdoor ?? '', powerSource: product.buyerRequirements.powerSource ?? '', installationNotes: product.buyerRequirements.installationNotes ?? '', faqItems: product.faqItems,
           featured: product.featured,
+          featuredPosition: product.featuredPosition == null ? '' : String(product.featuredPosition), newUntil: product.newUntil?.slice(0, 10) ?? '',
           showWhenOutOfStock: product.showWhenOutOfStock,
           restockNotificationsEnabled: product.restockNotificationsEnabled,
           status: product.status,

@@ -66,6 +66,8 @@ export type ProductFormValues = {
   installationNotes: string;
   faqItems: { question: string; answer: string }[];
   featured: boolean;
+  featuredPosition: string;
+  newUntil: string;
   showWhenOutOfStock: boolean;
   restockNotificationsEnabled: boolean;
   status: 'draft' | 'active' | 'archived';
@@ -102,7 +104,7 @@ const emptyProduct = (): ProductFormValues => ({
   sourceUrl: '',
   summary: '',
   description: '',
-  modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', hubRequired: false, hubName: '', appRequired: false, appName: '', wifiRequired: false, wifiBands: '', indoorOutdoor: '', powerSource: '', installationNotes: '', faqItems: [], featured: false, showWhenOutOfStock: true, restockNotificationsEnabled: false,
+  modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', hubRequired: false, hubName: '', appRequired: false, appName: '', wifiRequired: false, wifiBands: '', indoorOutdoor: '', powerSource: '', installationNotes: '', faqItems: [], featured: false, featuredPosition: '', newUntil: '', showWhenOutOfStock: true, restockNotificationsEnabled: false,
   status: 'active',
   warrantyMonths: '0',
   catalogPublished: false,
@@ -216,7 +218,7 @@ export function ProductForm({
           boxContents: toLines(values.boxContents), nextlyTake: values.nextlyTake || undefined,
           buyerRequirements: { hubRequired: values.hubRequired || undefined, hubName: values.hubName || undefined, appRequired: values.appRequired || undefined, appName: values.appName || undefined, wifiRequired: values.wifiRequired || undefined, wifiBands: toLines(values.wifiBands), indoorOutdoor: values.indoorOutdoor || undefined, powerSource: values.powerSource || undefined, installationNotes: values.installationNotes || undefined },
           faqItems: values.faqItems.filter((item) => item.question.trim() && item.answer.trim()),
-          featured: values.featured, showWhenOutOfStock: values.showWhenOutOfStock, restockNotificationsEnabled: values.restockNotificationsEnabled,
+          featured: values.featured, featuredPosition: values.featuredPosition || undefined, newUntil: values.newUntil || undefined, showWhenOutOfStock: values.showWhenOutOfStock, restockNotificationsEnabled: values.restockNotificationsEnabled,
           status: values.status,
           warrantyMonths: values.warrantyMonths || '0',
           catalogPublished: values.catalogPublished,
@@ -497,6 +499,7 @@ export function ProductForm({
               <label className="flex items-center gap-2"><input type="checkbox" checked={values.showWhenOutOfStock} onChange={(event) => set('showWhenOutOfStock', event.target.checked)} /> Show when sold out</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={values.restockNotificationsEnabled} onChange={(event) => set('restockNotificationsEnabled', event.target.checked)} /> Enable restock notification</label>
             </div>
+            <FieldRow><Field label="Featured position" htmlFor="featuredPosition" hint="Lower appears first"><Input id="featuredPosition" numeric inputMode="numeric" value={values.featuredPosition} onChange={(event) => set('featuredPosition', event.target.value)} /></Field><Field label="New until" htmlFor="newUntil"><Input id="newUntil" type="date" value={values.newUntil} onChange={(event) => set('newUntil', event.target.value)} /></Field></FieldRow>
             <Field label="Internal notes" htmlFor="notes" hint="Never shown publicly">
               <Textarea
                 id="notes"
