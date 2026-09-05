@@ -11,7 +11,7 @@ import { Field, FieldRow, Input, Select, Textarea } from '@/components/ui/field'
 import { SubmitButton } from '@/components/ui/submit-button';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { createProduct, updateProduct } from '@/server/actions/products';
-import { createCategory, createSupplier } from '@/server/actions/reference';
+import { createBrand, createCategory, createSupplier } from '@/server/actions/reference';
 import type { Option } from '@/server/queries/pickers';
 
 /**
@@ -123,11 +123,13 @@ export function ProductForm({
   initial,
   categories,
   suppliers,
+  brands,
 }: {
   /** Omit to render a blank form. */
   initial?: ProductFormValues;
   categories: Option[];
   suppliers: Option[];
+  brands: Option[];
 }) {
   const router = useRouter();
   const isEdit = Boolean(initial?.id);
@@ -135,6 +137,7 @@ export function ProductForm({
   const [values, setValues] = useState<ProductFormValues>(() => initial ?? emptyProduct());
   const [categoryList, setCategoryList] = useState(categories);
   const [supplierList, setSupplierList] = useState(suppliers);
+  const [brandList, setBrandList] = useState(brands);
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
 
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
@@ -180,6 +183,7 @@ export function ProductForm({
     },
     onError: () => toast.error('Could not add that supplier'),
   });
+  const createInlineBrand = useAction(createBrand, { onSuccess({ data }) { if (!data) return; setBrandList((current) => [...current, { id: data.id, label: data.name }]); set('brandId', data.id); }, onError: () => toast.error('Could not add that brand') });
 
   return (
     <form
@@ -267,6 +271,9 @@ export function ProductForm({
                 />
               </Field>
             </FieldRow>
+            <Field label="Brand" htmlFor="brand" hint="Actual manufacturer, not supplier">
+              <Combobox id="brand" options={brandList.map((brand) => ({ value: brand.id, label: brand.label }))} value={values.brandId} onChange={(value) => set('brandId', value)} placeholder="No brand" createLabel="Add brand" onCreate={(name) => createInlineBrand.execute({ name, slug: slugify(name), active: true })} />
+            </Field>
 
             <FieldRow>
               <Field label="Category" htmlFor="category">

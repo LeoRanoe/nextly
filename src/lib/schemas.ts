@@ -204,6 +204,14 @@ export const categorySchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
 });
 
+export const brandSchema = z.object({
+  name: shortText,
+  slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
+  website: z.union([z.string().trim().url('Not a valid URL'), z.literal('')]).transform((value) => value || undefined).optional(),
+  description: optionalText,
+  active: z.boolean().default(true),
+});
+
 export const supplierSchema = z.object({
   name: shortText,
   kind: z.enum(['amazon', 'aliexpress', 'other']),

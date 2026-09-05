@@ -5,7 +5,7 @@ import { ProductForm } from '@/components/forms/product-form';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { listCategoryOptions, listSupplierOptions } from '@/server/queries/pickers';
+import { listBrandOptions, listCategoryOptions, listSupplierOptions } from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Add a product' };
 
@@ -29,9 +29,10 @@ export default function NewProductPage() {
 }
 
 async function Loader() {
-  const [categories, suppliers] = await Promise.all([
+  const [categories, suppliers, brands] = await Promise.all([
     listCategoryOptions(),
     listSupplierOptions(),
+    listBrandOptions(),
   ]);
-  return <ProductForm categories={categories} suppliers={suppliers} />;
+  return <ProductForm categories={categories} suppliers={suppliers} brands={brands} />;
 }

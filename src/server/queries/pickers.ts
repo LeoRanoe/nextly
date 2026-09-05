@@ -186,6 +186,12 @@ export async function listCategoryOptions(): Promise<Option[]> {
   return rows.map((row) => ({ id: text(row.id), label: text(row.name) }));
 }
 
+export async function listBrandOptions(): Promise<Option[]> {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`SELECT id, name FROM brands WHERE active ORDER BY name`);
+  return rows.map((row) => ({ id: text(row.id), label: text(row.name) }));
+}
+
 export async function listSupplierOptions(): Promise<Option[]> {
   if (!isDatabaseConfigured()) return [];
 

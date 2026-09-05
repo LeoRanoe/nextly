@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { publicEnv } from '@/lib/env';
 import {
   categorySchema,
+  brandSchema,
   customerSchema,
   memberSchema,
   supplierSchema,
@@ -12,7 +13,7 @@ import {
 } from '@/lib/schemas';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '../db/client';
-import { categories, customers, members, purchaseOrders, sales, suppliers } from '../db/schema';
+import { brands, categories, customers, members, purchaseOrders, sales, suppliers } from '../db/schema';
 import { logActivity } from '../services/posting';
 import { ActionError, ownerAction, writeAction } from './client';
 
@@ -187,6 +188,18 @@ export const createCategory = writeAction
       return { id: category.id, name: category.name };
     });
     return result;
+  });
+
+export const createBrand = writeAction
+  .metadata({ action: 'created', entity: 'brand' })
+  .inputSchema(brandSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    return db.transaction(async (tx) => {
+      const [brand] = await tx.insert(brands).values({ name: input.name, slug: input.slug, website: input.website ?? null, description: input.description ?? null, active: input.active }).returning({ id: brands.id, name: brands.name });
+      if (!brand) throw new ActionError('Could not create the brand.');
+      await logActivity(tx, { memberId: ctx.member.id, action: 'created brand', entityType: 'brand', entityId: brand.id, entityLabel: brand.name });
+      return brand;
+    });
   });
 
 export const updateCategory = writeAction

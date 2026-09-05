@@ -15,7 +15,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { formatDate } from '@/lib/format';
 import { toDecimalString } from '@/lib/money';
 import type { WarrantyState } from '@/lib/warranty';
-import { listCategoryOptions, listSupplierOptions } from '@/server/queries/pickers';
+import { listBrandOptions, listCategoryOptions, listSupplierOptions } from '@/server/queries/pickers';
 import { getProduct } from '@/server/queries/reference';
 import { listProductWarrantyItems } from '@/server/queries/warranty';
 
@@ -42,10 +42,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
 async function Loader({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [product, categories, suppliers] = await Promise.all([
+  const [product, categories, suppliers, brands] = await Promise.all([
     getProduct(id),
     listCategoryOptions(),
     listSupplierOptions(),
+    listBrandOptions(),
   ]);
 
   if (!product) notFound();
@@ -70,6 +71,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
       <ProductForm
         categories={categories}
         suppliers={suppliers}
+        brands={brands}
         initial={{
           id: product.id,
           code: product.code,
