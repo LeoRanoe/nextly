@@ -183,6 +183,10 @@ export const productSchema = z.object({
   catalogPublished: z.boolean(),
   notes: optionalText,
   variants: z.array(variantSchema).min(1, 'A product needs at least one variant'),
+}).superRefine((value, ctx) => {
+  const defaults = value.variants.filter((variant) => variant.isDefault);
+  if (defaults.length > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['variants'], message: 'Choose only one default variant.' });
+  if (defaults.some((variant) => !variant.isActive)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['variants'], message: 'The default variant must be active.' });
 });
 
 export const restockRequestSchema = z.object({
