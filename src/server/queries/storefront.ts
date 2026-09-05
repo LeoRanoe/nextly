@@ -30,3 +30,24 @@ export async function listRestockRequests() {
   `);
   return rows.map((row) => ({ id: text(row.id), contact: text(row.contact), channel: text(row.channel), status: text(row.status) as 'waiting' | 'contacted' | 'converted' | 'cancelled', createdAt: text(row.created_at), productName: text(row.product_name), variantName: maybe(row.variant_name) }));
 }
+
+/** Private collection management read model. It intentionally includes only
+ * merchandising state, never supplier, cost, or inventory valuation data. */
+export async function listStorefrontCollectionsForDashboard() {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT c.id, c.name, c.slug, c.description, c.active::text,
+           c.homepage_visible::text, c.position::text,
+           COUNT(cp.product_id)::text AS product_count
+      FROM storefront_collections c
+      LEFT JOIN storefront_collection_products cp ON cp.collection_id = c.id
+     GROUP BY c.id
+     ORDER BY c.position, c.name
+  `);
+  return rows.map((row) => ({
+    id: text(row.id), name: text(row.name), slug: text(row.slug),
+    description: maybe(row.description), active: row.active === 'true',
+    homepageVisible: row.homepage_visible === 'true', position: num(row.position),
+    productCount: num(row.product_count),
+  }));
+}
