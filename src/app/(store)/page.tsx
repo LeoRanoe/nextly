@@ -9,6 +9,7 @@ import { CatalogSpotlight } from '@/components/store/catalog-spotlight';
 import { CategoryPills } from '@/components/store/category-pills';
 import { ProductCard } from '@/components/store/product-card';
 import { StoreHero, StoreValues } from '@/components/store/store-hero';
+import { StorePrice } from '@/components/store/store-price';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { RawSearchParams } from '@/lib/list-params';
@@ -16,6 +17,7 @@ import {
   type CatalogSort as CatalogSortValue,
   listCatalogCategories,
   listHomepageCollections,
+  listCatalogBundles,
   listCatalogProducts,
 } from '@/server/queries/catalog';
 import { getCurrentRate } from '@/server/queries/overview';
@@ -54,6 +56,9 @@ export default function CatalogPage({
       <Suspense fallback={null}>
         <GoalCollections />
       </Suspense>
+      <Suspense fallback={null}>
+        <BundleSection />
+      </Suspense>
 
       <section
         id="catalog"
@@ -76,6 +81,12 @@ export default function CatalogPage({
       </section>
     </>
   );
+}
+
+async function BundleSection() {
+  const [bundles, rate] = await Promise.all([listCatalogBundles(), getCurrentRate()]);
+  if (!bundles.length) return null;
+  return <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6"><p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">Starter setups</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">A complete place to start.</h2><div className="mt-4 grid gap-px border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-3">{bundles.map((bundle) => <div key={bundle.id} className="bg-base p-5"><h3 className="font-semibold text-ink">{bundle.name}</h3>{bundle.summary ? <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{bundle.summary}</p> : null}<p className="mt-3 text-[11px] text-ink-3">{bundle.availability > 0 ? `${bundle.availability} setup${bundle.availability === 1 ? '' : 's'} available` : 'Currently unavailable'}</p><div className="mt-3"><StorePrice usdCents={bundle.priceCents} srdRate={rate?.rateMicros} size="md" /></div></div>)}</div></section>;
 }
 
 async function GoalCollections() {
