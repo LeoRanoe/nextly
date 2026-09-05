@@ -413,6 +413,8 @@ export type ProductDetail = {
   compatibility: { platforms: string[]; protocols: string[]; ecosystems: string[] };
   boxContents: string[];
   nextlyTake: string | null;
+  buyerRequirements: { hubRequired?: boolean; hubName?: string; appRequired?: boolean; appName?: string; wifiRequired?: boolean; wifiBands: string[]; indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor'; powerSource?: string; installationNotes?: string };
+  faqItems: { question: string; answer: string }[];
   featured: boolean;
   showWhenOutOfStock: boolean;
   restockNotificationsEnabled: boolean;
@@ -454,7 +456,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT id, code, name, slug, category_id, supplier_id, brand_id, source_url,
            summary, description, model_number, key_features::text, best_for::text,
-           compatibility::text, box_contents::text, nextly_take, featured::text,
+           compatibility::text, buyer_requirements::text, box_contents::text, nextly_take, faq_items::text, featured::text,
            show_when_out_of_stock::text, restock_notifications_enabled::text, status::text AS status,
            warranty_months::text AS warranty_months,
            catalog_published::text AS catalog_published, notes
@@ -500,8 +502,10 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     keyFeatures: parseStringArray(row.key_features),
     bestFor: parseStringArray(row.best_for),
     compatibility: parseCompatibility(row.compatibility),
+    buyerRequirements: parseBuyerRequirements(row.buyer_requirements),
     boxContents: parseStringArray(row.box_contents),
     nextlyTake: maybe(row.nextly_take),
+    faqItems: parseFaqItems(row.faq_items),
     featured: bool(row.featured),
     showWhenOutOfStock: bool(row.show_when_out_of_stock),
     restockNotificationsEnabled: bool(row.restock_notifications_enabled),
@@ -534,6 +538,27 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       position: num(image.position),
     })),
   };
+}
+
+function parseBuyerRequirements(value: string | null | undefined): ProductDetail['buyerRequirements'] {
+  const raw = parseObject(value);
+  const stringList = Array.isArray(raw.wifiBands) ? raw.wifiBands.filter((item): item is string => typeof item === 'string') : [];
+  const indoorOutdoor = raw.indoorOutdoor;
+  return {
+    hubRequired: typeof raw.hubRequired === 'boolean' ? raw.hubRequired : undefined,
+    hubName: typeof raw.hubName === 'string' ? raw.hubName : undefined,
+    appRequired: typeof raw.appRequired === 'boolean' ? raw.appRequired : undefined,
+    appName: typeof raw.appName === 'string' ? raw.appName : undefined,
+    wifiRequired: typeof raw.wifiRequired === 'boolean' ? raw.wifiRequired : undefined,
+    wifiBands: stringList,
+    indoorOutdoor: indoorOutdoor === 'indoor' || indoorOutdoor === 'outdoor' || indoorOutdoor === 'indoor-outdoor' ? indoorOutdoor : undefined,
+    powerSource: typeof raw.powerSource === 'string' ? raw.powerSource : undefined,
+    installationNotes: typeof raw.installationNotes === 'string' ? raw.installationNotes : undefined,
+  };
+}
+
+function parseFaqItems(value: string | null | undefined): { question: string; answer: string }[] {
+  try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.flatMap((item) => item && typeof item === 'object' && typeof (item as { question?: unknown }).question === 'string' && typeof (item as { answer?: unknown }).answer === 'string' ? [{ question: (item as { question: string }).question, answer: (item as { answer: string }).answer }] : []) : []; } catch { return []; }
 }
 
 export type CustomerDetail = {

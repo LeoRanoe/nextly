@@ -91,6 +91,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
           ecosystems: product.compatibility.ecosystems.join('\n'),
           boxContents: product.boxContents.join('\n'),
           nextlyTake: product.nextlyTake ?? '',
+          hubRequired: product.buyerRequirements.hubRequired ?? false, hubName: product.buyerRequirements.hubName ?? '', appRequired: product.buyerRequirements.appRequired ?? false, appName: product.buyerRequirements.appName ?? '', wifiRequired: product.buyerRequirements.wifiRequired ?? false, wifiBands: product.buyerRequirements.wifiBands.join('\n'), indoorOutdoor: product.buyerRequirements.indoorOutdoor ?? '', powerSource: product.buyerRequirements.powerSource ?? '', installationNotes: product.buyerRequirements.installationNotes ?? '', faqItems: product.faqItems,
           featured: product.featured,
           showWhenOutOfStock: product.showWhenOutOfStock,
           restockNotificationsEnabled: product.restockNotificationsEnabled,

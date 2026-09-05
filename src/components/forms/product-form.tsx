@@ -55,6 +55,16 @@ export type ProductFormValues = {
   ecosystems: string;
   boxContents: string;
   nextlyTake: string;
+  hubRequired: boolean;
+  hubName: string;
+  appRequired: boolean;
+  appName: string;
+  wifiRequired: boolean;
+  wifiBands: string;
+  indoorOutdoor: '' | 'indoor' | 'outdoor' | 'indoor-outdoor';
+  powerSource: string;
+  installationNotes: string;
+  faqItems: { question: string; answer: string }[];
   featured: boolean;
   showWhenOutOfStock: boolean;
   restockNotificationsEnabled: boolean;
@@ -92,7 +102,7 @@ const emptyProduct = (): ProductFormValues => ({
   sourceUrl: '',
   summary: '',
   description: '',
-  modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', featured: false, showWhenOutOfStock: true, restockNotificationsEnabled: false,
+  modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', hubRequired: false, hubName: '', appRequired: false, appName: '', wifiRequired: false, wifiBands: '', indoorOutdoor: '', powerSource: '', installationNotes: '', faqItems: [], featured: false, showWhenOutOfStock: true, restockNotificationsEnabled: false,
   status: 'active',
   warrantyMonths: '0',
   catalogPublished: false,
@@ -204,6 +214,8 @@ export function ProductForm({
           keyFeatures: toLines(values.keyFeatures), bestFor: toLines(values.bestFor),
           compatibility: { platforms: toLines(values.platforms), protocols: toLines(values.protocols), ecosystems: toLines(values.ecosystems) },
           boxContents: toLines(values.boxContents), nextlyTake: values.nextlyTake || undefined,
+          buyerRequirements: { hubRequired: values.hubRequired || undefined, hubName: values.hubName || undefined, appRequired: values.appRequired || undefined, appName: values.appName || undefined, wifiRequired: values.wifiRequired || undefined, wifiBands: toLines(values.wifiBands), indoorOutdoor: values.indoorOutdoor || undefined, powerSource: values.powerSource || undefined, installationNotes: values.installationNotes || undefined },
+          faqItems: values.faqItems.filter((item) => item.question.trim() && item.answer.trim()),
           featured: values.featured, showWhenOutOfStock: values.showWhenOutOfStock, restockNotificationsEnabled: values.restockNotificationsEnabled,
           status: values.status,
           warrantyMonths: values.warrantyMonths || '0',
@@ -478,6 +490,8 @@ export function ProductForm({
               <Field label="Protocols" htmlFor="protocols" hint="One per line"><Textarea id="protocols" value={values.protocols} placeholder="Wi-Fi&#10;Matter" onChange={(event) => set('protocols', event.target.value)} /></Field>
             </FieldRow>
             <Field label="Ecosystems" htmlFor="ecosystems" hint="One per line"><Textarea id="ecosystems" value={values.ecosystems} placeholder="Home Assistant" onChange={(event) => set('ecosystems', event.target.value)} /></Field>
+            <div className="border-t border-line-subtle pt-3"><p className="mb-2 text-[13px] font-medium text-ink">Before you buy</p><div className="flex flex-wrap gap-4 text-[12px] text-ink-2"><label className="flex items-center gap-2"><input type="checkbox" checked={values.hubRequired} onChange={(event) => set('hubRequired', event.target.checked)} /> Hub required</label><label className="flex items-center gap-2"><input type="checkbox" checked={values.appRequired} onChange={(event) => set('appRequired', event.target.checked)} /> App required</label><label className="flex items-center gap-2"><input type="checkbox" checked={values.wifiRequired} onChange={(event) => set('wifiRequired', event.target.checked)} /> Wi-Fi required</label></div><FieldRow><Field label="Hub name" htmlFor="hubName"><Input id="hubName" value={values.hubName} onChange={(event) => set('hubName', event.target.value)} /></Field><Field label="App name" htmlFor="appName"><Input id="appName" value={values.appName} onChange={(event) => set('appName', event.target.value)} /></Field></FieldRow><FieldRow><Field label="Wi-Fi bands" htmlFor="wifiBands" hint="One per line"><Input id="wifiBands" value={values.wifiBands} onChange={(event) => set('wifiBands', event.target.value)} /></Field><Field label="Power" htmlFor="powerSource"><Input id="powerSource" value={values.powerSource} onChange={(event) => set('powerSource', event.target.value)} /></Field></FieldRow><Field label="Use" htmlFor="indoorOutdoor"><Select id="indoorOutdoor" value={values.indoorOutdoor} onChange={(event) => set('indoorOutdoor', event.target.value as ProductFormValues['indoorOutdoor'])}><option value="">Not specified</option><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option><option value="indoor-outdoor">Indoor & outdoor</option></Select></Field><Field label="Installation notes" htmlFor="installationNotes"><Textarea id="installationNotes" value={values.installationNotes} onChange={(event) => set('installationNotes', event.target.value)} /></Field></div>
+            <div className="border-t border-line-subtle pt-3"><div className="mb-2 flex items-center justify-between"><p className="text-[13px] font-medium text-ink">Frequently asked questions</p><Button type="button" size="sm" variant="ghost" onClick={() => set('faqItems', [...values.faqItems, { question: '', answer: '' }])}>Add FAQ</Button></div>{values.faqItems.map((item, index) => <div key={index} className="mb-2 flex gap-2"><Input value={item.question} placeholder="Question" onChange={(event) => set('faqItems', values.faqItems.map((current, i) => i === index ? { ...current, question: event.target.value } : current))} /><Input value={item.answer} placeholder="Answer" onChange={(event) => set('faqItems', values.faqItems.map((current, i) => i === index ? { ...current, answer: event.target.value } : current))} /><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove FAQ" onClick={() => set('faqItems', values.faqItems.filter((_, i) => i !== index))}><Trash2 className="size-3" /></Button></div>)}</div>
             <div className="flex flex-wrap gap-4 text-[12px] text-ink-2">
               <label className="flex items-center gap-2"><input type="checkbox" checked={values.featured} onChange={(event) => set('featured', event.target.checked)} /> Featured product</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={values.showWhenOutOfStock} onChange={(event) => set('showWhenOutOfStock', event.target.checked)} /> Show when sold out</label>
