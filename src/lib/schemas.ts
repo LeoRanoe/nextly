@@ -101,6 +101,7 @@ export const variantSchema = z.object({
   referenceCostCents: moneyInput,
   weightGrams: z.coerce.number().int().min(0).max(10_000_000).default(0),
   isStrategic: z.boolean().default(false),
+  isDefault: z.boolean().default(false),
   isActive: z.boolean().default(true),
   barcode: optionalText,
   attributes: z

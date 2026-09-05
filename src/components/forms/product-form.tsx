@@ -31,6 +31,7 @@ type VariantRow = {
   referenceCost: string;
   weightGrams: string;
   isStrategic: boolean;
+  isDefault: boolean;
   isActive: boolean;
   barcode: string;
   attributes: { key: string; value: string }[];
@@ -87,6 +88,7 @@ const blankVariant = (): VariantRow => ({
   referenceCost: '',
   weightGrams: '0',
   isStrategic: false,
+  isDefault: false,
   isActive: true,
   barcode: '',
   attributes: [],
@@ -233,6 +235,7 @@ export function ProductForm({
             referenceCostCents: variant.referenceCost || '0',
             weightGrams: Number(variant.weightGrams || 0),
             isStrategic: variant.isStrategic,
+            isDefault: variant.isDefault,
             isActive: variant.isActive,
             barcode: variant.barcode || undefined,
             attributes: Object.fromEntries(variant.attributes.filter((attribute) => attribute.key.trim() && attribute.value.trim()).map((attribute) => [attribute.key.trim(), attribute.value.trim()])),
@@ -433,6 +436,7 @@ export function ProductForm({
                   />
                   Strategic stock
                 </label>
+                <label className="flex items-end gap-2 pb-1 text-[11px] text-ink-3"><input type="radio" name="default-variant" checked={variant.isDefault} onChange={() => setValues((current) => ({ ...current, variants: current.variants.map((item) => ({ ...item, isDefault: item.key === variant.key })) }))} className="mt-0.5 size-4 shrink-0 accent-[var(--nx-accent)]" /> Default</label>
                 <div className="flex items-end pb-0.5">
                   <Button
                     type="button"

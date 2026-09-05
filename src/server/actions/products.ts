@@ -110,7 +110,7 @@ export const createProduct = writeAction
           attributes: variant.attributes,
           weightGrams: variant.weightGrams,
           isStrategic: variant.isStrategic,
-          isDefault: index === 0,
+          isDefault: variant.isDefault || (!input.variants.some((item) => item.isDefault) && index === 0),
           isActive: variant.isActive,
           position: index + 1,
         })),
@@ -219,7 +219,7 @@ export const updateProduct = writeAction
               weightGrams: variant.weightGrams,
               isStrategic: variant.isStrategic,
               isActive: variant.isActive,
-              isDefault: index === 0,
+              isDefault: variant.isDefault || (!input.variants.some((item) => item.isDefault) && index === 0),
               position: index + 1,
             })
             .where(
@@ -240,7 +240,7 @@ export const updateProduct = writeAction
               weightGrams: variant.weightGrams,
               isStrategic: variant.isStrategic,
               isActive: variant.isActive,
-              isDefault: index === 0,
+              isDefault: variant.isDefault || (!input.variants.some((item) => item.isDefault) && index === 0),
               position: index + 1,
             })
             .returning({ id: productVariants.id });

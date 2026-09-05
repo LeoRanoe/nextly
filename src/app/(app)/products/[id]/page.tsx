@@ -116,6 +116,7 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
             referenceCost: toDecimalString(variant.referenceCostCents),
             weightGrams: String(variant.weightGrams),
             isStrategic: variant.isStrategic,
+            isDefault: variant.isDefault,
             isActive: variant.isActive,
             barcode: variant.barcode ?? '',
             attributes: Object.entries(variant.attributes).map(([key, value]) => ({ key, value })),

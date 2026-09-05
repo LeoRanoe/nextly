@@ -434,6 +434,7 @@ export type ProductDetail = {
     referenceCostCents: Cents;
     weightGrams: number;
     isStrategic: boolean;
+    isDefault: boolean;
     isActive: boolean;
     barcode: string | null;
     attributes: Record<string, string>;
@@ -472,7 +473,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     db.execute<Record<string, string | null>>(sql`
       SELECT v.id, v.name, v.sku, v.barcode, v.attributes::text, v.list_price_cents::text, v.reference_cost_cents::text,
               v.weight_grams::text AS weight_grams,
-              v.is_strategic::text AS is_strategic,
+             v.is_strategic::text AS is_strategic, v.is_default::text AS is_default,
              v.is_active::text AS is_active,
              COALESCE(s.on_hand, 0)::text     AS on_hand,
              COALESCE(s.value_cents, 0)::text AS value_cents
@@ -527,6 +528,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       referenceCostCents: num(variant.reference_cost_cents),
       weightGrams: num(variant.weight_grams),
       isStrategic: bool(variant.is_strategic),
+      isDefault: bool(variant.is_default),
       isActive: bool(variant.is_active),
       barcode: maybe(variant.barcode),
       attributes: parseObject(variant.attributes),
