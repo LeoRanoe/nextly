@@ -8,15 +8,6 @@ import type { CatalogListItem } from '@/server/queries/catalog';
 import { StorePrice } from './store-price';
 import { WhatsAppCta } from './whatsapp-cta';
 
-/** Products created within this window carry the Fairphone-style NEW flag. */
-const NEW_WINDOW_DAYS = 30;
-
-function isRecent(iso: string): boolean {
-  const created = Date.parse(iso);
-  if (Number.isNaN(created)) return false;
-  return Date.now() - created < NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-}
-
 /**
  * One product in the storefront grid — the Fairphone card, in Northlight.
  *
@@ -46,7 +37,7 @@ export function ProductCard({
 }) {
   const inStock = product.onHand > 0;
   const hasRange = product.maxPriceCents > product.minPriceCents;
-  const isNew = isRecent(product.createdAt);
+  const isNew = product.newUntil ? Date.parse(product.newUntil) >= Date.now() : false;
   const spotlight = size === 'spotlight';
 
   return (
@@ -96,9 +87,9 @@ export function ProductCard({
       </div>
 
       <div className={cn('flex flex-1 flex-col gap-1.5', spotlight ? 'p-6 pt-5' : 'p-5 pt-4')}>
-        {product.categoryName ? (
+        {product.brandName || product.categoryName ? (
           <p className="text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
-            {product.categoryName}
+            {[product.brandName, product.categoryName].filter(Boolean).join(' · ')}
           </p>
         ) : null}
         {/* The card's "stretched link": its own box only wraps the name
@@ -121,6 +112,20 @@ export function ProductCard({
           <p className="line-clamp-2 text-[13px] text-ink-3 leading-relaxed">
             {product.summary}
           </p>
+        ) : null}
+        {product.compatibility.platforms.length || product.compatibility.protocols.length ? (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {[...product.compatibility.platforms, ...product.compatibility.protocols]
+              .slice(0, 3)
+              .map((item) => (
+                <span
+                  key={item}
+                  className="rounded-control border border-line px-1.5 py-0.5 text-[10px] text-ink-3"
+                >
+                  {item}
+                </span>
+              ))}
+          </div>
         ) : null}
 
         <div className="mt-auto pt-3">

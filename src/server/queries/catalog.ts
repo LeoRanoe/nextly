@@ -35,6 +35,9 @@ export type CatalogListItem = {
   summary: string | null;
   categoryName: string | null;
   categorySlug: string | null;
+  brandName: string | null;
+  compatibility: { platforms: string[]; protocols: string[]; ecosystems: string[] };
+  newUntil: string | null;
   /** Units on hand across the product's active variants. */
   onHand: number;
   minPriceCents: Cents;
@@ -76,8 +79,9 @@ export async function listCatalogProducts(
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      p.id, p.name, p.slug, p.summary, p.created_at::text AS created_at,
+      p.id, p.name, p.slug, p.summary, p.created_at::text AS created_at, p.new_until::text AS new_until,
       c.name AS category_name, c.slug AS category_slug,
+      b.name AS brand_name, p.compatibility::text AS compatibility,
       COALESCE((
         SELECT SUM(s.on_hand)
           FROM product_variants v
@@ -91,6 +95,7 @@ export async function listCatalogProducts(
       img.blur_data_url AS image_blur
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN brands b ON b.id = p.brand_id
     LEFT JOIN LATERAL (
       SELECT i.url, i.width, i.height, i.alt, i.blur_data_url
         FROM product_images i
@@ -109,6 +114,7 @@ export async function listCatalogProducts(
        WHERE v.product_id = p.id AND v.is_active AND v.list_price_cents > 0
     ) price ON true
     WHERE p.catalog_published AND p.status = 'active'
+      AND (p.show_when_out_of_stock OR EXISTS (SELECT 1 FROM product_variants sv JOIN v_stock_levels ss ON ss.variant_id = sv.id WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0))
       AND (${category}::text IS NULL OR c.slug = ${category})
       AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery})
     ORDER BY ${order}
@@ -122,6 +128,9 @@ export async function listCatalogProducts(
     summary: maybe(row.summary),
     categoryName: maybe(row.category_name),
     categorySlug: maybe(row.category_slug),
+    brandName: maybe(row.brand_name),
+    compatibility: parseCompatibility(row.compatibility ?? null),
+    newUntil: maybe(row.new_until),
     onHand: num(row.on_hand),
     minPriceCents: num(row.min_price),
     maxPriceCents: num(row.max_price),
@@ -173,6 +182,16 @@ export type CatalogProduct = {
   seoDescription: string | null;
   categoryName: string | null;
   categorySlug: string | null;
+  brandName: string | null;
+  modelNumber: string | null;
+  keyFeatures: string[];
+  bestFor: string[];
+  compatibility: { platforms: string[]; protocols: string[]; ecosystems: string[] };
+  buyerRequirements: Record<string, unknown>;
+  boxContents: string[];
+  nextlyTake: string | null;
+  faqItems: { question: string; answer: string }[];
+  restockNotificationsEnabled: boolean;
   variants: {
     id: string;
     name: string;
@@ -188,9 +207,13 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT
       p.id, p.code, p.name, p.slug, p.summary, p.description, p.specs::text,
-      p.seo_title, p.seo_description, c.name AS category_name, c.slug AS category_slug
+      p.seo_title, p.seo_description, c.name AS category_name, c.slug AS category_slug,
+      b.name AS brand_name, p.model_number, p.key_features::text, p.best_for::text,
+      p.compatibility::text, p.buyer_requirements::text, p.box_contents::text, p.nextly_take,
+      p.faq_items::text, p.restock_notifications_enabled::text
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN brands b ON b.id = p.brand_id
     WHERE p.slug = ${slug} AND p.catalog_published AND p.status = 'active'
     LIMIT 1
   `);
@@ -234,6 +257,16 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
     seoDescription: maybe(row.seo_description),
     categoryName: maybe(row.category_name),
     categorySlug: maybe(row.category_slug),
+    brandName: maybe(row.brand_name),
+    modelNumber: maybe(row.model_number),
+    keyFeatures: parseStringArray(row.key_features ?? null),
+    bestFor: parseStringArray(row.best_for ?? null),
+    compatibility: parseCompatibility(row.compatibility ?? null),
+    buyerRequirements: parseObject(row.buyer_requirements ?? null),
+    boxContents: parseStringArray(row.box_contents ?? null),
+    nextlyTake: maybe(row.nextly_take),
+    faqItems: parseFaqItems(row.faq_items ?? null),
+    restockNotificationsEnabled: bool(row.restock_notifications_enabled),
     variants: variants.map((variant) => ({
       id: text(variant.id),
       name: text(variant.name),
@@ -249,4 +282,56 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
       isPrimary: bool(image.is_primary),
     })),
   };
+}
+
+function parseObject(value: string | null): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+function parseStringArray(value: string | null): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+function parseCompatibility(value: string | null) {
+  const record = parseObject(value);
+  return {
+    platforms: Array.isArray(record.platforms)
+      ? record.platforms.filter((item): item is string => typeof item === 'string')
+      : [],
+    protocols: Array.isArray(record.protocols)
+      ? record.protocols.filter((item): item is string => typeof item === 'string')
+      : [],
+    ecosystems: Array.isArray(record.ecosystems)
+      ? record.ecosystems.filter((item): item is string => typeof item === 'string')
+      : [],
+  };
+}
+function parseFaqItems(value: string | null): { question: string; answer: string }[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is { question: string; answer: string } =>
+          Boolean(
+            item &&
+              typeof item === 'object' &&
+              typeof (item as { question?: unknown }).question === 'string' &&
+              typeof (item as { answer?: unknown }).answer === 'string',
+          ),
+        )
+      : [];
+  } catch {
+    return [];
+  }
 }

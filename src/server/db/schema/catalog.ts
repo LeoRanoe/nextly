@@ -21,10 +21,31 @@ export const categories = pgTable(
     name: text().notNull(),
     slug: text().notNull(),
     description: text(),
+    storefrontDescription: text(),
+    imageUrl: text(),
     position: integer().notNull().default(0),
+    showInStorefrontNav: boolean().notNull().default(true),
+    featured: boolean().notNull().default(false),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('categories_slug_key').on(t.slug)],
+);
+
+/** A manufacturer is not necessarily the supplier we buy from. */
+export const brands = pgTable(
+  'brands',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    slug: text().notNull(),
+    logoUrl: text(),
+    website: text(),
+    description: text(),
+    active: boolean().notNull().default(true),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('brands_slug_key').on(t.slug), index('brands_active_idx').on(t.active)],
 );
 
 export const suppliers = pgTable(
@@ -60,6 +81,7 @@ export const products = pgTable(
     code: text().notNull(),
     name: text().notNull(),
     slug: text().notNull(),
+    brandId: uuid().references(() => brands.id, { onDelete: 'set null' }),
     categoryId: uuid().references(() => categories.id, { onDelete: 'set null' }),
     supplierId: uuid().references(() => suppliers.id, { onDelete: 'set null' }),
     sourceUrl: text(),
@@ -67,6 +89,41 @@ export const products = pgTable(
     description: text(),
     /** Free-form spec sheet rendered as a table on the catalog page. */
     specs: jsonb().$type<Record<string, string>>().notNull().default({}),
+    modelNumber: text(),
+    keyFeatures: jsonb().$type<string[]>().notNull().default([]),
+    bestFor: jsonb().$type<string[]>().notNull().default([]),
+    compatibility: jsonb()
+      .$type<{ platforms: string[]; protocols: string[]; ecosystems: string[] }>()
+      .notNull()
+      .default({ platforms: [], protocols: [], ecosystems: [] }),
+    buyerRequirements: jsonb()
+      .$type<{
+        hubRequired?: boolean;
+        hubName?: string;
+        appRequired?: boolean;
+        appName?: string;
+        accountRequired?: boolean;
+        wifiRequired?: boolean;
+        wifiBands?: string[];
+        subscription?: 'none' | 'optional' | 'required';
+        subscriptionNotes?: string;
+        indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor';
+        powerSource?: string;
+        batteryType?: string;
+        neutralWireRequired?: boolean;
+        installationNotes?: string;
+        regionalNotes?: string;
+      }>()
+      .notNull()
+      .default({}),
+    boxContents: jsonb().$type<string[]>().notNull().default([]),
+    nextlyTake: text(),
+    faqItems: jsonb().$type<{ question: string; answer: string }[]>().notNull().default([]),
+    featured: boolean().notNull().default(false),
+    featuredPosition: integer(),
+    newUntil: timestamp({ withTimezone: true }),
+    showWhenOutOfStock: boolean().notNull().default(true),
+    restockNotificationsEnabled: boolean().notNull().default(false),
     status: productStatus().notNull().default('draft'),
     /** F-6: 0 means "no warranty". Expiry is derived from the sale's soldAt,
      *  never stored, so a later change to the term cannot rewrite history. */
@@ -86,8 +143,71 @@ export const products = pgTable(
     uniqueIndex('products_slug_key').on(t.slug),
     index('products_category_idx').on(t.categoryId),
     index('products_supplier_idx').on(t.supplierId),
+    index('products_brand_idx').on(t.brandId),
+    index('products_featured_idx').on(t.featured, t.featuredPosition),
     index('products_status_idx').on(t.status),
     index('products_catalog_idx').on(t.catalogPublished),
+  ],
+);
+
+export const productRelationships = pgTable(
+  'product_relationships',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    relatedProductId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: 'restrict' }),
+    relationshipType: text().notNull(),
+    position: integer().notNull().default(0),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('product_relationships_unique').on(
+      t.productId,
+      t.relatedProductId,
+      t.relationshipType,
+    ),
+    index('product_relationships_product_idx').on(t.productId, t.position),
+  ],
+);
+
+export const storefrontCollections = pgTable(
+  'storefront_collections',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    slug: text().notNull(),
+    description: text(),
+    imageUrl: text(),
+    active: boolean().notNull().default(true),
+    homepageVisible: boolean().notNull().default(false),
+    position: integer().notNull().default(0),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('storefront_collections_slug_key').on(t.slug),
+    index('storefront_collections_home_idx').on(t.homepageVisible, t.position),
+  ],
+);
+
+export const storefrontCollectionProducts = pgTable(
+  'storefront_collection_products',
+  {
+    collectionId: uuid()
+      .notNull()
+      .references(() => storefrontCollections.id, { onDelete: 'cascade' }),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    position: integer().notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('storefront_collection_products_unique').on(t.collectionId, t.productId),
+    index('storefront_collection_products_product_idx').on(t.productId),
   ],
 );
 
@@ -224,5 +344,32 @@ export const quoteRequests = pgTable(
     index('quote_requests_product_idx').on(t.productId),
     index('quote_requests_sale_idx').on(t.saleId),
     index('quote_requests_handler_idx').on(t.handledById),
+  ],
+);
+
+/** Demand history, not a mailing list. Product references are restrictive so
+ * an archived catalog item cannot silently erase people waiting for it. */
+export const restockRequests = pgTable(
+  'restock_requests',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: 'restrict' }),
+    variantId: uuid().references(() => productVariants.id, { onDelete: 'set null' }),
+    name: text(),
+    contact: text().notNull(),
+    channel: text().notNull(),
+    status: text().notNull().default('waiting'),
+    convertedSaleId: uuid().references(() => sales.id, { onDelete: 'set null' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    contactedAt: timestamp({ withTimezone: true }),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('restock_requests_status_idx').on(t.status, t.createdAt.desc()),
+    index('restock_requests_product_idx').on(t.productId),
+    index('restock_requests_variant_idx').on(t.variantId),
+    index('restock_requests_created_idx').on(t.createdAt.desc()),
   ],
 );

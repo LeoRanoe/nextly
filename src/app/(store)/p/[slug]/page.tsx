@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { QuoteRequestForm } from '@/components/forms/quote-request-form';
+import { RestockRequestForm } from '@/components/forms/restock-request-form';
 import { StorePrice } from '@/components/store/store-price';
 import { WhatsAppCta } from '@/components/store/whatsapp-cta';
 import { Badge } from '@/components/ui/badge';
@@ -79,8 +80,8 @@ async function Loader({ params }: { params: Params }) {
     description: product.seoDescription ?? product.summary ?? undefined,
     sku: product.code,
     image: product.images.map((image) => image.url),
-    brand: settings?.businessName
-      ? { '@type': 'Brand', name: settings.businessName }
+    brand: product.brandName
+      ? { '@type': 'Brand', name: product.brandName }
       : undefined,
     offers: {
       '@type': 'Offer',
@@ -173,9 +174,9 @@ async function Loader({ params }: { params: Params }) {
             <span className="tabular text-[11px] text-ink-4">{product.code}</span>
           </div>
 
-          {product.categoryName ? (
+          {product.brandName || product.categoryName ? (
             <p className="mt-3 text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
-              {product.categoryName}
+              {[product.brandName, product.categoryName].filter(Boolean).join(' · ')}
             </p>
           ) : null}
           <h1
@@ -205,7 +206,7 @@ async function Loader({ params }: { params: Params }) {
               message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
                 product.variants.length === 1 ? ` (${product.variants[0]?.name})` : ''
               }${product.code ? ` (SKU ${product.code})` : ''}`}
-              label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
+              label={inStock ? 'Order on WhatsApp' : 'Ask about restock'}
               className="h-11 rounded-full px-6 text-[14px]"
             />
           </div>
@@ -221,6 +222,27 @@ async function Loader({ params }: { params: Params }) {
               <QuoteRequestForm productId={product.id} productName={product.name} />
             </div>
           </details>
+
+          {!inStock && product.restockNotificationsEnabled ? (
+            <section className="mt-4 border-t border-line-subtle pt-4">
+              <h2 className="text-[14px] font-semibold text-ink">Notify me when it’s back</h2>
+              <p className="mt-1 text-[12px] text-ink-3">We’ll keep your request for the Nextly team. Nothing is sent automatically.</p>
+              <RestockRequestForm productId={product.id} />
+            </section>
+          ) : null}
+
+          {product.compatibility.platforms.length || product.compatibility.protocols.length || product.compatibility.ecosystems.length ? (
+            <section className="mt-6 border-t border-line-subtle pt-5">
+              <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Compatibility</h2>
+              <Compatibility label="Works with" values={[...product.compatibility.platforms, ...product.compatibility.ecosystems]} />
+              <Compatibility label="Connection" values={product.compatibility.protocols} />
+            </section>
+          ) : null}
+
+          {Object.keys(product.buyerRequirements).length > 0 ? <Requirements values={product.buyerRequirements} /> : null}
+          {product.keyFeatures.length ? <ListSection title="Key features" values={product.keyFeatures} /> : null}
+          {product.nextlyTake ? <section className="mt-6 border-l-2 border-store-bright pl-4"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Nextly’s take</h2><p className="mt-2 text-[13px] text-ink-2 leading-relaxed">{product.nextlyTake}</p></section> : null}
+          {product.boxContents.length ? <ListSection title="What’s in the box" values={product.boxContents} /> : null}
 
           {paragraphs.length > 0 ? (
             <div className="mt-5 space-y-3">
@@ -285,4 +307,16 @@ async function Loader({ params }: { params: Params }) {
       </div>
     </article>
   );
+}
+
+function Compatibility({ label, values }: { label: string; values: string[] }) {
+  if (!values.length) return null;
+  return <div className="mt-3"><p className="mb-1.5 text-[12px] text-ink-3">{label}</p><div className="flex flex-wrap gap-1.5">{values.map((value) => <span key={value} className="rounded-control border border-line px-2 py-1 text-[11px] text-ink">{value}</span>)}</div></div>;
+}
+function ListSection({ title, values }: { title: string; values: string[] }) { return <section className="mt-6"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">{title}</h2><ul className="mt-2 space-y-1 text-[13px] text-ink-2">{values.map((value) => <li key={value}>• {value}</li>)}</ul></section>; }
+function Requirements({ values }: { values: Record<string, unknown> }) {
+  const labels: Record<string, string> = { hubName: 'Hub', appName: 'App', wifiBands: 'Wi-Fi bands', subscription: 'Subscription', indoorOutdoor: 'Use', powerSource: 'Power', batteryType: 'Battery', installationNotes: 'Installation', regionalNotes: 'Regional notes' };
+  const entries = Object.entries(values).filter(([key, value]) => labels[key] && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0));
+  if (!entries.length) return null;
+  return <section className="mt-6 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Before you buy</h2><dl className="mt-2 space-y-1.5">{entries.map(([key, value]) => <div key={key} className="grid grid-cols-[110px_1fr] gap-2 text-[12px]"><dt className="text-ink-3">{labels[key]}</dt><dd className="text-ink">{Array.isArray(value) ? value.join(', ') : String(value)}</dd></div>)}</dl></section>;
 }

@@ -102,6 +102,34 @@ export const variantSchema = z.object({
   weightGrams: z.coerce.number().int().min(0).max(10_000_000).default(0),
   isStrategic: z.boolean().default(false),
   isActive: z.boolean().default(true),
+  barcode: optionalText,
+  attributes: z
+    .record(z.string().trim().min(1).max(80), z.string().trim().min(1).max(160))
+    .default({}),
+});
+
+const stringList = z.array(z.string().trim().min(1).max(240)).max(30).default([]);
+export const compatibilitySchema = z.object({
+  platforms: stringList,
+  protocols: stringList,
+  ecosystems: stringList,
+});
+export const buyerRequirementsSchema = z.object({
+  hubRequired: z.boolean().optional(),
+  hubName: optionalText,
+  appRequired: z.boolean().optional(),
+  appName: optionalText,
+  accountRequired: z.boolean().optional(),
+  wifiRequired: z.boolean().optional(),
+  wifiBands: stringList,
+  subscription: z.enum(['none', 'optional', 'required']).optional(),
+  subscriptionNotes: optionalText,
+  indoorOutdoor: z.enum(['indoor', 'outdoor', 'indoor-outdoor']).optional(),
+  powerSource: optionalText,
+  batteryType: optionalText,
+  neutralWireRequired: z.boolean().optional(),
+  installationNotes: optionalText,
+  regionalNotes: optionalText,
 });
 
 export const productSchema = z.object({
@@ -120,12 +148,32 @@ export const productSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
   categoryId: optionalUuid,
   supplierId: optionalUuid,
+  brandId: optionalUuid,
   sourceUrl: z
     .union([z.string().trim().url('Not a valid URL'), z.literal('')])
     .transform((value) => (value === '' ? undefined : value))
     .optional(),
   summary: optionalText,
   description: optionalText,
+  modelNumber: optionalText,
+  keyFeatures: stringList,
+  bestFor: stringList,
+  compatibility: compatibilitySchema.default({ platforms: [], protocols: [], ecosystems: [] }),
+  buyerRequirements: buyerRequirementsSchema.optional(),
+  boxContents: stringList,
+  nextlyTake: optionalText,
+  faqItems: z
+    .array(z.object({ question: shortText, answer: z.string().trim().min(1).max(2000) }))
+    .max(20)
+    .default([]),
+  featured: z.boolean().default(false),
+  featuredPosition: z.coerce.number().int().min(0).nullable().optional(),
+  newUntil: z
+    .union([dateInput, z.literal('')])
+    .transform((value) => (value === '' ? undefined : value))
+    .optional(),
+  showWhenOutOfStock: z.boolean().default(true),
+  restockNotificationsEnabled: z.boolean().default(false),
   status: z.enum(['draft', 'active', 'archived']),
   /** F-6: months of cover from the day of sale. 0 means no warranty; the
    *  upper bound only stops a typo becoming a century. */
@@ -133,6 +181,18 @@ export const productSchema = z.object({
   catalogPublished: z.boolean(),
   notes: optionalText,
   variants: z.array(variantSchema).min(1, 'A product needs at least one variant'),
+});
+
+export const restockRequestSchema = z.object({
+  productId: uuid,
+  variantId: optionalUuid,
+  name: optionalText,
+  contact: z.string().trim().min(3, 'Enter a WhatsApp number or email').max(200),
+  channel: z.enum(['whatsapp', 'email']),
+});
+export const restockRequestStatusSchema = z.object({
+  id: uuid,
+  status: z.enum(['waiting', 'contacted', 'converted', 'cancelled']),
 });
 
 export const categorySchema = z.object({
