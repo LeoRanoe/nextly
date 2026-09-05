@@ -303,6 +303,9 @@ async function SettingsAction() {
         invoiceFooter: settings?.invoiceFooter ?? '',
         instagram: settings?.instagram ?? '',
         openingHours: settings?.openingHours ?? '',
+        pickupEnabled: settings?.pickupEnabled ?? false, pickupLabel: settings?.pickupLabel ?? '', pickupDetails: settings?.pickupDetails ?? '', sameDayPickupEnabled: settings?.sameDayPickupEnabled ?? false, pickupCutoffTime: settings?.pickupCutoffTime ?? '',
+        deliveryEnabled: settings?.deliveryEnabled ?? false, deliveryDetails: settings?.deliveryDetails ?? '', deliveryAreas: settings?.deliveryAreas ?? '', deliveryFeeDisplay: settings?.deliveryFeeDisplay ?? '', deliveryEstimateDisplay: settings?.deliveryEstimateDisplay ?? '',
+        paymentMethods: settings?.paymentMethods ?? [], announcement: settings?.announcement ?? '', heroTitle: settings?.heroTitle ?? '', heroBody: settings?.heroBody ?? '', supportTitle: settings?.supportTitle ?? '', supportBody: settings?.supportBody ?? '', defaultNewArrivalDays: settings?.defaultNewArrivalDays ?? 30,
       }}
     />
   );
