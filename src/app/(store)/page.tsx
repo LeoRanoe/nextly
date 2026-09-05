@@ -50,7 +50,10 @@ export default function CatalogPage({
     <>
       <StoreHero />
 
-      <section id="catalog" className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 lg:px-6">
+      <section
+        id="catalog"
+        className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 pb-16 lg:px-6 lg:pb-20"
+      >
         <div className="mb-6 flex flex-col gap-4">
           <Suspense fallback={<PillsSkeleton />}>
             <CatalogPills />
