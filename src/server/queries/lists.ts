@@ -1,5 +1,6 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { isDatabaseConfigured } from '@/lib/env';
+import { catalogReadiness, type CatalogReadiness } from '@/lib/catalog-readiness';
 import type {
   CustomerQuery,
   ExpenseQuery,
@@ -43,6 +44,7 @@ export type ProductRow = {
   onHand: number;
   stockValueCents: Cents;
   listPriceCents: Cents;
+  catalogReadiness: CatalogReadiness;
 };
 
 // onHand/stockValue recompute the same subquery the SELECT list builds,
@@ -85,7 +87,9 @@ export async function listProducts(
 
   const rows = await db.execute<Record<string, string | null>>(sql`
     SELECT
-      p.id, p.code, p.name, p.status::text AS status,
+      p.id, p.code, p.name, p.slug, p.summary, p.brand_id, p.compatibility::text,
+      p.key_features::text, p.buyer_requirements::text, p.box_contents::text, p.nextly_take,
+      p.seo_description, p.status::text AS status,
       p.catalog_published::text AS catalog_published,
       c.name AS category_name,
       s.name AS supplier_name,
@@ -97,6 +101,8 @@ export async function listProducts(
                  WHERE sl.product_id = p.id), 0)::text AS stock_value_cents,
       COALESCE((SELECT MIN(v.list_price_cents) FROM product_variants v
                  WHERE v.product_id = p.id AND v.is_active), 0)::text AS list_price_cents,
+      COALESCE((SELECT json_agg(json_build_object('isActive', v.is_active, 'listPriceCents', v.list_price_cents))::text FROM product_variants v WHERE v.product_id = p.id), '[]') AS readiness_variants,
+      COALESCE((SELECT json_agg(json_build_object('alt', i.alt))::text FROM product_images i WHERE i.product_id = p.id), '[]') AS readiness_images,
       COUNT(*) OVER()::text AS total_count
     FROM products p
     LEFT JOIN categories c ON c.id = p.category_id
@@ -122,12 +128,25 @@ export async function listProducts(
       onHand: num(row.on_hand),
       stockValueCents: num(row.stock_value_cents),
       listPriceCents: num(row.list_price_cents),
+      catalogReadiness: catalogReadiness({
+        name: row.name, slug: row.slug, summary: row.summary, brandId: row.brand_id,
+        images: parseReadinessImages(row.readiness_images), variants: parseReadinessVariants(row.readiness_variants),
+        compatibility: parseReadinessCompatibility(row.compatibility), keyFeatures: parseReadinessStrings(row.key_features),
+        buyerRequirements: parseReadinessObject(row.buyer_requirements), boxContents: parseReadinessStrings(row.box_contents),
+        nextlyTake: row.nextly_take, seoDescription: row.seo_description,
+      }),
     })),
     total,
     page,
     perPage,
   );
 }
+
+function parseReadinessStrings(value: string | null | undefined): string[] { try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []; } catch { return []; } }
+function parseReadinessObject(value: string | null | undefined): Record<string, unknown> { try { const parsed: unknown = JSON.parse(value ?? '{}'); return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}; } catch { return {}; } }
+function parseReadinessCompatibility(value: string | null | undefined) { const raw = parseReadinessObject(value); return { platforms: Array.isArray(raw.platforms) ? raw.platforms.filter((item): item is string => typeof item === 'string') : [], protocols: Array.isArray(raw.protocols) ? raw.protocols.filter((item): item is string => typeof item === 'string') : [], ecosystems: Array.isArray(raw.ecosystems) ? raw.ecosystems.filter((item): item is string => typeof item === 'string') : [] }; }
+function parseReadinessVariants(value: string | null | undefined): { isActive: boolean; listPriceCents: number }[] { try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.flatMap((item) => item && typeof item === 'object' && typeof (item as { isActive?: unknown }).isActive === 'boolean' && typeof (item as { listPriceCents?: unknown }).listPriceCents === 'number' ? [{ isActive: (item as { isActive: boolean }).isActive, listPriceCents: (item as { listPriceCents: number }).listPriceCents }] : []) : []; } catch { return []; } }
+function parseReadinessImages(value: string | null | undefined): { alt?: string | null }[] { try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.flatMap((item) => item && typeof item === 'object' ? [{ alt: typeof (item as { alt?: unknown }).alt === 'string' ? (item as { alt: string }).alt : null }] : []) : []; } catch { return []; } }
 
 export type StockLevelRow = {
   variantId: string;

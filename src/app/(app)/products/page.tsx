@@ -152,6 +152,7 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                   On hand
                 </THSort>
                 <TH numeric>From</TH>
+                <TH numeric>Readiness</TH>
                 <THSort
                   href={buildHref({
                     ...query,
@@ -205,6 +206,7 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                   <TD numeric>
                     <Money cents={row.listPriceCents} size="sm" tone="muted" />
                   </TD>
+                  <TD numeric><span className={row.catalogReadiness.blockers.length ? 'text-negative' : 'text-ink-3'}>{row.catalogReadiness.percent}%</span></TD>
                   <TD numeric>
                     <Money cents={row.stockValueCents} size="sm" />
                   </TD>
