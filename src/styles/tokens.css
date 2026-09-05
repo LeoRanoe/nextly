@@ -137,47 +137,51 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 .nx-store {
-  /* ── Surfaces — white base, light-blue fields ───────────────────────── */
-  --nx-bg-sunken: hsl(204 58% 96.5%);
-  --nx-bg-base: hsl(0 0% 100%);
-  --nx-bg-raised: hsl(0 0% 100%);
-  --nx-bg-overlay: hsl(0 0% 100%);
-  --nx-bg-inset: hsl(204 66% 96.5%);
-  --nx-bg-hover: hsl(204 58% 94%);
-  --nx-bg-active: hsl(204 56% 91%);
+  /* ── Surfaces — warm cream base, parchment fields ────────────────────
+     Retinted from the original cool light-blue Northlight palette: same
+     structure (near-white base, one tinted "field" wash, one accent), a
+     warm amber/brass hue throughout instead of blue. See docs/03-design/
+     design-system.md's Northlight section for the full rationale. */
+  --nx-bg-sunken: hsl(38 28% 93%);
+  --nx-bg-base: hsl(40 30% 97%);
+  --nx-bg-raised: hsl(40 35% 99%);
+  --nx-bg-overlay: hsl(40 35% 99%);
+  --nx-bg-inset: hsl(35 32% 94%);
+  --nx-bg-hover: hsl(36 28% 91%);
+  --nx-bg-active: hsl(36 26% 87%);
 
-  /* ── Borders — cooler, lighter hairlines ────────────────────────────── */
-  --nx-border-subtle: hsl(206 42% 91%);
-  --nx-border: hsl(206 36% 85%);
-  --nx-border-strong: hsl(206 30% 71%);
+  /* ── Borders — warm, paper-toned hairlines ───────────────────────────── */
+  --nx-border-subtle: hsl(35 20% 88%);
+  --nx-border: hsl(35 18% 78%);
+  --nx-border-strong: hsl(35 15% 62%);
 
-  /* ── Text — navy-tinted ink ─────────────────────────────────────────── */
-  --nx-text: hsl(208 50% 12%);
-  --nx-text-secondary: hsl(208 22% 36%);
-  --nx-text-tertiary: hsl(208 16% 48%);
-  --nx-text-faint: hsl(208 14% 60%);
+  /* ── Text — warm near-black ink ───────────────────────────────────────── */
+  --nx-text: hsl(30 20% 14%);
+  --nx-text-secondary: hsl(30 12% 36%);
+  --nx-text-tertiary: hsl(30 10% 48%);
+  --nx-text-faint: hsl(30 9% 60%);
 
-  /* ── Accent — the brand navy, cool and confident on white ───────────── */
-  --nx-accent: hsl(206 77% 30%); /* #125488 */
-  --nx-accent-hover: hsl(206 77% 24%);
+  /* ── Accent — warm amber/brass, confident on cream ───────────────────── */
+  --nx-accent: hsl(38 72% 38%);
+  --nx-accent-hover: hsl(38 72% 31%);
   --nx-accent-fg: hsl(0 0% 100%);
-  --nx-accent-muted: hsl(203 85% 94%);
-  --nx-accent-border: hsl(203 70% 82%);
-  --nx-ring: hsl(199 88% 50%);
+  --nx-accent-muted: hsl(42 65% 93%);
+  --nx-accent-border: hsl(40 55% 75%);
+  --nx-ring: hsl(38 75% 42%);
 
-  /* ── Highlight cyan — the one bright note, used sparingly ───────────── */
-  --nx-store-bright: hsl(191 83% 57%); /* #37CAEC */
-  --nx-store-bright-soft: hsl(191 80% 94%);
+  /* ── Highlight — a brighter step of the same amber, used sparingly ───── */
+  --nx-store-bright: hsl(38 85% 55%);
+  --nx-store-bright-soft: hsl(42 70% 92%);
 
-  /* ── Navy — the footer's cool contrast block and hero ink ───────────── */
-  --nx-store-navy: hsl(208 50% 12%);
-  --nx-store-navy-soft: hsl(208 36% 22%);
-  --nx-store-navy-line: hsl(208 30% 32%);
+  /* ── Espresso — the footer's warm contrast block and hero ink ────────── */
+  --nx-store-navy: hsl(30 25% 14%);
+  --nx-store-navy-soft: hsl(30 20% 24%);
+  --nx-store-navy-line: hsl(30 18% 34%);
 
-  /* ── Elevation — softer and airier than the dashboard's single step ─── */
+  /* ── Elevation — shadows tinted warm, matching the rest of the palette ── */
   --nx-shadow-raised:
-    0 2px 6px -2px hsl(206 60% 30% / 0.08), 0 10px 28px -10px hsl(206 60% 30% / 0.12);
+    0 2px 6px -2px hsl(30 45% 25% / 0.1), 0 10px 28px -10px hsl(30 45% 25% / 0.14);
   --nx-shadow-overlay:
-    0 6px 16px -4px hsl(206 60% 24% / 0.12), 0 20px 48px -12px hsl(206 60% 24% / 0.16);
+    0 6px 16px -4px hsl(30 45% 20% / 0.14), 0 20px 48px -12px hsl(30 45% 20% / 0.18);
   --nx-highlight: transparent;
 }

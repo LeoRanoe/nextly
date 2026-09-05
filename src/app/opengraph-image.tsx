@@ -32,7 +32,7 @@ export default function Image() {
         justifyContent: 'center',
         gap: 28,
         padding: '80px 96px',
-        background: '#0f202e',
+        background: '#2d241b',
         color: '#ffffff',
       }}
     >
@@ -43,7 +43,7 @@ export default function Image() {
             width: 28,
             height: 28,
             borderRadius: '50%',
-            background: '#37caec',
+            background: '#eea62b',
           }}
         />
         <div style={{ display: 'flex', fontSize: 32, fontWeight: 600, letterSpacing: -1 }}>
