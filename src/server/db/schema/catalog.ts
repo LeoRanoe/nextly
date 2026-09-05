@@ -171,6 +171,7 @@ export const productRelationships = pgTable(
       t.relationshipType,
     ),
     index('product_relationships_product_idx').on(t.productId, t.position),
+    index('product_relationships_related_idx').on(t.relatedProductId),
   ],
 );
 
@@ -370,6 +371,7 @@ export const restockRequests = pgTable(
     index('restock_requests_status_idx').on(t.status, t.createdAt.desc()),
     index('restock_requests_product_idx').on(t.productId),
     index('restock_requests_variant_idx').on(t.variantId),
+    index('restock_requests_converted_sale_idx').on(t.convertedSaleId),
     index('restock_requests_created_idx').on(t.createdAt.desc()),
   ],
 );
