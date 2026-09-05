@@ -15,6 +15,7 @@ import type { RawSearchParams } from '@/lib/list-params';
 import {
   type CatalogSort as CatalogSortValue,
   listCatalogCategories,
+  listHomepageCollections,
   listCatalogProducts,
 } from '@/server/queries/catalog';
 import { getCurrentRate } from '@/server/queries/overview';
@@ -50,6 +51,10 @@ export default function CatalogPage({
     <>
       <StoreHero />
 
+      <Suspense fallback={null}>
+        <GoalCollections />
+      </Suspense>
+
       <section
         id="catalog"
         className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 pb-16 lg:px-6 lg:pb-20"
@@ -71,6 +76,12 @@ export default function CatalogPage({
       </section>
     </>
   );
+}
+
+async function GoalCollections() {
+  const collections = await listHomepageCollections();
+  if (!collections.length) return null;
+  return <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6"><div className="mb-4 flex items-baseline justify-between"><div><p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">Shop by goal</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">What do you want your home to do?</h2></div></div><div className="grid gap-px overflow-hidden border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-3">{collections.map((collection) => <Link key={collection.slug} href={`/?collection=${collection.slug}` as never} className="bg-base p-5 transition-colors hover:bg-hover"><h3 className="font-semibold text-ink">{collection.name}</h3>{collection.description ? <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{collection.description}</p> : null}<p className="mt-3 text-[11px] text-ink-4">{collection.productCount} product{collection.productCount === 1 ? '' : 's'} →</p></Link>)}</div></section>;
 }
 
 async function CatalogPills() {
@@ -115,17 +126,18 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   const raw = await searchParams;
   const q = typeof raw.q === 'string' ? raw.q : undefined;
   const category = typeof raw.category === 'string' ? raw.category : undefined;
+  const collection = typeof raw.collection === 'string' ? raw.collection : undefined;
   const sortRaw = typeof raw.sort === 'string' ? raw.sort : undefined;
   const sort = isCatalogSort(sortRaw) ? sortRaw : undefined;
 
   const [products, rate, settings] = await Promise.all([
-    listCatalogProducts({ q, category, sort }),
+    listCatalogProducts({ q, category, collection, sort }),
     getCurrentRate(),
     getSettings(),
   ]);
 
   if (products.length === 0) {
-    const filtered = Boolean(q || category);
+    const filtered = Boolean(q || category || collection);
     return (
       <EmptyState
         Icon={filtered ? PackageSearch : Package}

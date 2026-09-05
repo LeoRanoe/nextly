@@ -63,7 +63,7 @@ const CATALOG_SORT_CLAUSES: Record<CatalogSort, ReturnType<typeof sql>> = {
 };
 
 export async function listCatalogProducts(
-  params: { q?: string; category?: string; sort?: CatalogSort; limit?: number } = {},
+  params: { q?: string; category?: string; collection?: string; sort?: CatalogSort; limit?: number } = {},
 ): Promise<CatalogListItem[]> {
   if (!isDatabaseConfigured()) return [];
 
@@ -73,6 +73,7 @@ export async function listCatalogProducts(
   // as "no limit" to Postgres, so the hero's "newest one" read and the
   // grid's "every match" read share this one query with no branching SQL.
   const category = params.category?.trim() || null;
+  const collection = params.collection?.trim() || null;
   const likeQuery = params.q?.trim() ? `%${params.q.trim()}%` : null;
   const order = CATALOG_SORT_CLAUSES[params.sort ?? 'newest'];
   const limit = params.limit ?? null;
@@ -116,6 +117,7 @@ export async function listCatalogProducts(
     WHERE p.catalog_published AND p.status = 'active'
       AND (p.show_when_out_of_stock OR EXISTS (SELECT 1 FROM product_variants sv JOIN v_stock_levels ss ON ss.variant_id = sv.id WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0))
       AND (${category}::text IS NULL OR c.slug = ${category})
+      AND (${collection}::text IS NULL OR EXISTS (SELECT 1 FROM storefront_collection_products fcp JOIN storefront_collections fc ON fc.id = fcp.collection_id WHERE fcp.product_id = p.id AND fc.active AND fc.slug = ${collection}))
       AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery})
     ORDER BY ${order}
     LIMIT ${limit}
@@ -168,6 +170,24 @@ export async function listCatalogCategories(): Promise<CatalogCategory[]> {
     name: text(row.name),
     count: num(row.count),
   }));
+}
+
+export type StorefrontCollection = { name: string; slug: string; description: string | null; imageUrl: string | null; productCount: number };
+/** Intent-led collections are separate from categories and only appear once
+ * they contain something a visitor can actually buy. */
+export async function listHomepageCollections(): Promise<StorefrontCollection[]> {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT sc.name, sc.slug, sc.description, sc.image_url,
+           COUNT(p.id)::text AS product_count
+      FROM storefront_collections sc
+      JOIN storefront_collection_products cp ON cp.collection_id = sc.id
+      JOIN products p ON p.id = cp.product_id AND p.catalog_published AND p.status = 'active'
+     WHERE sc.active AND sc.homepage_visible
+     GROUP BY sc.id
+     ORDER BY sc.position, sc.name
+  `);
+  return rows.map((row) => ({ name: text(row.name), slug: text(row.slug), description: maybe(row.description), imageUrl: maybe(row.image_url), productCount: num(row.product_count) }));
 }
 
 export type CatalogProduct = {
