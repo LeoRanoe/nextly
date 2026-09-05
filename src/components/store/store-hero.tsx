@@ -13,7 +13,10 @@ import { getSettings } from '@/server/queries/reference';
  * two actions, catalogue underneath: the wash (`store-hero-field`) carries
  * the visual interest instead of a literal photo.
  */
-export function StoreHero() {
+export async function StoreHero() {
+  const settings = await getSettings();
+  const heroTitle = settings?.heroTitle?.trim() || 'Switch to smart.\nSwitch to Nextly.';
+  const heroBody = settings?.heroBody?.trim() || 'Connected devices for your home, imported and stocked in Paramaribo. What shows as in stock is on the shelf right now, priced in SRD and ready to collect today.';
   return (
     <section className="store-hero-field mb-10 w-full px-4 pt-16 pb-14 lg:px-6 lg:pt-20 lg:pb-16">
       <div className="mx-auto max-w-3xl text-center">
@@ -22,13 +25,10 @@ export function StoreHero() {
           Smart home · Paramaribo, Suriname
         </span>
         <h1 className="mt-5 text-[34px] font-semibold text-ink leading-[1.06] tracking-[-0.03em] sm:text-[46px] lg:text-[54px]">
-          Switch to smart.
-          <br />
-          <span className="text-accent">Switch to Nextly.</span>
+          {heroTitle.split('\n').map((line, index) => <span key={line}>{index > 0 ? <><br /><span className="text-accent">{line}</span></> : line}</span>)}
         </h1>
         <p className="mx-auto mt-4 max-w-[54ch] text-[15px] text-ink-2 leading-relaxed sm:text-[16px]">
-          Connected devices for your home, imported and stocked in Paramaribo. What shows as in
-          stock is on the shelf right now, priced in SRD and ready to collect today.
+          {heroBody}
         </p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           <a
