@@ -51,6 +51,11 @@ export type CatalogListItem = {
 };
 
 export type CatalogSort = 'newest' | 'name' | 'price-asc' | 'price-desc';
+export type CatalogFilterOptions = {
+  brands: { name: string; slug: string }[];
+  platforms: string[];
+  protocols: string[];
+};
 
 // Ordered by the `price` LATERAL's own numeric columns, qualified — never by
 // the outer SELECT list's same-named aliases, which are cast to `::text` for
@@ -69,6 +74,12 @@ export async function listCatalogProducts(
     q?: string;
     category?: string;
     collection?: string;
+    brand?: string;
+    platform?: string;
+    protocol?: string;
+    hub?: 'required' | 'not-required';
+    indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor';
+    newArrival?: boolean;
     availability?: 'in-stock' | 'incoming';
     sort?: CatalogSort;
     limit?: number;
@@ -83,6 +94,12 @@ export async function listCatalogProducts(
   // grid's "every match" read share this one query with no branching SQL.
   const category = params.category?.trim() || null;
   const collection = params.collection?.trim() || null;
+  const brand = params.brand?.trim() || null;
+  const platform = params.platform?.trim() || null;
+  const protocol = params.protocol?.trim() || null;
+  const hub = params.hub ?? null;
+  const indoorOutdoor = params.indoorOutdoor ?? null;
+  const newArrival = params.newArrival ?? false;
   const availability = params.availability ?? null;
   const likeQuery = params.q?.trim() ? `%${params.q.trim()}%` : null;
   const order = CATALOG_SORT_CLAUSES[params.sort ?? 'newest'];
@@ -130,6 +147,12 @@ export async function listCatalogProducts(
       AND (p.show_when_out_of_stock OR EXISTS (SELECT 1 FROM product_variants sv JOIN v_stock_levels ss ON ss.variant_id = sv.id WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0))
       AND (${category}::text IS NULL OR c.slug = ${category})
       AND (${collection}::text IS NULL OR EXISTS (SELECT 1 FROM storefront_collection_products fcp JOIN storefront_collections fc ON fc.id = fcp.collection_id WHERE fcp.product_id = p.id AND fc.active AND fc.slug = ${collection}))
+      AND (${brand}::text IS NULL OR b.slug = ${brand})
+      AND (${platform}::text IS NULL OR COALESCE(p.compatibility->'platforms', '[]'::jsonb) ? ${platform})
+      AND (${protocol}::text IS NULL OR COALESCE(p.compatibility->'protocols', '[]'::jsonb) ? ${protocol})
+      AND (${hub}::text IS NULL OR (${hub} = 'required' AND COALESCE(p.buyer_requirements->>'hubRequired', 'false') = 'true') OR (${hub} = 'not-required' AND COALESCE(p.buyer_requirements->>'hubRequired', 'false') <> 'true'))
+      AND (${indoorOutdoor}::text IS NULL OR p.buyer_requirements->>'indoorOutdoor' = ${indoorOutdoor})
+      AND (NOT ${newArrival} OR p.new_until >= CURRENT_DATE)
       AND (${availability}::text IS NULL OR (${availability} = 'in-stock' AND EXISTS (SELECT 1 FROM product_variants av JOIN v_stock_levels ast ON ast.variant_id = av.id WHERE av.product_id = p.id AND av.is_active AND ast.on_hand > 0)) OR (${availability} = 'incoming' AND EXISTS (SELECT 1 FROM purchase_order_items ai JOIN purchase_orders ao ON ao.id = ai.purchase_order_id JOIN product_variants av ON av.id = ai.variant_id WHERE av.product_id = p.id AND ao.status IN ('ordered', 'shipped') AND ai.quantity > ai.quantity_received)))
       AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery} OR p.model_number ILIKE ${likeQuery} OR b.name ILIKE ${likeQuery} OR p.key_features::text ILIKE ${likeQuery} OR p.compatibility::text ILIKE ${likeQuery})
     ORDER BY ${order}
@@ -162,6 +185,28 @@ export async function listCatalogProducts(
       : null,
     createdAt: text(row.created_at),
   }));
+}
+
+/** Filter values are derived from public catalog data; an empty choice is
+ * never shown just because it exists in an internal product draft. */
+export async function listCatalogFilterOptions(): Promise<CatalogFilterOptions> {
+  if (!isDatabaseConfigured()) return { brands: [], platforms: [], protocols: [] };
+  const [brands, platforms, protocols] = await Promise.all([
+    db.execute<Record<string, string>>(
+      sql`SELECT DISTINCT b.name, b.slug FROM products p JOIN brands b ON b.id = p.brand_id WHERE p.catalog_published AND p.status = 'active' AND b.active ORDER BY b.name`,
+    ),
+    db.execute<Record<string, string>>(
+      sql`SELECT DISTINCT value AS name FROM products p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.compatibility->'platforms', '[]'::jsonb)) value WHERE p.catalog_published AND p.status = 'active' ORDER BY name`,
+    ),
+    db.execute<Record<string, string>>(
+      sql`SELECT DISTINCT value AS name FROM products p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.compatibility->'protocols', '[]'::jsonb)) value WHERE p.catalog_published AND p.status = 'active' ORDER BY name`,
+    ),
+  ]);
+  return {
+    brands: brands.map((row) => ({ name: text(row.name), slug: text(row.slug) })),
+    platforms: platforms.map((row) => text(row.name)),
+    protocols: protocols.map((row) => text(row.name)),
+  };
 }
 
 export type CatalogCategory = { slug: string; name: string; count: number };

@@ -4,22 +4,24 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ListSearch } from '@/components/patterns/list-toolbar';
+import { CatalogAvailability } from '@/components/store/catalog-availability';
+import { CatalogFilters } from '@/components/store/catalog-filters';
 import { CatalogSort } from '@/components/store/catalog-sort';
 import { CatalogSpotlight } from '@/components/store/catalog-spotlight';
 import { CategoryPills } from '@/components/store/category-pills';
 import { ProductCard } from '@/components/store/product-card';
 import { StoreHero, StoreValues } from '@/components/store/store-hero';
 import { StorePrice } from '@/components/store/store-price';
-import { CatalogAvailability } from '@/components/store/catalog-availability';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { RawSearchParams } from '@/lib/list-params';
 import {
   type CatalogSort as CatalogSortValue,
-  listCatalogCategories,
-  listHomepageCollections,
   listCatalogBundles,
+  listCatalogCategories,
+  listCatalogFilterOptions,
   listCatalogProducts,
+  listHomepageCollections,
 } from '@/server/queries/catalog';
 import { getCurrentRate } from '@/server/queries/overview';
 import { getSettings } from '@/server/queries/reference';
@@ -87,13 +89,77 @@ export default function CatalogPage({
 async function BundleSection() {
   const [bundles, rate] = await Promise.all([listCatalogBundles(), getCurrentRate()]);
   if (!bundles.length) return null;
-  return <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6"><p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">Starter setups</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">A complete place to start.</h2><div className="mt-4 grid gap-px border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-3">{bundles.map((bundle) => <Link key={bundle.id} href={`/setups/${bundle.slug}` as never} className="bg-base p-5 transition-colors hover:bg-hover"><h3 className="font-semibold text-ink">{bundle.name}</h3>{bundle.summary ? <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{bundle.summary}</p> : null}<p className="mt-3 text-[11px] text-ink-3">{bundle.availability > 0 ? `${bundle.availability} setup${bundle.availability === 1 ? '' : 's'} available` : 'Currently unavailable'}</p><div className="mt-3"><StorePrice usdCents={bundle.priceCents} srdRate={rate?.rateMicros} size="md" /></div><p className="mt-4 text-[11px] font-semibold text-accent">View this setup →</p></Link>)}</div></section>;
+  return (
+    <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6">
+      <p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">
+        Starter setups
+      </p>
+      <h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">
+        A complete place to start.
+      </h2>
+      <div className="mt-4 grid gap-px border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-3">
+        {bundles.map((bundle) => (
+          <Link
+            key={bundle.id}
+            href={`/setups/${bundle.slug}` as never}
+            className="bg-base p-5 transition-colors hover:bg-hover"
+          >
+            <h3 className="font-semibold text-ink">{bundle.name}</h3>
+            {bundle.summary ? (
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{bundle.summary}</p>
+            ) : null}
+            <p className="mt-3 text-[11px] text-ink-3">
+              {bundle.availability > 0
+                ? `${bundle.availability} setup${bundle.availability === 1 ? '' : 's'} available`
+                : 'Currently unavailable'}
+            </p>
+            <div className="mt-3">
+              <StorePrice usdCents={bundle.priceCents} srdRate={rate?.rateMicros} size="md" />
+            </div>
+            <p className="mt-4 text-[11px] font-semibold text-accent">View this setup →</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 async function GoalCollections() {
   const collections = await listHomepageCollections();
   if (!collections.length) return null;
-  return <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6"><div className="mb-4 flex items-baseline justify-between"><div><p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">Shop by goal</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">What do you want your home to do?</h2></div></div><div className="grid gap-px overflow-hidden border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-3">{collections.map((collection) => <Link key={collection.slug} href={`/?collection=${collection.slug}` as never} className="bg-base p-5 transition-colors hover:bg-hover"><h3 className="font-semibold text-ink">{collection.name}</h3>{collection.description ? <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{collection.description}</p> : null}<p className="mt-3 text-[11px] text-ink-4">{collection.productCount} product{collection.productCount === 1 ? '' : 's'} →</p></Link>)}</div></section>;
+  return (
+    <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6">
+      <div className="mb-4 flex items-baseline justify-between">
+        <div>
+          <p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">
+            Shop by goal
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">
+            What do you want your home to do?
+          </h2>
+        </div>
+      </div>
+      <div className="grid gap-px overflow-hidden border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-3">
+        {collections.map((collection) => (
+          <Link
+            key={collection.slug}
+            href={`/?collection=${collection.slug}` as never}
+            className="bg-base p-5 transition-colors hover:bg-hover"
+          >
+            <h3 className="font-semibold text-ink">{collection.name}</h3>
+            {collection.description ? (
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
+                {collection.description}
+              </p>
+            ) : null}
+            <p className="mt-3 text-[11px] text-ink-4">
+              {collection.productCount} product{collection.productCount === 1 ? '' : 's'} →
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 async function CatalogPills() {
@@ -115,13 +181,17 @@ function PillsSkeleton() {
 }
 
 async function CatalogToolbar() {
+  const options = await listCatalogFilterOptions();
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <ListSearch placeholder="Search products" size="md" />
-      <div className="ml-auto flex gap-2">
-        <CatalogAvailability />
-        <CatalogSort />
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <ListSearch placeholder="Search products" size="md" />
+        <div className="ml-auto flex gap-2">
+          <CatalogAvailability />
+          <CatalogSort />
+        </div>
       </div>
+      <CatalogFilters options={options} />
     </div>
   );
 }
@@ -140,18 +210,55 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
   const q = typeof raw.q === 'string' ? raw.q : undefined;
   const category = typeof raw.category === 'string' ? raw.category : undefined;
   const collection = typeof raw.collection === 'string' ? raw.collection : undefined;
-  const availability = raw.availability === 'in-stock' || raw.availability === 'incoming' ? raw.availability : undefined;
+  const brand = typeof raw.brand === 'string' ? raw.brand : undefined;
+  const platform = typeof raw.platform === 'string' ? raw.platform : undefined;
+  const protocol = typeof raw.protocol === 'string' ? raw.protocol : undefined;
+  const hub = raw.hub === 'required' || raw.hub === 'not-required' ? raw.hub : undefined;
+  const indoorOutdoor =
+    raw.indoorOutdoor === 'indoor' ||
+    raw.indoorOutdoor === 'outdoor' ||
+    raw.indoorOutdoor === 'indoor-outdoor'
+      ? raw.indoorOutdoor
+      : undefined;
+  const newArrival = raw.new === 'true';
+  const availability =
+    raw.availability === 'in-stock' || raw.availability === 'incoming'
+      ? raw.availability
+      : undefined;
   const sortRaw = typeof raw.sort === 'string' ? raw.sort : undefined;
   const sort = isCatalogSort(sortRaw) ? sortRaw : undefined;
 
   const [products, rate, settings] = await Promise.all([
-    listCatalogProducts({ q, category, collection, availability, sort }),
+    listCatalogProducts({
+      q,
+      category,
+      collection,
+      brand,
+      platform,
+      protocol,
+      hub,
+      indoorOutdoor,
+      newArrival,
+      availability,
+      sort,
+    }),
     getCurrentRate(),
     getSettings(),
   ]);
 
   if (products.length === 0) {
-    const filtered = Boolean(q || category || collection || availability);
+    const filtered = Boolean(
+      q ||
+        category ||
+        collection ||
+        brand ||
+        platform ||
+        protocol ||
+        hub ||
+        indoorOutdoor ||
+        newArrival ||
+        availability,
+    );
     return (
       <EmptyState
         Icon={filtered ? PackageSearch : Package}
