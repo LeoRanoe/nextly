@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/table';
 import { parseListParams, productQuerySchema, type RawSearchParams } from '@/lib/list-params';
 import { listProducts } from '@/server/queries/lists';
+import { listBrandOptions, listCategoryOptions } from '@/server/queries/pickers';
 
 export const metadata: Metadata = { title: 'Products' };
 
@@ -44,7 +45,16 @@ const STATUS_OPTIONS = [
 
 const CATALOG_OPTIONS = [
   { value: 'published', label: 'Published' },
-  { value: 'draft', label: 'Draft' },
+  { value: 'unpublished', label: 'Unpublished' },
+  { value: 'missing', label: 'Missing catalog information' },
+];
+const STOCK_OPTIONS = [
+  { value: 'out-of-stock', label: 'Out of stock' },
+  { value: 'low-stock', label: 'Low stock' },
+];
+const FEATURED_OPTIONS = [
+  { value: 'yes', label: 'Featured' },
+  { value: 'no', label: 'Not featured' },
 ];
 
 export default function ProductsPage({
@@ -67,11 +77,9 @@ export default function ProductsPage({
         }
       />
       <Surface className="overflow-hidden">
-        <ListToolbar>
-          <ListSearch placeholder="Search by name or code" />
-          <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
-          <ListFilter param="catalog" label="Catalog" options={CATALOG_OPTIONS} />
-        </ListToolbar>
+        <Suspense fallback={<div className="h-14 border-line-subtle border-b" />}>
+          <ProductsToolbar />
+        </Suspense>
         <Suspense fallback={<TableSkeleton rows={3} widths={['w-44', 'w-24', 'w-16']} />}>
           <ProductsTable searchParams={searchParams} />
         </Suspense>
@@ -80,10 +88,41 @@ export default function ProductsPage({
   );
 }
 
+async function ProductsToolbar() {
+  const [brands, categories] = await Promise.all([listBrandOptions(), listCategoryOptions()]);
+  return (
+    <ListToolbar>
+      <ListSearch placeholder="Search by name or code" />
+      <ListFilter param="status" label="Status" options={STATUS_OPTIONS} />
+      <ListFilter param="catalog" label="Catalog" options={CATALOG_OPTIONS} />
+      <ListFilter param="stock" label="Stock" options={STOCK_OPTIONS} />
+      <ListFilter param="featured" label="Merchandising" options={FEATURED_OPTIONS} />
+      <ListFilter
+        param="brand"
+        label="Brand"
+        options={brands.map((brand) => ({ value: brand.id, label: brand.label }))}
+      />
+      <ListFilter
+        param="category"
+        label="Category"
+        options={categories.map((category) => ({ value: category.id, label: category.label }))}
+      />
+    </ListToolbar>
+  );
+}
+
 async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   const raw = await searchParams;
   const query = parseListParams(productQuerySchema, raw);
-  const hasFilters = Boolean(query.q || query.status || query.catalog);
+  const hasFilters = Boolean(
+    query.q ||
+      query.status ||
+      query.catalog ||
+      query.stock ||
+      query.featured ||
+      query.brand ||
+      query.category,
+  );
   const result = await listProducts(query);
 
   if (result.total === 0 && !hasFilters) {
@@ -133,11 +172,9 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                 >
                   Product
                 </THSort>
-                <TH>Code</TH>
+                <TH>Brand</TH>
                 <TH>Category</TH>
-                <TH>Supplier</TH>
                 <TH>Status</TH>
-                <TH numeric>Variants</TH>
                 <THSort
                   href={buildHref({
                     ...query,
@@ -166,6 +203,20 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                 >
                   Stock value
                 </THSort>
+                <TH numeric>Incoming</TH>
+                <TH>Featured</TH>
+                <THSort
+                  href={buildHref({
+                    ...query,
+                    sort: 'updated',
+                    dir: nextDir('updated'),
+                    page: 1,
+                  })}
+                  active={query.sort === 'updated'}
+                  dir={query.dir}
+                >
+                  Updated
+                </THSort>
                 <TH />
               </TR>
             </THead>
@@ -186,11 +237,8 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                       {row.name}
                     </Link>
                   </TD>
-                  <TD className="tabular whitespace-nowrap text-[12px] text-ink-3">
-                    {row.code}
-                  </TD>
+                  <TD className="whitespace-nowrap text-ink-3">{row.brandName ?? '—'}</TD>
                   <TD className="whitespace-nowrap text-ink-3">{row.categoryName ?? '—'}</TD>
-                  <TD className="whitespace-nowrap text-ink-3">{row.supplierName ?? '—'}</TD>
                   <TD>
                     <span className="inline-flex items-center gap-1.5">
                       <Badge tone={STATUS_TONE[row.status]}>
@@ -199,16 +247,30 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                       {row.catalogPublished ? <Badge tone="accent">Published</Badge> : null}
                     </span>
                   </TD>
-                  <TD numeric className="text-ink-3">
-                    {row.variantCount}
-                  </TD>
                   <TD numeric>{row.onHand}</TD>
                   <TD numeric>
                     <Money cents={row.listPriceCents} size="sm" tone="muted" />
                   </TD>
-                  <TD numeric><span className={row.catalogReadiness.blockers.length ? 'text-negative' : 'text-ink-3'}>{row.catalogReadiness.percent}%</span></TD>
+                  <TD numeric>
+                    <span
+                      className={
+                        row.catalogReadiness.blockers.length ? 'text-negative' : 'text-ink-3'
+                      }
+                    >
+                      {row.catalogReadiness.percent}%
+                    </span>
+                  </TD>
                   <TD numeric>
                     <Money cents={row.stockValueCents} size="sm" />
+                  </TD>
+                  <TD numeric className="text-ink-3">
+                    {row.incoming}
+                  </TD>
+                  <TD>{row.featured ? <Badge tone="accent">Featured</Badge> : '—'}</TD>
+                  <TD className="whitespace-nowrap text-[12px] text-ink-3">
+                    {new Intl.DateTimeFormat('en-SR', { dateStyle: 'medium' }).format(
+                      new Date(row.updatedAt),
+                    )}
                   </TD>
                   <TD className="text-right">
                     <ProductActions
@@ -253,7 +315,9 @@ async function ProductsTable({ searchParams }: { searchParams: Promise<RawSearch
                 <MobileRowMetaItem label="Category">
                   {row.categoryName ?? '—'}
                 </MobileRowMetaItem>
+                <MobileRowMetaItem label="Brand">{row.brandName ?? '—'}</MobileRowMetaItem>
                 <MobileRowMetaItem label="On hand">{row.onHand}</MobileRowMetaItem>
+                <MobileRowMetaItem label="Incoming">{row.incoming}</MobileRowMetaItem>
                 <MobileRowMetaItem label="From">
                   <Money cents={row.listPriceCents} size="sm" tone="muted" />
                 </MobileRowMetaItem>
@@ -289,6 +353,10 @@ function buildHref(query: {
   q?: string;
   status?: string;
   catalog?: string;
+  stock?: string;
+  featured?: string;
+  brand?: string;
+  category?: string;
   sort?: string;
   dir?: string;
   page?: number;
@@ -297,6 +365,10 @@ function buildHref(query: {
   if (query.q) params.set('q', query.q);
   if (query.status) params.set('status', query.status);
   if (query.catalog) params.set('catalog', query.catalog);
+  if (query.stock) params.set('stock', query.stock);
+  if (query.featured) params.set('featured', query.featured);
+  if (query.brand) params.set('brand', query.brand);
+  if (query.category) params.set('category', query.category);
   if (query.sort) params.set('sort', query.sort);
   if (query.dir) params.set('dir', query.dir);
   if (query.page && query.page > 1) params.set('page', String(query.page));

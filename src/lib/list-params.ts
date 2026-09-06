@@ -51,8 +51,12 @@ export type PurchaseOrderQuery = z.infer<typeof purchaseOrderQuerySchema>;
 export const productQuerySchema = z.object({
   ...base,
   status: z.enum(['draft', 'active', 'archived']).optional().catch(undefined),
-  catalog: z.enum(['published', 'draft']).optional().catch(undefined),
-  sort: z.enum(['name', 'onHand', 'stockValue']).catch('name'),
+  catalog: z.enum(['published', 'unpublished', 'missing']).optional().catch(undefined),
+  stock: z.enum(['out-of-stock', 'low-stock']).optional().catch(undefined),
+  featured: z.enum(['yes', 'no']).optional().catch(undefined),
+  brand: z.string().uuid().optional().catch(undefined),
+  category: z.string().uuid().optional().catch(undefined),
+  sort: z.enum(['name', 'onHand', 'stockValue', 'updated']).catch('name'),
   dir,
 });
 export type ProductQuery = z.infer<typeof productQuerySchema>;
