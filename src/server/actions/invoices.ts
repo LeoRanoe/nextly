@@ -2,7 +2,7 @@
 
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { publicEnv } from '@/lib/env';
+import { publicAppUrl } from '@/lib/env';
 import { createPublicToken } from '@/lib/public-token';
 import { uuid } from '@/lib/schemas';
 import { db } from '../db/client';
@@ -45,6 +45,6 @@ export const createPublicInvoiceLink = writeAction
       });
       return { number: sale.number };
     });
-    const baseUrl = publicEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+    const baseUrl = publicAppUrl().replace(/\/$/, '');
     return { ...result, url: `${baseUrl}/d/invoice/${token.raw}` };
   });

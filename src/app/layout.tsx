@@ -6,7 +6,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { Toaster } from '@/components/providers/toaster';
-import { publicEnv } from '@/lib/env';
+import { publicAppUrl } from '@/lib/env';
 import './globals.css';
 
 // Instrument Sans over Inter/Geist: those two are the visual signature of
@@ -24,7 +24,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(publicEnv().NEXT_PUBLIC_APP_URL),
+  metadataBase: new URL(publicAppUrl()),
   title: { default: 'Nextly', template: '%s · Nextly' },
   description: 'Operations dashboard for Nextly — IoT import, inventory and trade.',
   robots: { index: false, follow: false },

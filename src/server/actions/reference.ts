@@ -2,7 +2,7 @@
 
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { publicEnv } from '@/lib/env';
+import { publicAppUrl } from '@/lib/env';
 import {
   brandSchema,
   categorySchema,
@@ -481,7 +481,7 @@ export const inviteMember = ownerAction
 
     const admin = createAdminClient();
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${publicEnv().NEXT_PUBLIC_APP_URL}/auth/callback`,
+      redirectTo: `${publicAppUrl()}/auth/callback`,
     });
     if (error || !data.user) {
       throw new ActionError(error?.message ?? 'Supabase could not send the invitation.');

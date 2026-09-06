@@ -117,6 +117,29 @@ export function publicEnv(): PublicEnv {
   return publicCache;
 }
 
+/**
+ * The configured public origin is authoritative. A deployment can still be
+ * safe when an old configuration accidentally carries the local default: in
+ * that narrow case, Vercel's trusted deployment hostname prevents metadata,
+ * sitemap and invitation links from being published as localhost URLs.
+ */
+export function resolvePublicAppUrl(configuredUrl: string, deploymentHost?: string): string {
+  if (configuredUrl !== 'http://localhost:3000' || !deploymentHost?.trim())
+    return configuredUrl;
+  try {
+    const candidate = deploymentHost.includes('://')
+      ? deploymentHost
+      : `https://${deploymentHost}`;
+    return new URL(candidate).origin;
+  } catch {
+    return configuredUrl;
+  }
+}
+
+export function publicAppUrl(): string {
+  return resolvePublicAppUrl(publicEnv().NEXT_PUBLIC_APP_URL, process.env.VERCEL_URL);
+}
+
 /** True once the database is reachable in this environment. Lets pages render
  *  a setup state instead of a stack trace before Supabase is provisioned. */
 export function isDatabaseConfigured(): boolean {

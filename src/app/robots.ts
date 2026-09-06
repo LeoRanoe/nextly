@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { publicEnv } from '@/lib/env';
+import { publicAppUrl } from '@/lib/env';
 
 /**
  * Only the storefront is meant to be found. The root layout already sends
@@ -27,10 +27,10 @@ const PRIVATE_PATHS = [
 ];
 
 export default function robots(): MetadataRoute.Robots {
-  const { NEXT_PUBLIC_APP_URL } = publicEnv();
+  const appUrl = publicAppUrl();
 
   return {
     rules: [{ userAgent: '*', allow: ['/', '/p/'], disallow: PRIVATE_PATHS }],
-    sitemap: `${NEXT_PUBLIC_APP_URL}/sitemap.xml`,
+    sitemap: `${appUrl}/sitemap.xml`,
   };
 }

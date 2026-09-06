@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { connection } from 'next/server';
-import { publicEnv } from '@/lib/env';
+import { publicAppUrl } from '@/lib/env';
 import { listCatalogProducts } from '@/server/queries/catalog';
 
 /**
@@ -13,13 +13,13 @@ import { listCatalogProducts } from '@/server/queries/catalog';
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await connection();
-  const { NEXT_PUBLIC_APP_URL } = publicEnv();
+  const appUrl = publicAppUrl();
   const products = await listCatalogProducts();
 
   return [
-    { url: NEXT_PUBLIC_APP_URL, changeFrequency: 'daily', priority: 1 },
+    { url: appUrl, changeFrequency: 'daily', priority: 1 },
     ...products.map((product) => ({
-      url: `${NEXT_PUBLIC_APP_URL}/p/${product.slug}`,
+      url: `${appUrl}/p/${product.slug}`,
       changeFrequency: 'weekly' as const,
       priority: 0.8,
     })),

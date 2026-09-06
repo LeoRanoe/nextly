@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { isMigrationEnvironmentValid, isServerEnvironmentValid } from '@/lib/env';
+import {
+  isMigrationEnvironmentValid,
+  isServerEnvironmentValid,
+  resolvePublicAppUrl,
+} from '@/lib/env';
 import { dateInput, moneyInput, saleRefundSchema } from '@/lib/schemas';
 
 describe('dateInput', () => {
@@ -64,5 +68,22 @@ describe('runtime environment validation', () => {
 
     expect(isServerEnvironmentValid()).toBe(true);
     expect(isMigrationEnvironmentValid()).toBe(false);
+  });
+});
+
+describe('public application URL', () => {
+  it('uses the Vercel deployment origin only when the configured URL is the local default', () => {
+    expect(resolvePublicAppUrl('http://localhost:3000', 'nextly-black.vercel.app')).toBe(
+      'https://nextly-black.vercel.app',
+    );
+    expect(resolvePublicAppUrl('https://nextly.example', 'nextly-black.vercel.app')).toBe(
+      'https://nextly.example',
+    );
+  });
+
+  it('does not turn an invalid deployment host into a public URL', () => {
+    expect(resolvePublicAppUrl('http://localhost:3000', 'not a valid host')).toBe(
+      'http://localhost:3000',
+    );
   });
 });
