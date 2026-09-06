@@ -20,15 +20,13 @@ export function CatalogFilters({
       hub: parseAsString,
       indoorOutdoor: parseAsString,
       new: parseAsString,
+      price: parseAsString,
       page: parseAsString,
     },
     { shallow: false, history: 'replace' },
   );
   const set = (key: keyof typeof filters, value: string) =>
     setFilters({ [key]: value || null, page: null });
-  const hasChoices =
-    options.brands.length || options.platforms.length || options.protocols.length;
-  if (!hasChoices) return null;
   return (
     <details className="w-full border-t border-line-subtle pt-3">
       <summary className="cursor-pointer text-[12px] font-medium text-ink-2">
@@ -101,6 +99,17 @@ export function CatalogFilters({
         >
           <option value="">All arrival dates</option>
           <option value="true">New arrivals</option>
+        </Select>
+        <Select
+          aria-label="Price range"
+          value={filters.price ?? ''}
+          onChange={(event) => set('price', event.target.value)}
+        >
+          <option value="">All prices</option>
+          <option value="under-50">Under US$50</option>
+          <option value="50-100">US$50–100</option>
+          <option value="100-250">US$100–250</option>
+          <option value="250-plus">US$250+</option>
         </Select>
       </div>
     </details>

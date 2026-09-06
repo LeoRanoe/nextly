@@ -324,6 +324,13 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
       ? raw.indoorOutdoor
       : undefined;
   const newArrival = raw.new === 'true';
+  const price =
+    raw.price === 'under-50' ||
+    raw.price === '50-100' ||
+    raw.price === '100-250' ||
+    raw.price === '250-plus'
+      ? raw.price
+      : undefined;
   const availability =
     raw.availability === 'in-stock' || raw.availability === 'incoming'
       ? raw.availability
@@ -342,6 +349,7 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
       hub,
       indoorOutdoor,
       newArrival,
+      price,
       availability,
       sort,
     }),
@@ -360,6 +368,7 @@ async function CatalogGrid({ searchParams }: { searchParams: Promise<RawSearchPa
         hub ||
         indoorOutdoor ||
         newArrival ||
+        price ||
         availability,
     );
     return (

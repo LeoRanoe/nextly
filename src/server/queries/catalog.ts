@@ -84,6 +84,7 @@ export async function listCatalogProducts(
     hub?: 'required' | 'not-required';
     indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor';
     newArrival?: boolean;
+    price?: 'under-50' | '50-100' | '100-250' | '250-plus';
     availability?: 'in-stock' | 'incoming';
     sort?: CatalogSort;
     limit?: number;
@@ -104,6 +105,7 @@ export async function listCatalogProducts(
   const hub = params.hub ?? null;
   const indoorOutdoor = params.indoorOutdoor ?? null;
   const newArrival = params.newArrival ?? false;
+  const priceBucket = params.price ?? null;
   const availability = params.availability ?? null;
   const likeQuery = params.q?.trim() ? `%${params.q.trim()}%` : null;
   const order = CATALOG_SORT_CLAUSES[params.sort ?? 'newest'];
@@ -157,6 +159,11 @@ export async function listCatalogProducts(
       AND (${hub}::text IS NULL OR (${hub} = 'required' AND COALESCE(p.buyer_requirements->>'hubRequired', 'false') = 'true') OR (${hub} = 'not-required' AND COALESCE(p.buyer_requirements->>'hubRequired', 'false') <> 'true'))
       AND (${indoorOutdoor}::text IS NULL OR p.buyer_requirements->>'indoorOutdoor' = ${indoorOutdoor})
       AND (NOT ${newArrival} OR p.new_until >= CURRENT_DATE)
+      AND (${priceBucket}::text IS NULL
+        OR (${priceBucket} = 'under-50' AND price.min_price < 5000)
+        OR (${priceBucket} = '50-100' AND price.min_price >= 5000 AND price.min_price < 10000)
+        OR (${priceBucket} = '100-250' AND price.min_price >= 10000 AND price.min_price < 25000)
+        OR (${priceBucket} = '250-plus' AND price.min_price >= 25000))
       AND (${availability}::text IS NULL OR (${availability} = 'in-stock' AND EXISTS (SELECT 1 FROM product_variants av JOIN v_stock_levels ast ON ast.variant_id = av.id WHERE av.product_id = p.id AND av.is_active AND ast.on_hand > 0)) OR (${availability} = 'incoming' AND EXISTS (SELECT 1 FROM purchase_order_items ai JOIN purchase_orders ao ON ao.id = ai.purchase_order_id JOIN product_variants av ON av.id = ai.variant_id WHERE av.product_id = p.id AND ao.status IN ('ordered', 'shipped') AND ai.quantity > ai.quantity_received)))
       AND (${likeQuery}::text IS NULL OR p.name ILIKE ${likeQuery} OR p.summary ILIKE ${likeQuery} OR p.model_number ILIKE ${likeQuery} OR b.name ILIKE ${likeQuery} OR p.key_features::text ILIKE ${likeQuery} OR p.compatibility::text ILIKE ${likeQuery})
     ORDER BY ${order}
