@@ -517,11 +517,17 @@ export type ProductDetail = {
     hubName?: string;
     appRequired?: boolean;
     appName?: string;
+    accountRequired?: boolean;
     wifiRequired?: boolean;
     wifiBands: string[];
+    subscription?: 'none' | 'optional' | 'required';
+    subscriptionNotes?: string;
     indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor';
     powerSource?: string;
+    batteryType?: string;
+    neutralWireRequired?: boolean;
     installationNotes?: string;
+    regionalNotes?: string;
   };
   faqItems: { question: string; answer: string }[];
   featured: boolean;
@@ -709,8 +715,17 @@ function parseBuyerRequirements(
     hubName: typeof raw.hubName === 'string' ? raw.hubName : undefined,
     appRequired: typeof raw.appRequired === 'boolean' ? raw.appRequired : undefined,
     appName: typeof raw.appName === 'string' ? raw.appName : undefined,
+    accountRequired: typeof raw.accountRequired === 'boolean' ? raw.accountRequired : undefined,
     wifiRequired: typeof raw.wifiRequired === 'boolean' ? raw.wifiRequired : undefined,
     wifiBands: stringList,
+    subscription:
+      raw.subscription === 'none' ||
+      raw.subscription === 'optional' ||
+      raw.subscription === 'required'
+        ? raw.subscription
+        : undefined,
+    subscriptionNotes:
+      typeof raw.subscriptionNotes === 'string' ? raw.subscriptionNotes : undefined,
     indoorOutdoor:
       indoorOutdoor === 'indoor' ||
       indoorOutdoor === 'outdoor' ||
@@ -718,8 +733,12 @@ function parseBuyerRequirements(
         ? indoorOutdoor
         : undefined,
     powerSource: typeof raw.powerSource === 'string' ? raw.powerSource : undefined,
+    batteryType: typeof raw.batteryType === 'string' ? raw.batteryType : undefined,
+    neutralWireRequired:
+      typeof raw.neutralWireRequired === 'boolean' ? raw.neutralWireRequired : undefined,
     installationNotes:
       typeof raw.installationNotes === 'string' ? raw.installationNotes : undefined,
+    regionalNotes: typeof raw.regionalNotes === 'string' ? raw.regionalNotes : undefined,
   };
 }
 

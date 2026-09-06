@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAction } from 'next-safe-action/hooks';
 import { useState } from 'react';
@@ -61,11 +61,17 @@ export type ProductFormValues = {
   hubName: string;
   appRequired: boolean;
   appName: string;
+  accountRequired: boolean;
   wifiRequired: boolean;
   wifiBands: string;
+  subscription: '' | 'none' | 'optional' | 'required';
+  subscriptionNotes: string;
   indoorOutdoor: '' | 'indoor' | 'outdoor' | 'indoor-outdoor';
   powerSource: string;
+  batteryType: string;
+  neutralWireRequired: boolean;
   installationNotes: string;
+  regionalNotes: string;
   faqItems: { question: string; answer: string }[];
   featured: boolean;
   featuredPosition: string;
@@ -104,10 +110,39 @@ const emptyProduct = (): ProductFormValues => ({
   categoryId: null,
   supplierId: null,
   brandId: null,
-  sourceUrl: '', specs: [],
+  sourceUrl: '',
+  specs: [],
   summary: '',
   description: '',
-  modelNumber: '', keyFeatures: '', bestFor: '', platforms: '', protocols: '', ecosystems: '', boxContents: '', nextlyTake: '', hubRequired: false, hubName: '', appRequired: false, appName: '', wifiRequired: false, wifiBands: '', indoorOutdoor: '', powerSource: '', installationNotes: '', faqItems: [], featured: false, featuredPosition: '', newUntil: '', showWhenOutOfStock: true, restockNotificationsEnabled: false,
+  modelNumber: '',
+  keyFeatures: '',
+  bestFor: '',
+  platforms: '',
+  protocols: '',
+  ecosystems: '',
+  boxContents: '',
+  nextlyTake: '',
+  hubRequired: false,
+  hubName: '',
+  appRequired: false,
+  appName: '',
+  accountRequired: false,
+  wifiRequired: false,
+  wifiBands: '',
+  subscription: '',
+  subscriptionNotes: '',
+  indoorOutdoor: '',
+  powerSource: '',
+  batteryType: '',
+  neutralWireRequired: false,
+  installationNotes: '',
+  regionalNotes: '',
+  faqItems: [],
+  featured: false,
+  featuredPosition: '',
+  newUntil: '',
+  showWhenOutOfStock: true,
+  restockNotificationsEnabled: false,
   status: 'active',
   warrantyMonths: '0',
   catalogPublished: false,
@@ -131,7 +166,10 @@ function slugify(value: string): string {
 }
 
 function toLines(value: string): string[] {
-  return value.split('\n').map((item) => item.trim()).filter(Boolean);
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export function ProductForm({
@@ -198,7 +236,14 @@ export function ProductForm({
     },
     onError: () => toast.error('Could not add that supplier'),
   });
-  const createInlineBrand = useAction(createBrand, { onSuccess({ data }) { if (!data) return; setBrandList((current) => [...current, { id: data.id, label: data.name }]); set('brandId', data.id); }, onError: () => toast.error('Could not add that brand') });
+  const createInlineBrand = useAction(createBrand, {
+    onSuccess({ data }) {
+      if (!data) return;
+      setBrandList((current) => [...current, { id: data.id, label: data.name }]);
+      set('brandId', data.id);
+    },
+    onError: () => toast.error('Could not add that brand'),
+  });
 
   return (
     <form
@@ -215,14 +260,46 @@ export function ProductForm({
           sourceUrl: values.sourceUrl || '',
           summary: values.summary || undefined,
           description: values.description || undefined,
-          specs: Object.fromEntries(values.specs.filter((spec) => spec.key.trim() && spec.value.trim()).map((spec) => [spec.key.trim(), spec.value.trim()])),
+          specs: Object.fromEntries(
+            values.specs
+              .filter((spec) => spec.key.trim() && spec.value.trim())
+              .map((spec) => [spec.key.trim(), spec.value.trim()]),
+          ),
           modelNumber: values.modelNumber || undefined,
-          keyFeatures: toLines(values.keyFeatures), bestFor: toLines(values.bestFor),
-          compatibility: { platforms: toLines(values.platforms), protocols: toLines(values.protocols), ecosystems: toLines(values.ecosystems) },
-          boxContents: toLines(values.boxContents), nextlyTake: values.nextlyTake || undefined,
-          buyerRequirements: { hubRequired: values.hubRequired || undefined, hubName: values.hubName || undefined, appRequired: values.appRequired || undefined, appName: values.appName || undefined, wifiRequired: values.wifiRequired || undefined, wifiBands: toLines(values.wifiBands), indoorOutdoor: values.indoorOutdoor || undefined, powerSource: values.powerSource || undefined, installationNotes: values.installationNotes || undefined },
-          faqItems: values.faqItems.filter((item) => item.question.trim() && item.answer.trim()),
-          featured: values.featured, featuredPosition: values.featuredPosition || undefined, newUntil: values.newUntil || undefined, showWhenOutOfStock: values.showWhenOutOfStock, restockNotificationsEnabled: values.restockNotificationsEnabled,
+          keyFeatures: toLines(values.keyFeatures),
+          bestFor: toLines(values.bestFor),
+          compatibility: {
+            platforms: toLines(values.platforms),
+            protocols: toLines(values.protocols),
+            ecosystems: toLines(values.ecosystems),
+          },
+          boxContents: toLines(values.boxContents),
+          nextlyTake: values.nextlyTake || undefined,
+          buyerRequirements: {
+            hubRequired: values.hubRequired || undefined,
+            hubName: values.hubName || undefined,
+            appRequired: values.appRequired || undefined,
+            appName: values.appName || undefined,
+            accountRequired: values.accountRequired || undefined,
+            wifiRequired: values.wifiRequired || undefined,
+            wifiBands: toLines(values.wifiBands),
+            subscription: values.subscription || undefined,
+            subscriptionNotes: values.subscriptionNotes || undefined,
+            indoorOutdoor: values.indoorOutdoor || undefined,
+            powerSource: values.powerSource || undefined,
+            batteryType: values.batteryType || undefined,
+            neutralWireRequired: values.neutralWireRequired || undefined,
+            installationNotes: values.installationNotes || undefined,
+            regionalNotes: values.regionalNotes || undefined,
+          },
+          faqItems: values.faqItems.filter(
+            (item) => item.question.trim() && item.answer.trim(),
+          ),
+          featured: values.featured,
+          featuredPosition: values.featuredPosition || undefined,
+          newUntil: values.newUntil || undefined,
+          showWhenOutOfStock: values.showWhenOutOfStock,
+          restockNotificationsEnabled: values.restockNotificationsEnabled,
           status: values.status,
           warrantyMonths: values.warrantyMonths || '0',
           catalogPublished: values.catalogPublished,
@@ -238,7 +315,11 @@ export function ProductForm({
             isDefault: variant.isDefault,
             isActive: variant.isActive,
             barcode: variant.barcode || undefined,
-            attributes: Object.fromEntries(variant.attributes.filter((attribute) => attribute.key.trim() && attribute.value.trim()).map((attribute) => [attribute.key.trim(), attribute.value.trim()])),
+            attributes: Object.fromEntries(
+              variant.attributes
+                .filter((attribute) => attribute.key.trim() && attribute.value.trim())
+                .map((attribute) => [attribute.key.trim(), attribute.value.trim()]),
+            ),
           })),
         } as Parameters<typeof execute>[0]);
       }}
@@ -291,7 +372,17 @@ export function ProductForm({
               </Field>
             </FieldRow>
             <Field label="Brand" htmlFor="brand" hint="Actual manufacturer, not supplier">
-              <Combobox id="brand" options={brandList.map((brand) => ({ value: brand.id, label: brand.label }))} value={values.brandId} onChange={(value) => set('brandId', value)} placeholder="No brand" createLabel="Add brand" onCreate={(name) => createInlineBrand.execute({ name, slug: slugify(name), active: true })} />
+              <Combobox
+                id="brand"
+                options={brandList.map((brand) => ({ value: brand.id, label: brand.label }))}
+                value={values.brandId}
+                onChange={(value) => set('brandId', value)}
+                placeholder="No brand"
+                createLabel="Add brand"
+                onCreate={(name) =>
+                  createInlineBrand.execute({ name, slug: slugify(name), active: true })
+                }
+              />
             </Field>
 
             <FieldRow>
@@ -396,7 +487,14 @@ export function ProductForm({
                   />
                 </Field>
                 <Field label={index === 0 ? 'Barcode' : ''} htmlFor={`vbarcode-${variant.key}`}>
-                  <Input id={`vbarcode-${variant.key}`} value={variant.barcode} placeholder="Optional" onChange={(event) => setVariant(variant.key, { barcode: event.target.value })} />
+                  <Input
+                    id={`vbarcode-${variant.key}`}
+                    value={variant.barcode}
+                    placeholder="Optional"
+                    onChange={(event) =>
+                      setVariant(variant.key, { barcode: event.target.value })
+                    }
+                  />
                 </Field>
                 <Field label={index === 0 ? 'List cost' : ''} htmlFor={`vcost-${variant.key}`}>
                   <Input
@@ -436,7 +534,24 @@ export function ProductForm({
                   />
                   Strategic stock
                 </label>
-                <label className="flex items-end gap-2 pb-1 text-[11px] text-ink-3"><input type="radio" name="default-variant" checked={variant.isDefault} onChange={() => setValues((current) => ({ ...current, variants: current.variants.map((item) => ({ ...item, isDefault: item.key === variant.key })) }))} className="mt-0.5 size-4 shrink-0 accent-[var(--nx-accent)]" /> Default</label>
+                <label className="flex items-end gap-2 pb-1 text-[11px] text-ink-3">
+                  <input
+                    type="radio"
+                    name="default-variant"
+                    checked={variant.isDefault}
+                    onChange={() =>
+                      setValues((current) => ({
+                        ...current,
+                        variants: current.variants.map((item) => ({
+                          ...item,
+                          isDefault: item.key === variant.key,
+                        })),
+                      }))
+                    }
+                    className="mt-0.5 size-4 shrink-0 accent-[var(--nx-accent)]"
+                  />{' '}
+                  Default
+                </label>
                 <div className="flex items-end pb-0.5">
                   <Button
                     type="button"
@@ -456,8 +571,63 @@ export function ProductForm({
                 </div>
                 <div className="sm:col-span-3">
                   <p className="mb-1 text-[11px] text-ink-4">Attributes</p>
-                  {variant.attributes.map((attribute, attributeIndex) => <div key={`${variant.key}-${attributeIndex}`} className="mb-1 flex gap-1"><Input value={attribute.key} placeholder="colour" onChange={(event) => setVariant(variant.key, { attributes: variant.attributes.map((item, i) => i === attributeIndex ? { ...item, key: event.target.value } : item) })} /><Input value={attribute.value} placeholder="Black" onChange={(event) => setVariant(variant.key, { attributes: variant.attributes.map((item, i) => i === attributeIndex ? { ...item, value: event.target.value } : item) })} /><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove attribute" onClick={() => setVariant(variant.key, { attributes: variant.attributes.filter((_, i) => i !== attributeIndex) })}><Trash2 className="size-3" /></Button></div>)}
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setVariant(variant.key, { attributes: [...variant.attributes, { key: '', value: '' }] })}>Add attribute</Button>
+                  {variant.attributes.map((attribute, attributeIndex) => (
+                    <div key={`${variant.key}-${attributeIndex}`} className="mb-1 flex gap-1">
+                      <Input
+                        value={attribute.key}
+                        placeholder="colour"
+                        onChange={(event) =>
+                          setVariant(variant.key, {
+                            attributes: variant.attributes.map((item, i) =>
+                              i === attributeIndex
+                                ? { ...item, key: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <Input
+                        value={attribute.value}
+                        placeholder="Black"
+                        onChange={(event) =>
+                          setVariant(variant.key, {
+                            attributes: variant.attributes.map((item, i) =>
+                              i === attributeIndex
+                                ? { ...item, value: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Remove attribute"
+                        onClick={() =>
+                          setVariant(variant.key, {
+                            attributes: variant.attributes.filter(
+                              (_, i) => i !== attributeIndex,
+                            ),
+                          })
+                        }
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setVariant(variant.key, {
+                        attributes: [...variant.attributes, { key: '', value: '' }],
+                      })
+                    }
+                  >
+                    Add attribute
+                  </Button>
                 </div>
               </div>
             ))}
@@ -486,27 +656,399 @@ export function ProductForm({
                 onChange={(event) => set('description', event.target.value)}
               />
             </Field>
-            <div className="border-t border-line-subtle pt-3"><div className="mb-2 flex items-center justify-between"><p className="text-[13px] font-medium text-ink">Specifications</p><Button type="button" size="sm" variant="ghost" onClick={() => set('specs', [...values.specs, { key: '', value: '' }])}>Add specification</Button></div>{values.specs.map((spec, index) => <div key={index} className="mb-2 flex gap-2"><Input value={spec.key} placeholder="e.g. Resolution" onChange={(event) => set('specs', values.specs.map((item, i) => i === index ? { ...item, key: event.target.value } : item))} /><Input value={spec.value} placeholder="e.g. 1080p" onChange={(event) => set('specs', values.specs.map((item, i) => i === index ? { ...item, value: event.target.value } : item))} /><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove specification" onClick={() => set('specs', values.specs.filter((_, i) => i !== index))}><Trash2 className="size-3" /></Button></div>)}</div>
-            <FieldRow>
-              <Field label="Model number" htmlFor="modelNumber"><Input id="modelNumber" value={values.modelNumber} onChange={(event) => set('modelNumber', event.target.value)} /></Field>
-              <Field label="Nextly’s take" htmlFor="nextlyTake"><Input id="nextlyTake" value={values.nextlyTake} onChange={(event) => set('nextlyTake', event.target.value)} /></Field>
-            </FieldRow>
-            <Field label="Key features" htmlFor="keyFeatures" hint="One per line"><Textarea id="keyFeatures" value={values.keyFeatures} onChange={(event) => set('keyFeatures', event.target.value)} /></Field>
-            <Field label="Best for" htmlFor="bestFor" hint="One per line"><Textarea id="bestFor" value={values.bestFor} onChange={(event) => set('bestFor', event.target.value)} /></Field>
-            <Field label="What’s in the box" htmlFor="boxContents" hint="One item per line"><Textarea id="boxContents" value={values.boxContents} onChange={(event) => set('boxContents', event.target.value)} /></Field>
-            <FieldRow>
-              <Field label="Platforms" htmlFor="platforms" hint="One per line"><Textarea id="platforms" value={values.platforms} placeholder="Amazon Alexa&#10;Google Home" onChange={(event) => set('platforms', event.target.value)} /></Field>
-              <Field label="Protocols" htmlFor="protocols" hint="One per line"><Textarea id="protocols" value={values.protocols} placeholder="Wi-Fi&#10;Matter" onChange={(event) => set('protocols', event.target.value)} /></Field>
-            </FieldRow>
-            <Field label="Ecosystems" htmlFor="ecosystems" hint="One per line"><Textarea id="ecosystems" value={values.ecosystems} placeholder="Home Assistant" onChange={(event) => set('ecosystems', event.target.value)} /></Field>
-            <div className="border-t border-line-subtle pt-3"><p className="mb-2 text-[13px] font-medium text-ink">Before you buy</p><div className="flex flex-wrap gap-4 text-[12px] text-ink-2"><label className="flex items-center gap-2"><input type="checkbox" checked={values.hubRequired} onChange={(event) => set('hubRequired', event.target.checked)} /> Hub required</label><label className="flex items-center gap-2"><input type="checkbox" checked={values.appRequired} onChange={(event) => set('appRequired', event.target.checked)} /> App required</label><label className="flex items-center gap-2"><input type="checkbox" checked={values.wifiRequired} onChange={(event) => set('wifiRequired', event.target.checked)} /> Wi-Fi required</label></div><FieldRow><Field label="Hub name" htmlFor="hubName"><Input id="hubName" value={values.hubName} onChange={(event) => set('hubName', event.target.value)} /></Field><Field label="App name" htmlFor="appName"><Input id="appName" value={values.appName} onChange={(event) => set('appName', event.target.value)} /></Field></FieldRow><FieldRow><Field label="Wi-Fi bands" htmlFor="wifiBands" hint="One per line"><Input id="wifiBands" value={values.wifiBands} onChange={(event) => set('wifiBands', event.target.value)} /></Field><Field label="Power" htmlFor="powerSource"><Input id="powerSource" value={values.powerSource} onChange={(event) => set('powerSource', event.target.value)} /></Field></FieldRow><Field label="Use" htmlFor="indoorOutdoor"><Select id="indoorOutdoor" value={values.indoorOutdoor} onChange={(event) => set('indoorOutdoor', event.target.value as ProductFormValues['indoorOutdoor'])}><option value="">Not specified</option><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option><option value="indoor-outdoor">Indoor & outdoor</option></Select></Field><Field label="Installation notes" htmlFor="installationNotes"><Textarea id="installationNotes" value={values.installationNotes} onChange={(event) => set('installationNotes', event.target.value)} /></Field></div>
-            <div className="border-t border-line-subtle pt-3"><div className="mb-2 flex items-center justify-between"><p className="text-[13px] font-medium text-ink">Frequently asked questions</p><Button type="button" size="sm" variant="ghost" onClick={() => set('faqItems', [...values.faqItems, { question: '', answer: '' }])}>Add FAQ</Button></div>{values.faqItems.map((item, index) => <div key={index} className="mb-2 flex gap-2"><Input value={item.question} placeholder="Question" onChange={(event) => set('faqItems', values.faqItems.map((current, i) => i === index ? { ...current, question: event.target.value } : current))} /><Input value={item.answer} placeholder="Answer" onChange={(event) => set('faqItems', values.faqItems.map((current, i) => i === index ? { ...current, answer: event.target.value } : current))} /><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove FAQ" onClick={() => set('faqItems', values.faqItems.filter((_, i) => i !== index))}><Trash2 className="size-3" /></Button></div>)}</div>
-            <div className="flex flex-wrap gap-4 text-[12px] text-ink-2">
-              <label className="flex items-center gap-2"><input type="checkbox" checked={values.featured} onChange={(event) => set('featured', event.target.checked)} /> Featured product</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={values.showWhenOutOfStock} onChange={(event) => set('showWhenOutOfStock', event.target.checked)} /> Show when sold out</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={values.restockNotificationsEnabled} onChange={(event) => set('restockNotificationsEnabled', event.target.checked)} /> Enable restock notification</label>
+            <div className="border-t border-line-subtle pt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[13px] font-medium text-ink">Specifications</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => set('specs', [...values.specs, { key: '', value: '' }])}
+                >
+                  Add specification
+                </Button>
+              </div>
+              {values.specs.map((spec, index) => (
+                <div key={spec.key || `spec-${index}`} className="mb-2 flex gap-2">
+                  <Input
+                    value={spec.key}
+                    placeholder="e.g. Resolution"
+                    onChange={(event) =>
+                      set(
+                        'specs',
+                        values.specs.map((item, i) =>
+                          i === index ? { ...item, key: event.target.value } : item,
+                        ),
+                      )
+                    }
+                  />
+                  <Input
+                    value={spec.value}
+                    placeholder="e.g. 1080p"
+                    onChange={(event) =>
+                      set(
+                        'specs',
+                        values.specs.map((item, i) =>
+                          i === index ? { ...item, value: event.target.value } : item,
+                        ),
+                      )
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Move specification earlier"
+                    disabled={index === 0}
+                    onClick={() => {
+                      const specs = [...values.specs];
+                      [specs[index - 1], specs[index]] = [specs[index]!, specs[index - 1]!];
+                      set('specs', specs);
+                    }}
+                  >
+                    <ArrowUp className="size-3" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Move specification later"
+                    disabled={index === values.specs.length - 1}
+                    onClick={() => {
+                      const specs = [...values.specs];
+                      [specs[index], specs[index + 1]] = [specs[index + 1]!, specs[index]!];
+                      set('specs', specs);
+                    }}
+                  >
+                    <ArrowDown className="size-3" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Remove specification"
+                    onClick={() =>
+                      set(
+                        'specs',
+                        values.specs.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
+                </div>
+              ))}
             </div>
-            <FieldRow><Field label="Featured position" htmlFor="featuredPosition" hint="Lower appears first"><Input id="featuredPosition" numeric inputMode="numeric" value={values.featuredPosition} onChange={(event) => set('featuredPosition', event.target.value)} /></Field><Field label="New until" htmlFor="newUntil"><Input id="newUntil" type="date" value={values.newUntil} onChange={(event) => set('newUntil', event.target.value)} /></Field></FieldRow>
+            <FieldRow>
+              <Field label="Model number" htmlFor="modelNumber">
+                <Input
+                  id="modelNumber"
+                  value={values.modelNumber}
+                  onChange={(event) => set('modelNumber', event.target.value)}
+                />
+              </Field>
+              <Field label="Nextly’s take" htmlFor="nextlyTake">
+                <Input
+                  id="nextlyTake"
+                  value={values.nextlyTake}
+                  onChange={(event) => set('nextlyTake', event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <Field label="Key features" htmlFor="keyFeatures" hint="One per line">
+              <Textarea
+                id="keyFeatures"
+                value={values.keyFeatures}
+                onChange={(event) => set('keyFeatures', event.target.value)}
+              />
+            </Field>
+            <Field label="Best for" htmlFor="bestFor" hint="One per line">
+              <Textarea
+                id="bestFor"
+                value={values.bestFor}
+                onChange={(event) => set('bestFor', event.target.value)}
+              />
+            </Field>
+            <Field label="What’s in the box" htmlFor="boxContents" hint="One item per line">
+              <Textarea
+                id="boxContents"
+                value={values.boxContents}
+                onChange={(event) => set('boxContents', event.target.value)}
+              />
+            </Field>
+            <FieldRow>
+              <Field label="Platforms" htmlFor="platforms" hint="One per line">
+                <Textarea
+                  id="platforms"
+                  value={values.platforms}
+                  placeholder="Amazon Alexa&#10;Google Home"
+                  onChange={(event) => set('platforms', event.target.value)}
+                />
+              </Field>
+              <Field label="Protocols" htmlFor="protocols" hint="One per line">
+                <Textarea
+                  id="protocols"
+                  value={values.protocols}
+                  placeholder="Wi-Fi&#10;Matter"
+                  onChange={(event) => set('protocols', event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <Field label="Ecosystems" htmlFor="ecosystems" hint="One per line">
+              <Textarea
+                id="ecosystems"
+                value={values.ecosystems}
+                placeholder="Home Assistant"
+                onChange={(event) => set('ecosystems', event.target.value)}
+              />
+            </Field>
+            <div className="border-t border-line-subtle pt-3">
+              <p className="mb-2 text-[13px] font-medium text-ink">Before you buy</p>
+              <div className="flex flex-wrap gap-4 text-[12px] text-ink-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={values.hubRequired}
+                    onChange={(event) => set('hubRequired', event.target.checked)}
+                  />{' '}
+                  Hub required
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={values.appRequired}
+                    onChange={(event) => set('appRequired', event.target.checked)}
+                  />{' '}
+                  App required
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={values.accountRequired}
+                    onChange={(event) => set('accountRequired', event.target.checked)}
+                  />{' '}
+                  Account required
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={values.wifiRequired}
+                    onChange={(event) => set('wifiRequired', event.target.checked)}
+                  />{' '}
+                  Wi-Fi required
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={values.neutralWireRequired}
+                    onChange={(event) => set('neutralWireRequired', event.target.checked)}
+                  />{' '}
+                  Neutral wire required
+                </label>
+              </div>
+              <FieldRow>
+                <Field label="Hub name" htmlFor="hubName">
+                  <Input
+                    id="hubName"
+                    value={values.hubName}
+                    onChange={(event) => set('hubName', event.target.value)}
+                  />
+                </Field>
+                <Field label="App name" htmlFor="appName">
+                  <Input
+                    id="appName"
+                    value={values.appName}
+                    onChange={(event) => set('appName', event.target.value)}
+                  />
+                </Field>
+              </FieldRow>
+              <FieldRow>
+                <Field label="Wi-Fi bands" htmlFor="wifiBands" hint="One per line">
+                  <Input
+                    id="wifiBands"
+                    value={values.wifiBands}
+                    onChange={(event) => set('wifiBands', event.target.value)}
+                  />
+                </Field>
+                <Field label="Power" htmlFor="powerSource">
+                  <Input
+                    id="powerSource"
+                    value={values.powerSource}
+                    onChange={(event) => set('powerSource', event.target.value)}
+                  />
+                </Field>
+              </FieldRow>
+              <FieldRow>
+                <Field label="Battery" htmlFor="batteryType">
+                  <Input
+                    id="batteryType"
+                    value={values.batteryType}
+                    onChange={(event) => set('batteryType', event.target.value)}
+                  />
+                </Field>
+                <Field label="Subscription" htmlFor="subscription">
+                  <Select
+                    id="subscription"
+                    value={values.subscription}
+                    onChange={(event) =>
+                      set(
+                        'subscription',
+                        event.target.value as ProductFormValues['subscription'],
+                      )
+                    }
+                  >
+                    <option value="">Not specified</option>
+                    <option value="none">None</option>
+                    <option value="optional">Optional</option>
+                    <option value="required">Required</option>
+                  </Select>
+                </Field>
+              </FieldRow>
+              <Field label="Subscription notes" htmlFor="subscriptionNotes">
+                <Input
+                  id="subscriptionNotes"
+                  value={values.subscriptionNotes}
+                  onChange={(event) => set('subscriptionNotes', event.target.value)}
+                />
+              </Field>
+              <Field label="Use" htmlFor="indoorOutdoor">
+                <Select
+                  id="indoorOutdoor"
+                  value={values.indoorOutdoor}
+                  onChange={(event) =>
+                    set(
+                      'indoorOutdoor',
+                      event.target.value as ProductFormValues['indoorOutdoor'],
+                    )
+                  }
+                >
+                  <option value="">Not specified</option>
+                  <option value="indoor">Indoor</option>
+                  <option value="outdoor">Outdoor</option>
+                  <option value="indoor-outdoor">Indoor & outdoor</option>
+                </Select>
+              </Field>
+              <Field label="Installation notes" htmlFor="installationNotes">
+                <Textarea
+                  id="installationNotes"
+                  value={values.installationNotes}
+                  onChange={(event) => set('installationNotes', event.target.value)}
+                />
+              </Field>
+              <Field label="Regional notes" htmlFor="regionalNotes">
+                <Textarea
+                  id="regionalNotes"
+                  value={values.regionalNotes}
+                  onChange={(event) => set('regionalNotes', event.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="border-t border-line-subtle pt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[13px] font-medium text-ink">Frequently asked questions</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    set('faqItems', [...values.faqItems, { question: '', answer: '' }])
+                  }
+                >
+                  Add FAQ
+                </Button>
+              </div>
+              {values.faqItems.map((item, index) => (
+                <div key={index} className="mb-2 flex gap-2">
+                  <Input
+                    value={item.question}
+                    placeholder="Question"
+                    onChange={(event) =>
+                      set(
+                        'faqItems',
+                        values.faqItems.map((current, i) =>
+                          i === index ? { ...current, question: event.target.value } : current,
+                        ),
+                      )
+                    }
+                  />
+                  <Input
+                    value={item.answer}
+                    placeholder="Answer"
+                    onChange={(event) =>
+                      set(
+                        'faqItems',
+                        values.faqItems.map((current, i) =>
+                          i === index ? { ...current, answer: event.target.value } : current,
+                        ),
+                      )
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Remove FAQ"
+                    onClick={() =>
+                      set(
+                        'faqItems',
+                        values.faqItems.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-4 text-[12px] text-ink-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={values.featured}
+                  onChange={(event) => set('featured', event.target.checked)}
+                />{' '}
+                Featured product
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={values.showWhenOutOfStock}
+                  onChange={(event) => set('showWhenOutOfStock', event.target.checked)}
+                />{' '}
+                Show when sold out
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={values.restockNotificationsEnabled}
+                  onChange={(event) => set('restockNotificationsEnabled', event.target.checked)}
+                />{' '}
+                Enable restock notification
+              </label>
+            </div>
+            <FieldRow>
+              <Field
+                label="Featured position"
+                htmlFor="featuredPosition"
+                hint="Lower appears first"
+              >
+                <Input
+                  id="featuredPosition"
+                  numeric
+                  inputMode="numeric"
+                  value={values.featuredPosition}
+                  onChange={(event) => set('featuredPosition', event.target.value)}
+                />
+              </Field>
+              <Field label="New until" htmlFor="newUntil">
+                <Input
+                  id="newUntil"
+                  type="date"
+                  value={values.newUntil}
+                  onChange={(event) => set('newUntil', event.target.value)}
+                />
+              </Field>
+            </FieldRow>
             <Field label="Internal notes" htmlFor="notes" hint="Never shown publicly">
               <Textarea
                 id="notes"

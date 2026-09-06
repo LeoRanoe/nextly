@@ -4,6 +4,7 @@ import {
   categorySchema,
   compatibilitySchema,
   productRelationshipSchema,
+  productSchema,
   restockRequestSchema,
 } from '@/lib/schemas';
 
@@ -19,6 +20,56 @@ describe('storefront schemas', () => {
       protocols: ['Matter'],
       ecosystems: ['Home Assistant'],
     });
+  });
+  it('accepts complete before-you-buy requirements without flattening their meaning', () => {
+    const value = compatibilitySchema.parse({ platforms: [], protocols: [], ecosystems: [] });
+    expect(value.protocols).toEqual([]);
+    const product = productSchema.parse({
+      code: 'CAM-TEST',
+      name: 'Camera',
+      slug: 'camera',
+      categoryId: null,
+      supplierId: null,
+      brandId: null,
+      sourceUrl: '',
+      summary: '',
+      description: '',
+      specs: {},
+      modelNumber: '',
+      keyFeatures: [],
+      bestFor: [],
+      compatibility: value,
+      buyerRequirements: {
+        accountRequired: true,
+        subscription: 'optional',
+        subscriptionNotes: 'Cloud history is optional',
+        batteryType: 'Rechargeable',
+        neutralWireRequired: true,
+        regionalNotes: 'Use the local power adapter.',
+      },
+      boxContents: [],
+      nextlyTake: '',
+      faqItems: [],
+      featured: false,
+      showWhenOutOfStock: true,
+      restockNotificationsEnabled: false,
+      status: 'draft',
+      warrantyMonths: 0,
+      catalogPublished: false,
+      notes: '',
+      variants: [
+        {
+          name: 'Standard',
+          sku: 'CAM-TEST-STD',
+          listPriceCents: '100',
+          referenceCostCents: '0',
+          isActive: true,
+          isDefault: true,
+        },
+      ],
+    });
+    expect(product.buyerRequirements?.subscription).toBe('optional');
+    expect(product.buyerRequirements?.neutralWireRequired).toBe(true);
   });
   it('rejects malformed restock interest before it reaches the database', () => {
     expect(() =>
