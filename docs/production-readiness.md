@@ -50,6 +50,23 @@ The application prepares draft purchase orders only. It never places an order
 with Amazon or AliExpress automatically; a person must review and raise the PO
 and then place the supplier order externally.
 
+## Storefront E2E fixtures
+
+The storefront browser tests are intentionally inert until they are pointed at
+an isolated staging database. Never supply these values for production.
+
+Set `E2E_ISOLATED_STAGING=1`, `E2E_EMAIL`, and `E2E_PASSWORD`, then provide a
+real published fixture product through `E2E_PUBLIC_PRODUCT_SLUG`. Optional
+`E2E_PUBLIC_PRODUCT_NAME`, `E2E_PUBLIC_VARIANT_NAME`, and
+`E2E_PUBLIC_COLLECTION_SLUG` make the catalog assertions more specific.
+
+For the mutating restock scenario, configure a published, sold-out product
+with restock notifications enabled via `E2E_RESTOCK_PRODUCT_SLUG` and
+`E2E_RESTOCK_VARIANT_NAME`. For the dashboard save scenario, configure
+`E2E_DASHBOARD_PRODUCT_ID`. The tests use these fixture records; they do not
+seed customer-facing stock, reviews, or marketing content. Keep the fixtures
+out of production because the restock test intentionally creates one request.
+
 ## Weekly reorder automation
 
 `vercel.json` calls `/api/cron/reorder` every Monday at 12:00 UTC. That is
