@@ -73,6 +73,25 @@ const CATALOG_SORT_CLAUSES: Record<CatalogSort, ReturnType<typeof sql>> = {
   'price-desc': sql`price.max_price DESC NULLS LAST, p.name ASC`,
 };
 
+/** A product that the operator has chosen to hide while sold out is not part
+ * of the public catalog at all. Keep this predicate in every public read
+ * model, including filter/navigation option queries, so a visitor is never
+ * offered a path that resolves to an empty catalog. */
+const PUBLIC_STOCK_VISIBILITY = sql`
+  (
+    p.show_when_out_of_stock
+    OR EXISTS (
+      SELECT 1
+        FROM product_variants public_stock_variant
+        JOIN v_stock_levels public_stock_level
+          ON public_stock_level.variant_id = public_stock_variant.id
+       WHERE public_stock_variant.product_id = p.id
+         AND public_stock_variant.is_active
+         AND public_stock_level.on_hand > 0
+    )
+  )
+`;
+
 export async function listCatalogProducts(
   params: {
     q?: string;
@@ -150,7 +169,7 @@ export async function listCatalogProducts(
        WHERE v.product_id = p.id AND v.is_active AND v.list_price_cents > 0
     ) price ON true
     WHERE p.catalog_published AND p.status = 'active'
-      AND (p.show_when_out_of_stock OR EXISTS (SELECT 1 FROM product_variants sv JOIN v_stock_levels ss ON ss.variant_id = sv.id WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0))
+      AND ${PUBLIC_STOCK_VISIBILITY}
       AND (${category}::text IS NULL OR c.slug = ${category})
       AND (${collection}::text IS NULL OR EXISTS (SELECT 1 FROM storefront_collection_products fcp JOIN storefront_collections fc ON fc.id = fcp.collection_id WHERE fcp.product_id = p.id AND fc.active AND fc.slug = ${collection}))
       AND (${brand}::text IS NULL OR b.slug = ${brand})
@@ -205,13 +224,13 @@ export async function listCatalogFilterOptions(): Promise<CatalogFilterOptions> 
   if (!isDatabaseConfigured()) return { brands: [], platforms: [], protocols: [] };
   const [brands, platforms, protocols] = await Promise.all([
     db.execute<Record<string, string>>(
-      sql`SELECT DISTINCT b.name, b.slug FROM products p JOIN brands b ON b.id = p.brand_id WHERE p.catalog_published AND p.status = 'active' AND b.active ORDER BY b.name`,
+      sql`SELECT DISTINCT b.name, b.slug FROM products p JOIN brands b ON b.id = p.brand_id WHERE p.catalog_published AND p.status = 'active' AND b.active AND ${PUBLIC_STOCK_VISIBILITY} ORDER BY b.name`,
     ),
     db.execute<Record<string, string>>(
-      sql`SELECT DISTINCT value AS name FROM products p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.compatibility->'platforms', '[]'::jsonb)) value WHERE p.catalog_published AND p.status = 'active' ORDER BY name`,
+      sql`SELECT DISTINCT value AS name FROM products p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.compatibility->'platforms', '[]'::jsonb)) value WHERE p.catalog_published AND p.status = 'active' AND ${PUBLIC_STOCK_VISIBILITY} ORDER BY name`,
     ),
     db.execute<Record<string, string>>(
-      sql`SELECT DISTINCT value AS name FROM products p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.compatibility->'protocols', '[]'::jsonb)) value WHERE p.catalog_published AND p.status = 'active' ORDER BY name`,
+      sql`SELECT DISTINCT value AS name FROM products p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.compatibility->'protocols', '[]'::jsonb)) value WHERE p.catalog_published AND p.status = 'active' AND ${PUBLIC_STOCK_VISIBILITY} ORDER BY name`,
     ),
   ]);
   return {
@@ -233,6 +252,7 @@ export async function listCatalogCategories(): Promise<CatalogCategory[]> {
       FROM products p
       JOIN categories c ON c.id = p.category_id
      WHERE p.catalog_published AND p.status = 'active' AND c.show_in_storefront_nav
+       AND ${PUBLIC_STOCK_VISIBILITY}
      GROUP BY c.slug, c.name, c.position
      ORDER BY c.position, c.name
   `);
@@ -338,6 +358,7 @@ export async function listHomepageCollections(): Promise<StorefrontCollection[]>
       FROM storefront_collections sc
       JOIN storefront_collection_products cp ON cp.collection_id = sc.id
       JOIN products p ON p.id = cp.product_id AND p.catalog_published AND p.status = 'active'
+                    AND ${PUBLIC_STOCK_VISIBILITY}
      WHERE sc.active AND sc.homepage_visible
      GROUP BY sc.id
      ORDER BY sc.position, sc.name
@@ -399,15 +420,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN brands b ON b.id = p.brand_id
     WHERE p.slug = ${slug} AND p.catalog_published AND p.status = 'active'
-      AND (
-        p.show_when_out_of_stock
-        OR EXISTS (
-          SELECT 1
-            FROM product_variants sv
-            JOIN v_stock_levels ss ON ss.variant_id = sv.id
-           WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0
-        )
-      )
+      AND ${PUBLIC_STOCK_VISIBILITY}
     LIMIT 1
   `);
 
