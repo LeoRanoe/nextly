@@ -16,7 +16,9 @@ import { getSettings } from '@/server/queries/reference';
 export async function StoreHero() {
   const settings = await getSettings();
   const heroTitle = settings?.heroTitle?.trim() || 'Switch to smart.\nSwitch to Nextly.';
-  const heroBody = settings?.heroBody?.trim() || 'Connected devices for your home, imported and stocked in Paramaribo. What shows as in stock is on the shelf right now, priced in SRD and ready to collect today.';
+  const heroBody =
+    settings?.heroBody?.trim() ||
+    'Connected devices for your home, imported and stocked in Paramaribo. What shows as in stock is on the shelf right now, priced in SRD and ready to collect today.';
   return (
     <section className="store-hero-field mb-10 w-full px-4 pt-16 pb-14 lg:px-6 lg:pt-20 lg:pb-16">
       <div className="mx-auto max-w-3xl text-center">
@@ -25,7 +27,18 @@ export async function StoreHero() {
           Smart home · Paramaribo, Suriname
         </span>
         <h1 className="mt-5 text-[34px] font-semibold text-ink leading-[1.06] tracking-[-0.03em] sm:text-[46px] lg:text-[54px]">
-          {heroTitle.split('\n').map((line, index) => <span key={line}>{index > 0 ? <><br /><span className="text-accent">{line}</span></> : line}</span>)}
+          {heroTitle.split('\n').map((line, index) => (
+            <span key={line}>
+              {index > 0 ? (
+                <>
+                  <br />
+                  <span className="text-accent">{line}</span>
+                </>
+              ) : (
+                line
+              )}
+            </span>
+          ))}
         </h1>
         <p className="mx-auto mt-4 max-w-[54ch] text-[15px] text-ink-2 leading-relaxed sm:text-[16px]">
           {heroBody}
@@ -35,12 +48,18 @@ export async function StoreHero() {
             href="#catalog"
             className="inline-flex h-12 items-center rounded-full bg-accent px-7 text-[15px] font-bold text-accent-fg shadow-lg shadow-accent/25 transition-all duration-150 ease-out-instrument hover:bg-accent-hover hover:shadow-xl hover:shadow-accent/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
-            Browse the catalog
+            Shop smart home
           </a>
           <Suspense fallback={<HeroCtaFallback />}>
             <HeroWhatsApp />
           </Suspense>
         </div>
+        <ul className="mt-7 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] font-medium text-ink-3">
+          <li>Local stock in Paramaribo</li>
+          <li>SRD pricing</li>
+          {settings?.pickupEnabled ? <li>Pickup available</li> : null}
+          {settings?.whatsapp ? <li>WhatsApp support</li> : null}
+        </ul>
       </div>
     </section>
   );
@@ -51,8 +70,8 @@ async function HeroWhatsApp() {
   return (
     <WhatsAppCta
       number={settings?.whatsapp ?? null}
-      message="Hallo Nextly, ik heb een vraag over jullie smart home producten."
-      label="Ask us on WhatsApp"
+      message="Hi Nextly, I have a question about smart-home products."
+      label="Ask Nextly"
       className="h-11 rounded-full px-6 text-[14px]"
     />
   );
@@ -63,7 +82,7 @@ async function HeroWhatsApp() {
 function HeroCtaFallback() {
   return (
     <span className="inline-flex h-11 items-center rounded-full border border-line bg-raised px-6 text-[14px] font-medium text-ink-3">
-      Ask us on WhatsApp
+      Ask Nextly
     </span>
   );
 }
@@ -76,8 +95,10 @@ function HeroCtaFallback() {
  *  that can drift from the settings row. */
 export async function StoreValues() {
   const settings = await getSettings();
-  const supportTitle = settings?.supportTitle?.trim() || 'Not sure if something works with your setup?';
-  const supportBody = settings?.supportBody?.trim() || 'Tell us what you already use and we’ll help you choose.';
+  const supportTitle =
+    settings?.supportTitle?.trim() || 'Not sure if something works with your setup?';
+  const supportBody =
+    settings?.supportBody?.trim() || 'Tell us what you already use and we’ll help you choose.';
   return (
     <section className="mt-16 border-line-subtle border-t pt-12">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start lg:gap-16">
@@ -105,9 +126,7 @@ export async function StoreValues() {
             <dt className="text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
               {supportTitle}
             </dt>
-            <dd className="mt-1.5 text-[14px] text-ink-2 leading-relaxed">
-              {supportBody}
-            </dd>
+            <dd className="mt-1.5 text-[14px] text-ink-2 leading-relaxed">{supportBody}</dd>
           </div>
         </dl>
       </div>

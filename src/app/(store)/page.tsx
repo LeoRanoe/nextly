@@ -14,6 +14,7 @@ import { StoreHero, StoreValues } from '@/components/store/store-hero';
 import { StorePrice } from '@/components/store/store-price';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { RateMicros } from '@/lib/fx';
 import type { RawSearchParams } from '@/lib/list-params';
 import {
   type CatalogSort as CatalogSortValue,
@@ -61,6 +62,12 @@ export default function CatalogPage({
       </Suspense>
       <Suspense fallback={null}>
         <BundleSection />
+      </Suspense>
+      <Suspense fallback={null}>
+        <NewArrivalsSection />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ComingNextSection />
       </Suspense>
 
       <section
@@ -156,6 +163,70 @@ async function GoalCollections() {
               {collection.productCount} product{collection.productCount === 1 ? '' : 's'} →
             </p>
           </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+async function NewArrivalsSection() {
+  const [products, rate, settings] = await Promise.all([
+    listCatalogProducts({ newArrival: true, limit: 4 }),
+    getCurrentRate(),
+    getSettings(),
+  ]);
+  if (!products.length) return null;
+  return (
+    <ProductStrip
+      eyebrow="Just arrived"
+      title="New products, with a real arrival window."
+      products={products}
+      rate={rate?.rateMicros}
+      whatsapp={settings?.whatsapp ?? null}
+    />
+  );
+}
+
+async function ComingNextSection() {
+  const [products, rate, settings] = await Promise.all([
+    listCatalogProducts({ availability: 'incoming', limit: 4 }),
+    getCurrentRate(),
+    getSettings(),
+  ]);
+  if (!products.length) return null;
+  return (
+    <ProductStrip
+      eyebrow="Coming next"
+      title="Already on the way to Paramaribo."
+      products={products}
+      rate={rate?.rateMicros}
+      whatsapp={settings?.whatsapp ?? null}
+    />
+  );
+}
+
+function ProductStrip({
+  eyebrow,
+  title,
+  products,
+  rate,
+  whatsapp,
+}: {
+  eyebrow: string;
+  title: string;
+  products: Awaited<ReturnType<typeof listCatalogProducts>>;
+  rate: RateMicros | undefined;
+  whatsapp: string | null;
+}) {
+  return (
+    <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6">
+      <p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">
+        {eyebrow}
+      </p>
+      <h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-ink">{title}</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {products.map((product) => (
+          <ProductCard key={product.id} product={product} srdRate={rate} whatsapp={whatsapp} />
         ))}
       </div>
     </section>
