@@ -38,6 +38,10 @@ const privateRoutes = [
   '/sales',
   '/sales/new',
   '/settings',
+  '/storefront',
+  '/storefront/collections',
+  '/storefront/homepage',
+  '/storefront/restock',
   '/suppliers',
 ];
 
@@ -68,6 +72,7 @@ test('invalid public identifiers return intentional not-found responses', async 
 }) => {
   for (const route of [
     '/p/not-a-real-product',
+    '/setups/not-a-real-setup',
     '/d/invoice/not-a-real-token',
     '/d/quote/not-a-real-token',
     '/d/invoice/x',
@@ -89,6 +94,7 @@ test('owner can open every authenticated index and create route', async ({ page 
 test('valid public product and document links render without login', async ({ request }) => {
   const fixtures = [
     process.env.E2E_PRODUCT_SLUG ? `/p/${process.env.E2E_PRODUCT_SLUG}` : null,
+    process.env.E2E_BUNDLE_SLUG ? `/setups/${process.env.E2E_BUNDLE_SLUG}` : null,
     process.env.E2E_INVOICE_TOKEN ? `/d/invoice/${process.env.E2E_INVOICE_TOKEN}` : null,
     process.env.E2E_QUOTE_TOKEN ? `/d/quote/${process.env.E2E_QUOTE_TOKEN}` : null,
   ].filter((route): route is string => Boolean(route));
