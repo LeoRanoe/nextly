@@ -31,6 +31,17 @@ const blank = () => ({
   sku: '',
   name: '',
   description: '',
+  slug: '',
+  summary: '',
+  storefrontImageUrl: '',
+  bestFor: '',
+  compatibilityNotes: '',
+  nextlyTake: '',
+  seoTitle: '',
+  seoDescription: '',
+  catalogPublished: false,
+  featured: false,
+  position: '0',
   price: '',
   components: [newComponent()],
 });
@@ -103,6 +114,17 @@ export function BundleManager({
       sku: bundle.sku,
       name: bundle.name,
       description: bundle.description ?? '',
+      slug: bundle.slug ?? '',
+      summary: bundle.summary ?? '',
+      storefrontImageUrl: bundle.storefrontImageUrl ?? '',
+      bestFor: bundle.bestFor.join('\n'),
+      compatibilityNotes: bundle.compatibilityNotes ?? '',
+      nextlyTake: bundle.nextlyTake ?? '',
+      seoTitle: bundle.seoTitle ?? '',
+      seoDescription: bundle.seoDescription ?? '',
+      catalogPublished: bundle.catalogPublished,
+      featured: bundle.featured,
+      position: String(bundle.position),
       price: toDecimalString(bundle.priceCents),
       components: bundle.components.map((component) => ({
         key: crypto.randomUUID(),
@@ -124,6 +146,20 @@ export function BundleManager({
       sku: draft.sku,
       name: draft.name,
       description: draft.description || undefined,
+      slug: draft.slug || undefined,
+      summary: draft.summary || undefined,
+      storefrontImageUrl: draft.storefrontImageUrl || undefined,
+      bestFor: draft.bestFor
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      compatibilityNotes: draft.compatibilityNotes || undefined,
+      nextlyTake: draft.nextlyTake || undefined,
+      seoTitle: draft.seoTitle || undefined,
+      seoDescription: draft.seoDescription || undefined,
+      catalogPublished: draft.catalogPublished,
+      featured: draft.featured,
+      position: Number(draft.position) || 0,
       priceCents: draft.price || '0',
       components,
     };
@@ -232,6 +268,133 @@ export function BundleManager({
               placeholder="What the customer gets"
             />
           </Field>
+          <div className="border-t border-line-subtle pt-3">
+            <p className="mb-3 text-[11px] text-ink-4 uppercase tracking-[.06em]">Storefront</p>
+            <div className="space-y-3">
+              <Field label="Public slug" htmlFor="bundle-slug" hint="Required to publish">
+                <Input
+                  id="bundle-slug"
+                  value={draft.slug}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, slug: event.target.value }))
+                  }
+                  placeholder="camera-bundle"
+                />
+              </Field>
+              <Field label="Summary" htmlFor="bundle-summary" hint="Short card description">
+                <Textarea
+                  id="bundle-summary"
+                  value={draft.summary}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, summary: event.target.value }))
+                  }
+                  rows={2}
+                />
+              </Field>
+              <Field label="Best for" htmlFor="bundle-best-for" hint="One use case per line">
+                <Textarea
+                  id="bundle-best-for"
+                  value={draft.bestFor}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, bestFor: event.target.value }))
+                  }
+                  rows={2}
+                />
+              </Field>
+              <Field label="Compatibility notes" htmlFor="bundle-compatibility">
+                <Textarea
+                  id="bundle-compatibility"
+                  value={draft.compatibilityNotes}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      compatibilityNotes: event.target.value,
+                    }))
+                  }
+                  rows={2}
+                />
+              </Field>
+              <Field label="Nextly's take" htmlFor="bundle-take">
+                <Textarea
+                  id="bundle-take"
+                  value={draft.nextlyTake}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, nextlyTake: event.target.value }))
+                  }
+                  rows={2}
+                />
+              </Field>
+              <Field label="Storefront image URL" htmlFor="bundle-image">
+                <Input
+                  id="bundle-image"
+                  type="url"
+                  value={draft.storefrontImageUrl}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      storefrontImageUrl: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Position" htmlFor="bundle-position">
+                  <Input
+                    id="bundle-position"
+                    type="number"
+                    min="0"
+                    numeric
+                    value={draft.position}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, position: event.target.value }))
+                    }
+                  />
+                </Field>
+                <label className="flex items-end gap-2 pb-2 text-[13px] text-ink">
+                  <input
+                    type="checkbox"
+                    checked={draft.featured}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, featured: event.target.checked }))
+                    }
+                  />{' '}
+                  Featured
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-[13px] text-ink">
+                <input
+                  type="checkbox"
+                  checked={draft.catalogPublished}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      catalogPublished: event.target.checked,
+                    }))
+                  }
+                />{' '}
+                Publish to storefront
+              </label>
+              <Field label="SEO title" htmlFor="bundle-seo-title">
+                <Input
+                  id="bundle-seo-title"
+                  value={draft.seoTitle}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, seoTitle: event.target.value }))
+                  }
+                />
+              </Field>
+              <Field label="SEO description" htmlFor="bundle-seo-description">
+                <Textarea
+                  id="bundle-seo-description"
+                  value={draft.seoDescription}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, seoDescription: event.target.value }))
+                  }
+                  rows={2}
+                />
+              </Field>
+            </div>
+          </div>
           <div className="space-y-2">
             <p className="text-[11px] text-ink-4 uppercase tracking-[.06em]">Components</p>
             {draft.components.map((component, index) => (

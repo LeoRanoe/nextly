@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bundleSchema,
   categorySchema,
   compatibilitySchema,
   productRelationshipSchema,
@@ -51,5 +52,18 @@ describe('storefront schemas', () => {
     });
     expect(value).toMatchObject({ position: 4, showInStorefrontNav: false, featured: true });
     expect(value.storefrontDescription).toBeUndefined();
+  });
+  it('requires a slug before publishing a bundle publicly', () => {
+    const base = {
+      sku: 'BND-CAM',
+      name: 'Camera bundle',
+      priceCents: '100',
+      components: [{ variantId: '00000000-0000-4000-8000-000000000001', quantity: '1' }],
+    };
+    expect(bundleSchema.safeParse({ ...base, catalogPublished: true }).success).toBe(false);
+    expect(
+      bundleSchema.safeParse({ ...base, slug: 'camera-bundle', catalogPublished: true })
+        .success,
+    ).toBe(true);
   });
 });

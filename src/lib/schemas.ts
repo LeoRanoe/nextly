@@ -312,13 +312,46 @@ export const bundleComponentSchema = z.object({
   quantity,
 });
 
-export const bundleSchema = z.object({
-  sku: z.string().trim().min(1, 'Required').max(64),
-  name: shortText,
-  description: optionalText,
-  priceCents: moneyInput,
-  components: z.array(bundleComponentSchema).min(1, 'Add at least one component'),
-});
+export const bundleSchema = z
+  .object({
+    sku: z.string().trim().min(1, 'Required').max(64),
+    name: shortText,
+    description: optionalText,
+    slug: z
+      .union([
+        z
+          .string()
+          .trim()
+          .max(120)
+          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
+        z.literal(''),
+      ])
+      .transform((value) => value || undefined)
+      .optional(),
+    summary: optionalText,
+    storefrontImageUrl: z
+      .union([z.string().trim().url('Not a valid URL'), z.literal('')])
+      .transform((value) => value || undefined)
+      .optional(),
+    bestFor: stringList,
+    compatibilityNotes: optionalText,
+    nextlyTake: optionalText,
+    seoTitle: optionalText,
+    seoDescription: optionalText,
+    catalogPublished: z.boolean().default(false),
+    featured: z.boolean().default(false),
+    position: z.coerce.number().int().min(0).max(10_000).default(0),
+    priceCents: moneyInput,
+    components: z.array(bundleComponentSchema).min(1, 'Add at least one component'),
+  })
+  .superRefine((value, ctx) => {
+    if (value.catalogPublished && !value.slug)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['slug'],
+        message: 'A public bundle needs a slug.',
+      });
+  });
 
 export const customerSchema = z.object({
   name: shortText,

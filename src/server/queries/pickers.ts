@@ -4,6 +4,17 @@ import type { Cents } from '@/lib/money';
 import { db } from '../db/client';
 import { bool, maybe, num, text } from './row';
 
+function parseStringArray(value: string | null | undefined): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * The `isDatabaseConfigured()` guard on each function below is a SETUP state,
  * not an outage. Only an ABSENT connection string returns empty; a failing
@@ -93,6 +104,17 @@ export type BundleOption = {
   sku: string;
   name: string;
   description: string | null;
+  slug: string | null;
+  summary: string | null;
+  storefrontImageUrl: string | null;
+  bestFor: string[];
+  compatibilityNotes: string | null;
+  nextlyTake: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  catalogPublished: boolean;
+  featured: boolean;
+  position: number;
   priceCents: Cents;
   availability: number;
   componentRetailCents: Cents;
@@ -104,7 +126,9 @@ export async function listBundleOptions(): Promise<BundleOption[]> {
   if (!isDatabaseConfigured()) return [];
   const [headers, componentRows] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
-      SELECT id, sku, name, description, price_cents::text
+      SELECT id, sku, name, description, slug, summary, storefront_image_url,
+             best_for, compatibility_notes, nextly_take, seo_title, seo_description,
+             catalog_published::text, featured::text, position::text, price_cents::text
       FROM bundles WHERE is_active = true ORDER BY name
     `),
     db.execute<Record<string, string | null>>(sql`
@@ -144,6 +168,17 @@ export async function listBundleOptions(): Promise<BundleOption[]> {
       sku: text(row.sku),
       name: text(row.name),
       description: maybe(row.description),
+      slug: maybe(row.slug),
+      summary: maybe(row.summary),
+      storefrontImageUrl: maybe(row.storefront_image_url),
+      bestFor: parseStringArray(row.best_for),
+      compatibilityNotes: maybe(row.compatibility_notes),
+      nextlyTake: maybe(row.nextly_take),
+      seoTitle: maybe(row.seo_title),
+      seoDescription: maybe(row.seo_description),
+      catalogPublished: bool(row.catalog_published),
+      featured: bool(row.featured),
+      position: num(row.position),
       priceCents: num(row.price_cents),
       components,
       availability: components.length
@@ -188,7 +223,9 @@ export async function listCategoryOptions(): Promise<Option[]> {
 
 export async function listBrandOptions(): Promise<Option[]> {
   if (!isDatabaseConfigured()) return [];
-  const rows = await db.execute<Record<string, string | null>>(sql`SELECT id, name FROM brands WHERE active ORDER BY name`);
+  const rows = await db.execute<Record<string, string | null>>(
+    sql`SELECT id, name FROM brands WHERE active ORDER BY name`,
+  );
   return rows.map((row) => ({ id: text(row.id), label: text(row.name) }));
 }
 
