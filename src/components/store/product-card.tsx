@@ -39,6 +39,16 @@ export function ProductCard({
   const hasRange = product.maxPriceCents > product.minPriceCents;
   const isNew = product.newUntil ? Date.parse(product.newUntil) >= Date.now() : false;
   const spotlight = size === 'spotlight';
+  const quickSignals = [
+    ...product.compatibility.platforms,
+    ...product.compatibility.protocols,
+    ...product.compatibility.ecosystems,
+    ...(product.buyerRequirements.hubRequired === false ? ['No hub required'] : []),
+    ...(product.buyerRequirements.indoorOutdoor === 'outdoor' ? ['Outdoor'] : []),
+    ...(product.buyerRequirements.indoorOutdoor === 'indoor-outdoor'
+      ? ['Indoor & outdoor']
+      : []),
+  ].slice(0, 3);
 
   return (
     <div className="store-card group relative flex flex-col overflow-hidden">
@@ -58,7 +68,11 @@ export function ProductCard({
               : 'bg-store-navy/80 text-white backdrop-blur-sm'
           }`}
         >
-          {inStock ? `${product.onHand} in stock` : product.incoming > 0 ? `${product.incoming} on the way` : 'Sold out'}
+          {inStock
+            ? `${product.onHand} in stock`
+            : product.incoming > 0
+              ? `${product.incoming} on the way`
+              : 'Sold out'}
         </span>
         {isNew && inStock ? (
           <span className="pointer-events-none absolute top-3 right-3 z-10 rounded-control bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
@@ -113,19 +127,23 @@ export function ProductCard({
             {product.summary}
           </p>
         ) : null}
-        {!inStock && product.incoming > 0 ? <p className="text-[11px] text-ink-3">{product.expectedAt ? `Expected around ${new Intl.DateTimeFormat('en-SR', { day: 'numeric', month: 'short' }).format(new Date(product.expectedAt))}` : 'Incoming stock confirmed'}</p> : null}
-        {product.compatibility.platforms.length || product.compatibility.protocols.length ? (
+        {!inStock && product.incoming > 0 ? (
+          <p className="text-[11px] text-ink-3">
+            {product.expectedAt
+              ? `Expected around ${new Intl.DateTimeFormat('en-SR', { day: 'numeric', month: 'short' }).format(new Date(product.expectedAt))}`
+              : 'Incoming stock confirmed'}
+          </p>
+        ) : null}
+        {quickSignals.length ? (
           <div className="flex flex-wrap gap-1 pt-1">
-            {[...product.compatibility.platforms, ...product.compatibility.protocols]
-              .slice(0, 3)
-              .map((item) => (
-                <span
-                  key={item}
-                  className="rounded-control border border-line px-1.5 py-0.5 text-[10px] text-ink-3"
-                >
-                  {item}
-                </span>
-              ))}
+            {quickSignals.map((item) => (
+              <span
+                key={item}
+                className="rounded-control border border-line px-1.5 py-0.5 text-[10px] text-ink-3"
+              >
+                {item}
+              </span>
+            ))}
           </div>
         ) : null}
 
@@ -139,10 +157,10 @@ export function ProductCard({
         </div>
         <WhatsAppCta
           number={whatsapp}
-          message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
-            inStock ? '. Is het op voorraad?' : '. Wanneer komt de volgende levering?'
+          message={`Hi Nextly, I’m interested in ${product.name}${
+            inStock ? '. Is it in stock?' : '. When is the next delivery expected?'
           }`}
-          label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
+          label={inStock ? 'Ask Nextly' : 'Ask about restock'}
           size="md"
           className={cn('relative z-10 mt-2 self-stretch rounded-full', spotlight && 'h-10')}
         />

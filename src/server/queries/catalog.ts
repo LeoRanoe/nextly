@@ -37,6 +37,10 @@ export type CatalogListItem = {
   categorySlug: string | null;
   brandName: string | null;
   compatibility: { platforms: string[]; protocols: string[]; ecosystems: string[] };
+  buyerRequirements: {
+    hubRequired?: boolean;
+    indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor';
+  };
   newUntil: string | null;
   /** Units on hand across the product's active variants. */
   onHand: number;
@@ -109,7 +113,7 @@ export async function listCatalogProducts(
     SELECT
       p.id, p.name, p.slug, p.summary, p.created_at::text AS created_at, p.new_until::text AS new_until,
       c.name AS category_name, c.slug AS category_slug,
-      b.name AS brand_name, p.compatibility::text AS compatibility,
+      b.name AS brand_name, p.compatibility::text AS compatibility, p.buyer_requirements::text AS buyer_requirements,
       COALESCE((
         SELECT SUM(s.on_hand)
           FROM product_variants v
@@ -168,6 +172,7 @@ export async function listCatalogProducts(
     categorySlug: maybe(row.category_slug),
     brandName: maybe(row.brand_name),
     compatibility: parseCompatibility(row.compatibility ?? null),
+    buyerRequirements: parseBuyerRequirements(row.buyer_requirements ?? null),
     newUntil: maybe(row.new_until),
     onHand: num(row.on_hand),
     incoming: num(row.incoming),
@@ -502,6 +507,18 @@ function parseCompatibility(value: string | null) {
     ecosystems: Array.isArray(record.ecosystems)
       ? record.ecosystems.filter((item): item is string => typeof item === 'string')
       : [],
+  };
+}
+function parseBuyerRequirements(value: string | null): CatalogListItem['buyerRequirements'] {
+  const record = parseObject(value);
+  const indoorOutdoor = record.indoorOutdoor;
+  return {
+    ...(typeof record.hubRequired === 'boolean' ? { hubRequired: record.hubRequired } : {}),
+    ...(indoorOutdoor === 'indoor' ||
+    indoorOutdoor === 'outdoor' ||
+    indoorOutdoor === 'indoor-outdoor'
+      ? { indoorOutdoor }
+      : {}),
   };
 }
 function parseFaqItems(value: string | null): { question: string; answer: string }[] {
