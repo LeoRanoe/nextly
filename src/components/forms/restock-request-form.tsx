@@ -3,9 +3,9 @@
 import { useAction } from 'next-safe-action/hooks';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { createRestockRequest } from '@/server/actions/restock';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
+import { createRestockRequest } from '@/server/actions/restock';
 
 export function RestockRequestForm({
   productId,
@@ -16,6 +16,7 @@ export function RestockRequestForm({
 }) {
   const [contact, setContact] = useState('');
   const [channel, setChannel] = useState<'whatsapp' | 'email'>('whatsapp');
+  const [website, setWebsite] = useState('');
   const { execute, isPending } = useAction(createRestockRequest, {
     onSuccess: () => {
       setContact('');
@@ -28,12 +29,25 @@ export function RestockRequestForm({
       className="mt-3 flex flex-col gap-2 sm:flex-row"
       onSubmit={(event) => {
         event.preventDefault();
-        execute({ productId, variantId: variantId ?? null, contact, channel });
+        execute({ productId, variantId: variantId ?? null, contact, channel, website });
       }}
     >
       <label className="sr-only" htmlFor="restock-contact">
         WhatsApp number or email
       </label>
+      <label className="sr-only" htmlFor="restock-website" aria-hidden="true">
+        Website
+      </label>
+      <input
+        id="restock-website"
+        name="website"
+        value={website}
+        onChange={(event) => setWebsite(event.target.value)}
+        tabIndex={-1}
+        autoComplete="off"
+        className="hidden"
+        aria-hidden="true"
+      />
       <Input
         id="restock-contact"
         required

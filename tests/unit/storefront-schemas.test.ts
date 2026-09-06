@@ -81,6 +81,17 @@ describe('storefront schemas', () => {
       }),
     ).toThrow();
   });
+  it('rejects restock honeypot input before it reaches the database', () => {
+    expect(
+      restockRequestSchema.safeParse({
+        productId: '00000000-0000-4000-8000-000000000001',
+        variantId: null,
+        contact: '5978000000',
+        channel: 'whatsapp',
+        website: 'https://bot.example',
+      }).success,
+    ).toBe(false);
+  });
   it('rejects a product relationship pointing back to itself', () => {
     const id = '00000000-0000-4000-8000-000000000001';
     expect(() =>

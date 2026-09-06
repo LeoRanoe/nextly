@@ -213,6 +213,8 @@ export const restockRequestSchema = z.object({
   name: optionalText,
   contact: z.string().trim().min(3, 'Enter a WhatsApp number or email').max(200),
   channel: z.enum(['whatsapp', 'email']),
+  /** Hidden field. Legitimate forms leave it empty; basic bots often do not. */
+  website: z.string().max(0).optional(),
 });
 export const restockRequestStatusSchema = z.object({
   id: uuid,
