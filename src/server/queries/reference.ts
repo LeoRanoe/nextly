@@ -556,6 +556,8 @@ export type ProductDetail = {
     width: number;
     height: number;
     alt: string | null;
+    variantId: string | null;
+    purpose: 'product' | 'packaging' | 'lifestyle' | 'box_contents';
     isPrimary: boolean;
     position: number;
   }[];
@@ -591,7 +593,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
        ORDER BY v.position
     `),
     db.execute<Record<string, string | null>>(sql`
-      SELECT id, url, thumb_url, width::text, height::text, alt,
+      SELECT id, url, thumb_url, width::text, height::text, alt, variant_id, purpose,
              is_primary::text AS is_primary, position::text
         FROM product_images
        WHERE product_id = ${id}
@@ -650,6 +652,8 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
       width: num(image.width),
       height: num(image.height),
       alt: maybe(image.alt),
+      variantId: maybe(image.variant_id),
+      purpose: text(image.purpose) as ProductDetail['images'][number]['purpose'],
       isPrimary: bool(image.is_primary),
       position: num(image.position),
     })),

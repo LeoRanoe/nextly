@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { useMember } from '@/components/providers/member-provider';
 import { ConfirmDialog } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Input, Select } from '@/components/ui/field';
 import { Surface, SurfaceHeader } from '@/components/ui/surface';
 import { cn } from '@/lib/cn';
 import {
@@ -25,6 +26,7 @@ import {
   removeProductImage,
   reorderProductImages,
   setPrimaryProductImage,
+  updateProductImageDetails,
 } from '@/server/actions/media';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
@@ -37,6 +39,8 @@ export type ProductImageValue = {
   width: number;
   height: number;
   alt: string | null;
+  variantId: string | null;
+  purpose: 'product' | 'packaging' | 'lifestyle' | 'box_contents';
   isPrimary: boolean;
 };
 
@@ -60,9 +64,11 @@ export type ProductImageValue = {
 export function ProductImages({
   productId,
   initial,
+  variants,
 }: {
   productId: string;
   initial: ProductImageValue[];
+  variants: { id: string; name: string; sku: string }[];
 }) {
   const router = useRouter();
   const { role } = useMember();
@@ -88,6 +94,13 @@ export function ProductImages({
       router.refresh();
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Could not remove the image'),
+  });
+  const detailsAction = useAction(updateProductImageDetails, {
+    onSuccess: () => {
+      toast.success('Image details saved');
+      router.refresh();
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Could not save image details'),
   });
 
   async function handleFiles(files: FileList | null) {
@@ -245,6 +258,14 @@ export function ProductImages({
                   ) : null}
                 </div>
               </div>
+              <ImageDetails
+                image={image}
+                variants={variants}
+                pending={detailsAction.isPending}
+                onSave={(details) =>
+                  detailsAction.execute({ id: image.id, productId, ...details })
+                }
+              />
             </div>
           ))}
 
@@ -284,6 +305,82 @@ export function ProductImages({
         </p>
       ) : null}
     </Surface>
+  );
+}
+
+function ImageDetails({
+  image,
+  variants,
+  pending,
+  onSave,
+}: {
+  image: ProductImageValue;
+  variants: { id: string; name: string; sku: string }[];
+  pending: boolean;
+  onSave: (details: {
+    alt: string | null;
+    purpose: ProductImageValue['purpose'];
+    variantId: string | null;
+  }) => void;
+}) {
+  const [alt, setAlt] = useState(image.alt ?? '');
+  const [purpose, setPurpose] = useState<ProductImageValue['purpose']>(image.purpose);
+  const [variantId, setVariantId] = useState(image.variantId ?? '');
+  const changed =
+    alt !== (image.alt ?? '') ||
+    purpose !== image.purpose ||
+    variantId !== (image.variantId ?? '');
+
+  return (
+    <div className="space-y-1.5 border-line-subtle border-t bg-base p-2">
+      <Input
+        aria-label="Image alt text"
+        value={alt}
+        placeholder="Describe this image"
+        onChange={(event) => setAlt(event.target.value)}
+        className="h-7 text-[11px]"
+      />
+      <div className="grid grid-cols-2 gap-1.5">
+        <Select
+          aria-label="Image usage"
+          value={purpose}
+          onChange={(event) => setPurpose(event.target.value as ProductImageValue['purpose'])}
+          className="h-7 text-[11px]"
+        >
+          <option value="product">Product</option>
+          <option value="packaging">Packaging</option>
+          <option value="lifestyle">Lifestyle</option>
+          <option value="box_contents">Box contents</option>
+        </Select>
+        <Select
+          aria-label="Assigned variant"
+          value={variantId}
+          onChange={(event) => setVariantId(event.target.value)}
+          className="h-7 text-[11px]"
+        >
+          <option value="">All variants</option>
+          {variants.map((variant) => (
+            <option key={variant.id} value={variant.id}>
+              {variant.name} · {variant.sku}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {changed ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="h-7 w-full text-[11px]"
+          disabled={pending}
+          onClick={() =>
+            onSave({ alt: alt.trim() || null, purpose, variantId: variantId || null })
+          }
+        >
+          Save details
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

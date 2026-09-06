@@ -17,10 +17,21 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { formatDate } from '@/lib/format';
 import { toDecimalString } from '@/lib/money';
 import type { WarrantyState } from '@/lib/warranty';
-import { listBrandOptions, listCategoryOptions, listSupplierOptions } from '@/server/queries/pickers';
-import { getProduct, listProductRelationshipOptions, listProductRelationships } from '@/server/queries/reference';
+import {
+  listBrandOptions,
+  listCategoryOptions,
+  listSupplierOptions,
+} from '@/server/queries/pickers';
+import {
+  getProduct,
+  listProductRelationshipOptions,
+  listProductRelationships,
+} from '@/server/queries/reference';
+import {
+  listProductStorefrontCollections,
+  listStorefrontCollectionOptions,
+} from '@/server/queries/storefront';
 import { listProductWarrantyItems } from '@/server/queries/warranty';
-import { listProductStorefrontCollections, listStorefrontCollectionOptions } from '@/server/queries/storefront';
 
 export const metadata: Metadata = { title: 'Product' };
 
@@ -53,7 +64,13 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
   ]);
 
   if (!product) notFound();
-  const [relationships, relationshipOptions, collectionMemberships, collectionOptions] = await Promise.all([listProductRelationships(id), listProductRelationshipOptions(id), listProductStorefrontCollections(id), listStorefrontCollectionOptions()]);
+  const [relationships, relationshipOptions, collectionMemberships, collectionOptions] =
+    await Promise.all([
+      listProductRelationships(id),
+      listProductRelationshipOptions(id),
+      listProductStorefrontCollections(id),
+      listStorefrontCollectionOptions(),
+    ]);
 
   // The warranty months comes from the product itself, so this has to wait
   // for it — passing the loaded value keeps the section below from disagreeing
@@ -71,9 +88,25 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
           </Button>
         </div>
       ) : null}
-      <ProductImages productId={product.id} initial={product.images} />
-      <ProductRelationships productId={product.id} relationships={relationships} options={relationshipOptions} />
-      <ProductStorefrontCollections productId={product.id} memberships={collectionMemberships} collections={collectionOptions} />
+      <ProductImages
+        productId={product.id}
+        initial={product.images}
+        variants={product.variants.map((variant) => ({
+          id: variant.id,
+          name: variant.name,
+          sku: variant.sku,
+        }))}
+      />
+      <ProductRelationships
+        productId={product.id}
+        relationships={relationships}
+        options={relationshipOptions}
+      />
+      <ProductStorefrontCollections
+        productId={product.id}
+        memberships={collectionMemberships}
+        collections={collectionOptions}
+      />
       <ProductForm
         categories={categories}
         suppliers={suppliers}
@@ -98,9 +131,20 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
           ecosystems: product.compatibility.ecosystems.join('\n'),
           boxContents: product.boxContents.join('\n'),
           nextlyTake: product.nextlyTake ?? '',
-          hubRequired: product.buyerRequirements.hubRequired ?? false, hubName: product.buyerRequirements.hubName ?? '', appRequired: product.buyerRequirements.appRequired ?? false, appName: product.buyerRequirements.appName ?? '', wifiRequired: product.buyerRequirements.wifiRequired ?? false, wifiBands: product.buyerRequirements.wifiBands.join('\n'), indoorOutdoor: product.buyerRequirements.indoorOutdoor ?? '', powerSource: product.buyerRequirements.powerSource ?? '', installationNotes: product.buyerRequirements.installationNotes ?? '', faqItems: product.faqItems,
+          hubRequired: product.buyerRequirements.hubRequired ?? false,
+          hubName: product.buyerRequirements.hubName ?? '',
+          appRequired: product.buyerRequirements.appRequired ?? false,
+          appName: product.buyerRequirements.appName ?? '',
+          wifiRequired: product.buyerRequirements.wifiRequired ?? false,
+          wifiBands: product.buyerRequirements.wifiBands.join('\n'),
+          indoorOutdoor: product.buyerRequirements.indoorOutdoor ?? '',
+          powerSource: product.buyerRequirements.powerSource ?? '',
+          installationNotes: product.buyerRequirements.installationNotes ?? '',
+          faqItems: product.faqItems,
           featured: product.featured,
-          featuredPosition: product.featuredPosition == null ? '' : String(product.featuredPosition), newUntil: product.newUntil?.slice(0, 10) ?? '',
+          featuredPosition:
+            product.featuredPosition == null ? '' : String(product.featuredPosition),
+          newUntil: product.newUntil?.slice(0, 10) ?? '',
           showWhenOutOfStock: product.showWhenOutOfStock,
           restockNotificationsEnabled: product.restockNotificationsEnabled,
           status: product.status,
@@ -119,7 +163,10 @@ async function Loader({ params }: { params: Promise<{ id: string }> }) {
             isDefault: variant.isDefault,
             isActive: variant.isActive,
             barcode: variant.barcode ?? '',
-            attributes: Object.entries(variant.attributes).map(([key, value]) => ({ key, value })),
+            attributes: Object.entries(variant.attributes).map(([key, value]) => ({
+              key,
+              value,
+            })),
           })),
         }}
       />

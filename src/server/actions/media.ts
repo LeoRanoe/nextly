@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuid } from '@/lib/schemas';
 import { db } from '../db/client';
-import { productImages } from '../db/schema';
+import { productImages, productVariants } from '../db/schema';
 import { deleteProductImageBlobs, recordProductImage } from '../services/media';
 import { logActivity } from '../services/posting';
 import { ActionError, ownerAction, writeAction } from './client';
@@ -134,6 +134,55 @@ export const setPrimaryProductImage = writeAction
       await logActivity(tx, {
         memberId: ctx.member.id,
         action: 'set primary product image',
+        entityType: 'product',
+        entityId: input.productId,
+      });
+    });
+    return { id: input.id };
+  });
+
+const imagePurpose = z.enum(['product', 'packaging', 'lifestyle', 'box_contents']);
+
+/** Update customer-facing image context without changing the upload pipeline. */
+export const updateProductImageDetails = writeAction
+  .metadata({ action: 'updated', entity: 'product image' })
+  .inputSchema(
+    z.object({
+      id: uuid,
+      productId: uuid,
+      alt: z.string().trim().max(200).nullable(),
+      purpose: imagePurpose,
+      variantId: uuid.nullable(),
+    }),
+  )
+  .action(async ({ parsedInput: input, ctx }) => {
+    await db.transaction(async (tx) => {
+      const [image] = await tx
+        .select({ id: productImages.id })
+        .from(productImages)
+        .where(
+          and(eq(productImages.id, input.id), eq(productImages.productId, input.productId)),
+        )
+        .limit(1);
+      if (!image) throw new ActionError('That image does not belong to this product.');
+
+      if (input.variantId) {
+        const [variant] = await tx
+          .select({ productId: productVariants.productId })
+          .from(productVariants)
+          .where(eq(productVariants.id, input.variantId))
+          .limit(1);
+        if (!variant || variant.productId !== input.productId)
+          throw new ActionError('Choose a variant from this product.');
+      }
+
+      await tx
+        .update(productImages)
+        .set({ alt: input.alt || null, purpose: input.purpose, variantId: input.variantId })
+        .where(eq(productImages.id, input.id));
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'updated product image details',
         entityType: 'product',
         entityId: input.productId,
       });

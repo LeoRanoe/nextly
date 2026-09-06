@@ -274,6 +274,8 @@ export const productImages = pgTable(
     height: integer().notNull(),
     blurDataUrl: text(),
     alt: text(),
+    /** Merchandising context; a product shot remains the safe default. */
+    purpose: text().notNull().default('product'),
     position: integer().notNull().default(0),
     isPrimary: boolean().notNull().default(false),
     byteSize: bigint({ mode: 'number' }),

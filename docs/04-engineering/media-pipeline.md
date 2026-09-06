@@ -2,9 +2,9 @@
 
 Product images and expense receipts.
 
-Status: **schema and configuration are in place; the upload UI is not built yet.**
-This document is the design it will be built to, and the two constraints below
-are the reason it is shaped this way.
+Status: **implemented.** The product editor uses this pipeline for upload,
+reorder, primary-image selection, deletion, alt text, image purpose and
+optional variant assignment.
 
 ---
 
@@ -123,6 +123,10 @@ failure than not inserting it at all.
 
 ## The UI it feeds
 
-Drag-and-drop grid with reorder, set-primary, inline alt text, per-file
-progress, replace and delete. Alt text is a first-class field, not an
-afterthought — it is what the catalog will need for accessibility and search.
+An accessible grid provides reorder buttons, primary-image selection, inline
+alt text, per-file progress and owner-only deletion. An image may be assigned
+to one variant (or all variants) and marked as a product, packaging, lifestyle
+or box-contents image. These are image metadata only: Blob storage and the
+derivative pipeline stay the single media implementation. Alt text is a
+first-class field, not an afterthought — it is what the catalog needs for
+accessibility and search.
