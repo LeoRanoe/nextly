@@ -399,6 +399,15 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN brands b ON b.id = p.brand_id
     WHERE p.slug = ${slug} AND p.catalog_published AND p.status = 'active'
+      AND (
+        p.show_when_out_of_stock
+        OR EXISTS (
+          SELECT 1
+            FROM product_variants sv
+            JOIN v_stock_levels ss ON ss.variant_id = sv.id
+           WHERE sv.product_id = p.id AND sv.is_active AND ss.on_hand > 0
+        )
+      )
     LIMIT 1
   `);
 
