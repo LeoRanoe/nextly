@@ -268,7 +268,17 @@ export function CustomerSheet({
 
 /* ── Categories ──────────────────────────────────────────────────────────── */
 
-export type CategoryValues = { id: string; name: string; slug: string };
+export type CategoryValues = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  storefrontDescription: string | null;
+  imageUrl: string | null;
+  position: number;
+  showInStorefrontNav: boolean;
+  featured: boolean;
+};
 
 export function CategorySheet({
   initial,
@@ -289,6 +299,16 @@ export function CategorySheet({
   const [name, setName] = useState(initial?.name ?? '');
   const [slug, setSlug] = useState(initial?.slug ?? '');
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [storefrontDescription, setStorefrontDescription] = useState(
+    initial?.storefrontDescription ?? '',
+  );
+  const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? '');
+  const [position, setPosition] = useState(String(initial?.position ?? ''));
+  const [showInStorefrontNav, setShowInStorefrontNav] = useState(
+    initial?.showInStorefrontNav ?? true,
+  );
+  const [featured, setFeatured] = useState(initial?.featured ?? false);
 
   // Two hook calls, always both — see the comment in CustomerSheet above.
   const createHook = useAction(createCategory, {
@@ -338,6 +358,12 @@ export function CategorySheet({
               ...(isEdit ? { id: initial?.id as string } : {}),
               name,
               slug: slug || slugify(name),
+              description,
+              storefrontDescription,
+              imageUrl,
+              ...(position ? { position: Number(position) } : {}),
+              showInStorefrontNav,
+              featured,
             } as never);
           }}
         >
@@ -366,6 +392,64 @@ export function CategorySheet({
                 }}
               />
             </Field>
+            <Field
+              label="Internal description"
+              htmlFor="cat-description"
+              hint="Optional dashboard context"
+            >
+              <Textarea
+                id="cat-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </Field>
+          </SheetSection>
+          <SheetSection title="Storefront">
+            <Field
+              label="Short storefront description"
+              htmlFor="cat-storefront-description"
+              hint="Shown where this category is introduced"
+            >
+              <Textarea
+                id="cat-storefront-description"
+                value={storefrontDescription}
+                onChange={(event) => setStorefrontDescription(event.target.value)}
+              />
+            </Field>
+            <Field label="Image URL" htmlFor="cat-image-url" hint="Optional category image">
+              <Input
+                id="cat-image-url"
+                type="url"
+                value={imageUrl}
+                onChange={(event) => setImageUrl(event.target.value)}
+              />
+            </Field>
+            <Field label="Position" htmlFor="cat-position" hint="Lower numbers appear first">
+              <Input
+                id="cat-position"
+                type="number"
+                min="0"
+                numeric
+                value={position}
+                onChange={(event) => setPosition(event.target.value)}
+              />
+            </Field>
+            <label className="flex items-center gap-2 text-[13px] text-ink">
+              <input
+                type="checkbox"
+                checked={showInStorefrontNav}
+                onChange={(event) => setShowInStorefrontNav(event.target.checked)}
+              />{' '}
+              Show in storefront navigation
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-ink">
+              <input
+                type="checkbox"
+                checked={featured}
+                onChange={(event) => setFeatured(event.target.checked)}
+              />{' '}
+              Featured category
+            </label>
           </SheetSection>
         </form>
       </FormSheet>

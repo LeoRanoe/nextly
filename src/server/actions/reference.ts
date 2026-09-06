@@ -4,8 +4,8 @@ import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { publicEnv } from '@/lib/env';
 import {
-  categorySchema,
   brandSchema,
+  categorySchema,
   customerSchema,
   memberSchema,
   supplierSchema,
@@ -13,7 +13,15 @@ import {
 } from '@/lib/schemas';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { db } from '../db/client';
-import { brands, categories, customers, members, purchaseOrders, sales, suppliers } from '../db/schema';
+import {
+  brands,
+  categories,
+  customers,
+  members,
+  purchaseOrders,
+  sales,
+  suppliers,
+} from '../db/schema';
 import { logActivity } from '../services/posting';
 import { ActionError, ownerAction, writeAction } from './client';
 
@@ -171,7 +179,12 @@ export const createCategory = writeAction
         .values({
           name: input.name,
           slug: input.slug,
-          position: Number(row?.max ?? 0) + 1,
+          description: input.description ?? null,
+          storefrontDescription: input.storefrontDescription ?? null,
+          imageUrl: input.imageUrl ?? null,
+          position: input.position ?? Number(row?.max ?? 0) + 1,
+          showInStorefrontNav: input.showInStorefrontNav,
+          featured: input.featured,
         })
         .returning();
 
@@ -195,9 +208,24 @@ export const createBrand = writeAction
   .inputSchema(brandSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     return db.transaction(async (tx) => {
-      const [brand] = await tx.insert(brands).values({ name: input.name, slug: input.slug, website: input.website ?? null, description: input.description ?? null, active: input.active }).returning({ id: brands.id, name: brands.name });
+      const [brand] = await tx
+        .insert(brands)
+        .values({
+          name: input.name,
+          slug: input.slug,
+          website: input.website ?? null,
+          description: input.description ?? null,
+          active: input.active,
+        })
+        .returning({ id: brands.id, name: brands.name });
       if (!brand) throw new ActionError('Could not create the brand.');
-      await logActivity(tx, { memberId: ctx.member.id, action: 'created brand', entityType: 'brand', entityId: brand.id, entityLabel: brand.name });
+      await logActivity(tx, {
+        memberId: ctx.member.id,
+        action: 'created brand',
+        entityType: 'brand',
+        entityId: brand.id,
+        entityLabel: brand.name,
+      });
       return brand;
     });
   });
@@ -217,7 +245,16 @@ export const updateCategory = writeAction
 
       await tx
         .update(categories)
-        .set({ name: input.name, slug: input.slug })
+        .set({
+          name: input.name,
+          slug: input.slug,
+          description: input.description ?? null,
+          storefrontDescription: input.storefrontDescription ?? null,
+          imageUrl: input.imageUrl ?? null,
+          position: input.position ?? existing.position,
+          showInStorefrontNav: input.showInStorefrontNav,
+          featured: input.featured,
+        })
         .where(eq(categories.id, input.id));
 
       await logActivity(tx, {

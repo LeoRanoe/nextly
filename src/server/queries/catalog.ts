@@ -65,7 +65,14 @@ const CATALOG_SORT_CLAUSES: Record<CatalogSort, ReturnType<typeof sql>> = {
 };
 
 export async function listCatalogProducts(
-  params: { q?: string; category?: string; collection?: string; availability?: 'in-stock' | 'incoming'; sort?: CatalogSort; limit?: number } = {},
+  params: {
+    q?: string;
+    category?: string;
+    collection?: string;
+    availability?: 'in-stock' | 'incoming';
+    sort?: CatalogSort;
+    limit?: number;
+  } = {},
 ): Promise<CatalogListItem[]> {
   if (!isDatabaseConfigured()) return [];
 
@@ -168,7 +175,7 @@ export async function listCatalogCategories(): Promise<CatalogCategory[]> {
     SELECT c.slug, c.name, COUNT(*)::text AS count
       FROM products p
       JOIN categories c ON c.id = p.category_id
-     WHERE p.catalog_published AND p.status = 'active'
+     WHERE p.catalog_published AND p.status = 'active' AND c.show_in_storefront_nav
      GROUP BY c.slug, c.name, c.position
      ORDER BY c.position, c.name
   `);
@@ -180,8 +187,21 @@ export async function listCatalogCategories(): Promise<CatalogCategory[]> {
   }));
 }
 
-export type StorefrontCollection = { name: string; slug: string; description: string | null; imageUrl: string | null; productCount: number };
-export type CatalogBundle = { id: string; slug: string; name: string; summary: string | null; priceCents: Cents; availability: number };
+export type StorefrontCollection = {
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  productCount: number;
+};
+export type CatalogBundle = {
+  id: string;
+  slug: string;
+  name: string;
+  summary: string | null;
+  priceCents: Cents;
+  availability: number;
+};
 
 /** Public bundle read model: availability is the limiting component quantity,
  * never a manually maintained stock number and never a cost calculation. */
@@ -207,16 +227,49 @@ export async function listCatalogBundles(limit = 6): Promise<CatalogBundle[]> {
      ORDER BY b.featured DESC, b.position, b.name
      LIMIT ${limit}
   `);
-  return rows.map((row) => ({ id: text(row.id), slug: text(row.slug), name: text(row.name), summary: maybe(row.summary), priceCents: num(row.price_cents), availability: num(row.availability) }));
+  return rows.map((row) => ({
+    id: text(row.id),
+    slug: text(row.slug),
+    name: text(row.name),
+    summary: maybe(row.summary),
+    priceCents: num(row.price_cents),
+    availability: num(row.availability),
+  }));
 }
 export async function getCatalogBundle(slug: string) {
   if (!isDatabaseConfigured()) return null;
-  const [bundle] = await db.execute<Record<string, string | null>>(sql`SELECT id, name, slug, summary, description, storefront_image_url, best_for, compatibility_notes, nextly_take, price_cents::text FROM bundles b WHERE slug = ${slug} AND catalog_published AND is_active AND EXISTS (SELECT 1 FROM bundle_components bc WHERE bc.bundle_id = b.id) AND NOT EXISTS (SELECT 1 FROM bundle_components bc JOIN product_variants v ON v.id = bc.variant_id JOIN products p ON p.id = v.product_id WHERE bc.bundle_id = b.id AND (NOT v.is_active OR NOT p.catalog_published OR p.status <> 'active')) LIMIT 1`);
+  const [bundle] = await db.execute<Record<string, string | null>>(
+    sql`SELECT id, name, slug, summary, description, storefront_image_url, best_for, compatibility_notes, nextly_take, price_cents::text FROM bundles b WHERE slug = ${slug} AND catalog_published AND is_active AND EXISTS (SELECT 1 FROM bundle_components bc WHERE bc.bundle_id = b.id) AND NOT EXISTS (SELECT 1 FROM bundle_components bc JOIN product_variants v ON v.id = bc.variant_id JOIN products p ON p.id = v.product_id WHERE bc.bundle_id = b.id AND (NOT v.is_active OR NOT p.catalog_published OR p.status <> 'active')) LIMIT 1`,
+  );
   if (!bundle) return null;
-  const components = await db.execute<Record<string, string | null>>(sql`SELECT p.name AS product_name, v.name AS variant_name, bc.quantity::text, COALESCE(s.on_hand, 0)::text AS on_hand FROM bundle_components bc JOIN product_variants v ON v.id = bc.variant_id JOIN products p ON p.id = v.product_id LEFT JOIN v_stock_levels s ON s.variant_id = v.id WHERE bc.bundle_id = ${bundle.id} ORDER BY p.name, v.name`);
-  const items = components.map((row) => ({ productName: text(row.product_name), variantName: text(row.variant_name), quantity: num(row.quantity), onHand: num(row.on_hand) }));
-  const availability = items.length ? Math.min(...items.map((item) => Math.floor(item.onHand / item.quantity))) : 0;
-  return { id: text(bundle.id), name: text(bundle.name), slug: text(bundle.slug), summary: maybe(bundle.summary), description: maybe(bundle.description), storefrontImageUrl: maybe(bundle.storefront_image_url), bestFor: Array.isArray(bundle.best_for) ? bundle.best_for.filter((item): item is string => typeof item === 'string') : [], compatibilityNotes: maybe(bundle.compatibility_notes), nextlyTake: maybe(bundle.nextly_take), priceCents: num(bundle.price_cents), items, availability };
+  const components = await db.execute<Record<string, string | null>>(
+    sql`SELECT p.name AS product_name, v.name AS variant_name, bc.quantity::text, COALESCE(s.on_hand, 0)::text AS on_hand FROM bundle_components bc JOIN product_variants v ON v.id = bc.variant_id JOIN products p ON p.id = v.product_id LEFT JOIN v_stock_levels s ON s.variant_id = v.id WHERE bc.bundle_id = ${bundle.id} ORDER BY p.name, v.name`,
+  );
+  const items = components.map((row) => ({
+    productName: text(row.product_name),
+    variantName: text(row.variant_name),
+    quantity: num(row.quantity),
+    onHand: num(row.on_hand),
+  }));
+  const availability = items.length
+    ? Math.min(...items.map((item) => Math.floor(item.onHand / item.quantity)))
+    : 0;
+  return {
+    id: text(bundle.id),
+    name: text(bundle.name),
+    slug: text(bundle.slug),
+    summary: maybe(bundle.summary),
+    description: maybe(bundle.description),
+    storefrontImageUrl: maybe(bundle.storefront_image_url),
+    bestFor: Array.isArray(bundle.best_for)
+      ? bundle.best_for.filter((item): item is string => typeof item === 'string')
+      : [],
+    compatibilityNotes: maybe(bundle.compatibility_notes),
+    nextlyTake: maybe(bundle.nextly_take),
+    priceCents: num(bundle.price_cents),
+    items,
+    availability,
+  };
 }
 /** Intent-led collections are separate from categories and only appear once
  * they contain something a visitor can actually buy. */
@@ -232,7 +285,13 @@ export async function listHomepageCollections(): Promise<StorefrontCollection[]>
      GROUP BY sc.id
      ORDER BY sc.position, sc.name
   `);
-  return rows.map((row) => ({ name: text(row.name), slug: text(row.slug), description: maybe(row.description), imageUrl: maybe(row.image_url), productCount: num(row.product_count) }));
+  return rows.map((row) => ({
+    name: text(row.name),
+    slug: text(row.slug),
+    description: maybe(row.description),
+    imageUrl: maybe(row.image_url),
+    productCount: num(row.product_count),
+  }));
 }
 
 export type CatalogProduct = {
@@ -357,7 +416,12 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
       blurDataUrl: maybe(image.blur_data_url),
       isPrimary: bool(image.is_primary),
     })),
-    related: related.map((item) => ({ name: text(item.name), slug: text(item.slug), summary: maybe(item.summary), relationshipType: text(item.relationship_type) })),
+    related: related.map((item) => ({
+      name: text(item.name),
+      slug: text(item.slug),
+      summary: maybe(item.summary),
+      relationshipType: text(item.relationship_type),
+    })),
   };
 }
 

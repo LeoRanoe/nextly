@@ -927,11 +927,23 @@ export function CategoryActions({
   id,
   name,
   slug,
+  description,
+  storefrontDescription,
+  imageUrl,
+  position,
+  showInStorefrontNav,
+  featured,
   productCount,
 }: {
   id: string;
   name: string;
   slug: string;
+  description: string | null;
+  storefrontDescription: string | null;
+  imageUrl: string | null;
+  position: number;
+  showInStorefrontNav: boolean;
+  featured: boolean;
   productCount: number;
 }) {
   const router = useRouter();
@@ -960,7 +972,21 @@ export function CategoryActions({
         ) : null}
       </Menu>
 
-      <CategorySheet initial={{ id, name, slug }} open={editing} onOpenChange={setEditing} />
+      <CategorySheet
+        initial={{
+          id,
+          name,
+          slug,
+          description,
+          storefrontDescription,
+          imageUrl,
+          position,
+          showInStorefrontNav,
+          featured,
+        }}
+        open={editing}
+        onOpenChange={setEditing}
+      />
 
       <ConfirmDialog
         open={confirming}

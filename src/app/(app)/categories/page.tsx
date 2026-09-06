@@ -139,6 +139,12 @@ async function CategoriesTable({ searchParams }: { searchParams: Promise<RawSear
                       id={row.id}
                       name={row.name}
                       slug={row.slug}
+                      description={row.description}
+                      storefrontDescription={row.storefrontDescription}
+                      imageUrl={row.imageUrl}
+                      position={row.position}
+                      showInStorefrontNav={row.showInStorefrontNav}
+                      featured={row.featured}
                       productCount={row.productCount}
                     />
                   </TD>
@@ -166,6 +172,12 @@ async function CategoriesTable({ searchParams }: { searchParams: Promise<RawSear
                 id={row.id}
                 name={row.name}
                 slug={row.slug}
+                description={row.description}
+                storefrontDescription={row.storefrontDescription}
+                imageUrl={row.imageUrl}
+                position={row.position}
+                showInStorefrontNav={row.showInStorefrontNav}
+                featured={row.featured}
                 productCount={row.productCount}
               />
             </div>

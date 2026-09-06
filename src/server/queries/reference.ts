@@ -11,18 +11,46 @@ function parseObject(value: string | null | undefined): Record<string, string> {
   try {
     const parsed: unknown = JSON.parse(value ?? '{}');
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
-  } catch { return {}; }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string',
+      ),
+    );
+  } catch {
+    return {};
+  }
 }
 function parseStringArray(value: string | null | undefined): string[] {
-  try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []; } catch { return []; }
+  try {
+    const parsed: unknown = JSON.parse(value ?? '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
 }
 function parseCompatibility(value: string | null | undefined) {
   try {
     const parsed: unknown = JSON.parse(value ?? '{}');
-    const record = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-    return { platforms: Array.isArray(record.platforms) ? record.platforms.filter((item): item is string => typeof item === 'string') : [], protocols: Array.isArray(record.protocols) ? record.protocols.filter((item): item is string => typeof item === 'string') : [], ecosystems: Array.isArray(record.ecosystems) ? record.ecosystems.filter((item): item is string => typeof item === 'string') : [] };
-  } catch { return { platforms: [], protocols: [], ecosystems: [] }; }
+    const record =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    return {
+      platforms: Array.isArray(record.platforms)
+        ? record.platforms.filter((item): item is string => typeof item === 'string')
+        : [],
+      protocols: Array.isArray(record.protocols)
+        ? record.protocols.filter((item): item is string => typeof item === 'string')
+        : [],
+      ecosystems: Array.isArray(record.ecosystems)
+        ? record.ecosystems.filter((item): item is string => typeof item === 'string')
+        : [],
+    };
+  } catch {
+    return { platforms: [], protocols: [], ecosystems: [] };
+  }
 }
 
 /**
@@ -38,6 +66,12 @@ export type CategoryRow = {
   id: string;
   name: string;
   slug: string;
+  description: string | null;
+  storefrontDescription: string | null;
+  imageUrl: string | null;
+  position: number;
+  showInStorefrontNav: boolean;
+  featured: boolean;
   productCount: number;
 };
 
@@ -65,7 +99,8 @@ export async function listCategories(
   const direction = sql.raw(query.dir === 'asc' ? 'ASC' : 'DESC');
 
   const rows = await db.execute<Record<string, string>>(sql`
-    SELECT c.id, c.name, c.slug,
+    SELECT c.id, c.name, c.slug, c.description, c.storefront_description, c.image_url,
+           c.position::text, c.show_in_storefront_nav::text, c.featured::text,
            (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id)::text AS product_count,
            COUNT(*) OVER()::text AS total_count
       FROM categories c
@@ -81,6 +116,12 @@ export async function listCategories(
       id: text(row.id),
       name: text(row.name),
       slug: text(row.slug),
+      description: maybe(row.description),
+      storefrontDescription: maybe(row.storefront_description),
+      imageUrl: maybe(row.image_url),
+      position: num(row.position),
+      showInStorefrontNav: bool(row.show_in_storefront_nav),
+      featured: bool(row.featured),
       productCount: num(row.product_count),
     })),
     total,
@@ -329,10 +370,23 @@ export type SettingsRow = {
   invoiceFooter: string | null;
   instagram: string | null;
   openingHours: string | null;
-  pickupEnabled: boolean; pickupLabel: string | null; pickupDetails: string | null; sameDayPickupEnabled: boolean; pickupCutoffTime: string | null;
-  deliveryEnabled: boolean; deliveryDetails: string | null; deliveryAreas: string | null; deliveryFeeDisplay: string | null; deliveryEstimateDisplay: string | null;
+  pickupEnabled: boolean;
+  pickupLabel: string | null;
+  pickupDetails: string | null;
+  sameDayPickupEnabled: boolean;
+  pickupCutoffTime: string | null;
+  deliveryEnabled: boolean;
+  deliveryDetails: string | null;
+  deliveryAreas: string | null;
+  deliveryFeeDisplay: string | null;
+  deliveryEstimateDisplay: string | null;
   paymentMethods: { name: string; details?: string }[];
-  announcement: string | null; heroTitle: string | null; heroBody: string | null; supportTitle: string | null; supportBody: string | null; defaultNewArrivalDays: number;
+  announcement: string | null;
+  heroTitle: string | null;
+  heroBody: string | null;
+  supportTitle: string | null;
+  supportBody: string | null;
+  defaultNewArrivalDays: number;
 };
 
 export async function getSettings(): Promise<SettingsRow | null> {
@@ -377,23 +431,47 @@ export async function getSettings(): Promise<SettingsRow | null> {
     invoiceFooter: row.invoice_footer ?? null,
     instagram: row.instagram ?? null,
     openingHours: row.opening_hours ?? null,
-    pickupEnabled: bool(row.pickup_enabled), pickupLabel: row.pickup_label ?? null, pickupDetails: row.pickup_details ?? null, sameDayPickupEnabled: bool(row.same_day_pickup_enabled), pickupCutoffTime: row.pickup_cutoff_time ?? null,
-    deliveryEnabled: bool(row.delivery_enabled), deliveryDetails: row.delivery_details ?? null, deliveryAreas: row.delivery_areas ?? null, deliveryFeeDisplay: row.delivery_fee_display ?? null, deliveryEstimateDisplay: row.delivery_estimate_display ?? null,
+    pickupEnabled: bool(row.pickup_enabled),
+    pickupLabel: row.pickup_label ?? null,
+    pickupDetails: row.pickup_details ?? null,
+    sameDayPickupEnabled: bool(row.same_day_pickup_enabled),
+    pickupCutoffTime: row.pickup_cutoff_time ?? null,
+    deliveryEnabled: bool(row.delivery_enabled),
+    deliveryDetails: row.delivery_details ?? null,
+    deliveryAreas: row.delivery_areas ?? null,
+    deliveryFeeDisplay: row.delivery_fee_display ?? null,
+    deliveryEstimateDisplay: row.delivery_estimate_display ?? null,
     paymentMethods: parsePaymentMethods(row.payment_methods),
-    announcement: row.announcement ?? null, heroTitle: row.hero_title ?? null, heroBody: row.hero_body ?? null, supportTitle: row.support_title ?? null, supportBody: row.support_body ?? null, defaultNewArrivalDays: num(row.default_new_arrival_days, 30),
+    announcement: row.announcement ?? null,
+    heroTitle: row.hero_title ?? null,
+    heroBody: row.hero_body ?? null,
+    supportTitle: row.support_title ?? null,
+    supportBody: row.support_body ?? null,
+    defaultNewArrivalDays: num(row.default_new_arrival_days, 30),
   };
 }
 
-function parsePaymentMethods(value: string | null | undefined): { name: string; details?: string }[] {
+function parsePaymentMethods(
+  value: string | null | undefined,
+): { name: string; details?: string }[] {
   try {
     const parsed: unknown = JSON.parse(value ?? '[]');
     if (!Array.isArray(parsed)) return [];
     return parsed.flatMap((item) => {
-      if (!item || typeof item !== 'object' || typeof (item as { name?: unknown }).name !== 'string') return [];
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        typeof (item as { name?: unknown }).name !== 'string'
+      )
+        return [];
       const details = (item as { details?: unknown }).details;
-      return typeof details === 'string' ? [{ name: (item as { name: string }).name, details }] : [{ name: (item as { name: string }).name }];
+      return typeof details === 'string'
+        ? [{ name: (item as { name: string }).name, details }]
+        : [{ name: (item as { name: string }).name }];
     });
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 export type ProductDetail = {
@@ -414,7 +492,17 @@ export type ProductDetail = {
   compatibility: { platforms: string[]; protocols: string[]; ecosystems: string[] };
   boxContents: string[];
   nextlyTake: string | null;
-  buyerRequirements: { hubRequired?: boolean; hubName?: string; appRequired?: boolean; appName?: string; wifiRequired?: boolean; wifiBands: string[]; indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor'; powerSource?: string; installationNotes?: string };
+  buyerRequirements: {
+    hubRequired?: boolean;
+    hubName?: string;
+    appRequired?: boolean;
+    appName?: string;
+    wifiRequired?: boolean;
+    wifiBands: string[];
+    indoorOutdoor?: 'indoor' | 'outdoor' | 'indoor-outdoor';
+    powerSource?: string;
+    installationNotes?: string;
+  };
   faqItems: { question: string; answer: string }[];
   featured: boolean;
   featuredPosition: number | null;
@@ -548,21 +636,49 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
   };
 }
 
-export type ProductRelationshipRow = { id: string; relatedProductId: string; relatedProductName: string; relationshipType: 'accessory' | 'works_with' | 'alternative' | 'cheaper_alternative' | 'premium_alternative' | 'required_accessory' };
-export async function listProductRelationships(productId: string): Promise<ProductRelationshipRow[]> {
+export type ProductRelationshipRow = {
+  id: string;
+  relatedProductId: string;
+  relatedProductName: string;
+  relationshipType:
+    | 'accessory'
+    | 'works_with'
+    | 'alternative'
+    | 'cheaper_alternative'
+    | 'premium_alternative'
+    | 'required_accessory';
+};
+export async function listProductRelationships(
+  productId: string,
+): Promise<ProductRelationshipRow[]> {
   if (!isDatabaseConfigured()) return [];
-  const rows = await db.execute<Record<string, string | null>>(sql`SELECT pr.id, pr.related_product_id, rp.name AS related_product_name, pr.relationship_type::text FROM product_relationships pr JOIN products rp ON rp.id = pr.related_product_id WHERE pr.product_id = ${productId} ORDER BY pr.position, rp.name`);
-  return rows.map((row) => ({ id: text(row.id), relatedProductId: text(row.related_product_id), relatedProductName: text(row.related_product_name), relationshipType: text(row.relationship_type) as ProductRelationshipRow['relationshipType'] }));
+  const rows = await db.execute<Record<string, string | null>>(
+    sql`SELECT pr.id, pr.related_product_id, rp.name AS related_product_name, pr.relationship_type::text FROM product_relationships pr JOIN products rp ON rp.id = pr.related_product_id WHERE pr.product_id = ${productId} ORDER BY pr.position, rp.name`,
+  );
+  return rows.map((row) => ({
+    id: text(row.id),
+    relatedProductId: text(row.related_product_id),
+    relatedProductName: text(row.related_product_name),
+    relationshipType: text(row.relationship_type) as ProductRelationshipRow['relationshipType'],
+  }));
 }
-export async function listProductRelationshipOptions(productId: string): Promise<{ id: string; name: string }[]> {
+export async function listProductRelationshipOptions(
+  productId: string,
+): Promise<{ id: string; name: string }[]> {
   if (!isDatabaseConfigured()) return [];
-  const rows = await db.execute<Record<string, string | null>>(sql`SELECT id, name FROM products WHERE id <> ${productId} AND status <> 'archived' ORDER BY name LIMIT 500`);
+  const rows = await db.execute<Record<string, string | null>>(
+    sql`SELECT id, name FROM products WHERE id <> ${productId} AND status <> 'archived' ORDER BY name LIMIT 500`,
+  );
   return rows.map((row) => ({ id: text(row.id), name: text(row.name) }));
 }
 
-function parseBuyerRequirements(value: string | null | undefined): ProductDetail['buyerRequirements'] {
+function parseBuyerRequirements(
+  value: string | null | undefined,
+): ProductDetail['buyerRequirements'] {
   const raw = parseObject(value);
-  const stringList = Array.isArray(raw.wifiBands) ? raw.wifiBands.filter((item): item is string => typeof item === 'string') : [];
+  const stringList = Array.isArray(raw.wifiBands)
+    ? raw.wifiBands.filter((item): item is string => typeof item === 'string')
+    : [];
   const indoorOutdoor = raw.indoorOutdoor;
   return {
     hubRequired: typeof raw.hubRequired === 'boolean' ? raw.hubRequired : undefined,
@@ -571,14 +687,41 @@ function parseBuyerRequirements(value: string | null | undefined): ProductDetail
     appName: typeof raw.appName === 'string' ? raw.appName : undefined,
     wifiRequired: typeof raw.wifiRequired === 'boolean' ? raw.wifiRequired : undefined,
     wifiBands: stringList,
-    indoorOutdoor: indoorOutdoor === 'indoor' || indoorOutdoor === 'outdoor' || indoorOutdoor === 'indoor-outdoor' ? indoorOutdoor : undefined,
+    indoorOutdoor:
+      indoorOutdoor === 'indoor' ||
+      indoorOutdoor === 'outdoor' ||
+      indoorOutdoor === 'indoor-outdoor'
+        ? indoorOutdoor
+        : undefined,
     powerSource: typeof raw.powerSource === 'string' ? raw.powerSource : undefined,
-    installationNotes: typeof raw.installationNotes === 'string' ? raw.installationNotes : undefined,
+    installationNotes:
+      typeof raw.installationNotes === 'string' ? raw.installationNotes : undefined,
   };
 }
 
-function parseFaqItems(value: string | null | undefined): { question: string; answer: string }[] {
-  try { const parsed: unknown = JSON.parse(value ?? '[]'); return Array.isArray(parsed) ? parsed.flatMap((item) => item && typeof item === 'object' && typeof (item as { question?: unknown }).question === 'string' && typeof (item as { answer?: unknown }).answer === 'string' ? [{ question: (item as { question: string }).question, answer: (item as { answer: string }).answer }] : []) : []; } catch { return []; }
+function parseFaqItems(
+  value: string | null | undefined,
+): { question: string; answer: string }[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '[]');
+    return Array.isArray(parsed)
+      ? parsed.flatMap((item) =>
+          item &&
+          typeof item === 'object' &&
+          typeof (item as { question?: unknown }).question === 'string' &&
+          typeof (item as { answer?: unknown }).answer === 'string'
+            ? [
+                {
+                  question: (item as { question: string }).question,
+                  answer: (item as { answer: string }).answer,
+                },
+              ]
+            : [],
+        )
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export type CustomerDetail = {

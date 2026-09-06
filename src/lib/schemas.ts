@@ -133,61 +133,79 @@ export const buyerRequirementsSchema = z.object({
   regionalNotes: optionalText,
 });
 
-export const productSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .min(1, 'Required')
-    .max(64)
-    .regex(/^[A-Za-z0-9][A-Za-z0-9-]*$/, 'Letters, numbers and hyphens only'),
-  name: shortText,
-  slug: z
-    .string()
-    .trim()
-    .min(1, 'Required')
-    .max(120)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
-  categoryId: optionalUuid,
-  supplierId: optionalUuid,
-  brandId: optionalUuid,
-  sourceUrl: z
-    .union([z.string().trim().url('Not a valid URL'), z.literal('')])
-    .transform((value) => (value === '' ? undefined : value))
-    .optional(),
-  summary: optionalText,
-  description: optionalText,
-  specs: z.record(z.string().trim().min(1).max(100), z.string().trim().min(1).max(500)).default({}),
-  modelNumber: optionalText,
-  keyFeatures: stringList,
-  bestFor: stringList,
-  compatibility: compatibilitySchema.default({ platforms: [], protocols: [], ecosystems: [] }),
-  buyerRequirements: buyerRequirementsSchema.optional(),
-  boxContents: stringList,
-  nextlyTake: optionalText,
-  faqItems: z
-    .array(z.object({ question: shortText, answer: z.string().trim().min(1).max(2000) }))
-    .max(20)
-    .default([]),
-  featured: z.boolean().default(false),
-  featuredPosition: z.coerce.number().int().min(0).nullable().optional(),
-  newUntil: z
-    .union([dateInput, z.literal('')])
-    .transform((value) => (value === '' ? undefined : value))
-    .optional(),
-  showWhenOutOfStock: z.boolean().default(true),
-  restockNotificationsEnabled: z.boolean().default(false),
-  status: z.enum(['draft', 'active', 'archived']),
-  /** F-6: months of cover from the day of sale. 0 means no warranty; the
-   *  upper bound only stops a typo becoming a century. */
-  warrantyMonths: z.coerce.number().int().min(0).max(600).default(0),
-  catalogPublished: z.boolean(),
-  notes: optionalText,
-  variants: z.array(variantSchema).min(1, 'A product needs at least one variant'),
-}).superRefine((value, ctx) => {
-  const defaults = value.variants.filter((variant) => variant.isDefault);
-  if (defaults.length > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['variants'], message: 'Choose only one default variant.' });
-  if (defaults.some((variant) => !variant.isActive)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['variants'], message: 'The default variant must be active.' });
-});
+export const productSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(1, 'Required')
+      .max(64)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9-]*$/, 'Letters, numbers and hyphens only'),
+    name: shortText,
+    slug: z
+      .string()
+      .trim()
+      .min(1, 'Required')
+      .max(120)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
+    categoryId: optionalUuid,
+    supplierId: optionalUuid,
+    brandId: optionalUuid,
+    sourceUrl: z
+      .union([z.string().trim().url('Not a valid URL'), z.literal('')])
+      .transform((value) => (value === '' ? undefined : value))
+      .optional(),
+    summary: optionalText,
+    description: optionalText,
+    specs: z
+      .record(z.string().trim().min(1).max(100), z.string().trim().min(1).max(500))
+      .default({}),
+    modelNumber: optionalText,
+    keyFeatures: stringList,
+    bestFor: stringList,
+    compatibility: compatibilitySchema.default({
+      platforms: [],
+      protocols: [],
+      ecosystems: [],
+    }),
+    buyerRequirements: buyerRequirementsSchema.optional(),
+    boxContents: stringList,
+    nextlyTake: optionalText,
+    faqItems: z
+      .array(z.object({ question: shortText, answer: z.string().trim().min(1).max(2000) }))
+      .max(20)
+      .default([]),
+    featured: z.boolean().default(false),
+    featuredPosition: z.coerce.number().int().min(0).nullable().optional(),
+    newUntil: z
+      .union([dateInput, z.literal('')])
+      .transform((value) => (value === '' ? undefined : value))
+      .optional(),
+    showWhenOutOfStock: z.boolean().default(true),
+    restockNotificationsEnabled: z.boolean().default(false),
+    status: z.enum(['draft', 'active', 'archived']),
+    /** F-6: months of cover from the day of sale. 0 means no warranty; the
+     *  upper bound only stops a typo becoming a century. */
+    warrantyMonths: z.coerce.number().int().min(0).max(600).default(0),
+    catalogPublished: z.boolean(),
+    notes: optionalText,
+    variants: z.array(variantSchema).min(1, 'A product needs at least one variant'),
+  })
+  .superRefine((value, ctx) => {
+    const defaults = value.variants.filter((variant) => variant.isDefault);
+    if (defaults.length > 1)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variants'],
+        message: 'Choose only one default variant.',
+      });
+    if (defaults.some((variant) => !variant.isActive))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variants'],
+        message: 'The default variant must be active.',
+      });
+  });
 
 export const restockRequestSchema = z.object({
   productId: uuid,
@@ -202,15 +220,47 @@ export const restockRequestStatusSchema = z.object({
 });
 export type RestockRequestStatus = z.infer<typeof restockRequestStatusSchema>['status'];
 
-export const productRelationshipSchema = z.object({
-  productId: uuid,
-  relatedProductId: uuid,
-  relationshipType: z.enum(['accessory', 'works_with', 'alternative', 'cheaper_alternative', 'premium_alternative', 'required_accessory']),
-  position: z.coerce.number().int().min(0).max(10_000).default(0),
-}).refine((value) => value.productId !== value.relatedProductId, { message: 'A product cannot relate to itself.', path: ['relatedProductId'] });
+export const productRelationshipSchema = z
+  .object({
+    productId: uuid,
+    relatedProductId: uuid,
+    relationshipType: z.enum([
+      'accessory',
+      'works_with',
+      'alternative',
+      'cheaper_alternative',
+      'premium_alternative',
+      'required_accessory',
+    ]),
+    position: z.coerce.number().int().min(0).max(10_000).default(0),
+  })
+  .refine((value) => value.productId !== value.relatedProductId, {
+    message: 'A product cannot relate to itself.',
+    path: ['relatedProductId'],
+  });
 
-export const storefrontCollectionSchema = z.object({ name: shortText, slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), description: optionalText, imageUrl: z.union([z.string().trim().url(), z.literal('')]).transform((value) => value || undefined).optional(), active: z.boolean().default(true), homepageVisible: z.boolean().default(false), position: z.coerce.number().int().min(0).max(10_000).default(0) });
-export const storefrontCollectionProductSchema = z.object({ collectionId: uuid, productId: uuid, position: z.coerce.number().int().min(0).max(10_000).default(0) });
+export const storefrontCollectionSchema = z.object({
+  name: shortText,
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  description: optionalText,
+  imageUrl: z
+    .union([z.string().trim().url(), z.literal('')])
+    .transform((value) => value || undefined)
+    .optional(),
+  active: z.boolean().default(true),
+  homepageVisible: z.boolean().default(false),
+  position: z.coerce.number().int().min(0).max(10_000).default(0),
+});
+export const storefrontCollectionProductSchema = z.object({
+  collectionId: uuid,
+  productId: uuid,
+  position: z.coerce.number().int().min(0).max(10_000).default(0),
+});
 
 export const categorySchema = z.object({
   name: shortText,
@@ -219,12 +269,29 @@ export const categorySchema = z.object({
     .trim()
     .min(1, 'Required')
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
+  description: optionalText,
+  storefrontDescription: optionalText,
+  imageUrl: z
+    .union([z.string().trim().url('Not a valid URL'), z.literal('')])
+    .transform((value) => value || undefined)
+    .optional(),
+  position: z.coerce.number().int().min(0).max(10_000).optional(),
+  showInStorefrontNav: z.boolean().default(true),
+  featured: z.boolean().default(false),
 });
 
 export const brandSchema = z.object({
   name: shortText,
-  slug: z.string().trim().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
-  website: z.union([z.string().trim().url('Not a valid URL'), z.literal('')]).transform((value) => value || undefined).optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Lowercase words separated by hyphens'),
+  website: z
+    .union([z.string().trim().url('Not a valid URL'), z.literal('')])
+    .transform((value) => value || undefined)
+    .optional(),
   description: optionalText,
   active: z.boolean().default(true),
 });
@@ -516,12 +583,25 @@ export const settingsSchema = z.object({
   // handle however it likes; the footer only renders what is filled in.
   instagram: optionalText,
   openingHours: optionalText,
-  pickupEnabled: z.boolean().default(false), pickupLabel: optionalText, pickupDetails: optionalText,
-  sameDayPickupEnabled: z.boolean().default(false), pickupCutoffTime: optionalText,
-  deliveryEnabled: z.boolean().default(false), deliveryDetails: optionalText, deliveryAreas: optionalText,
-  deliveryFeeDisplay: optionalText, deliveryEstimateDisplay: optionalText,
-  paymentMethods: z.array(z.object({ name: shortText, details: optionalText })).max(10).default([]),
-  announcement: optionalText, heroTitle: optionalText, heroBody: optionalText, supportTitle: optionalText, supportBody: optionalText,
+  pickupEnabled: z.boolean().default(false),
+  pickupLabel: optionalText,
+  pickupDetails: optionalText,
+  sameDayPickupEnabled: z.boolean().default(false),
+  pickupCutoffTime: optionalText,
+  deliveryEnabled: z.boolean().default(false),
+  deliveryDetails: optionalText,
+  deliveryAreas: optionalText,
+  deliveryFeeDisplay: optionalText,
+  deliveryEstimateDisplay: optionalText,
+  paymentMethods: z
+    .array(z.object({ name: shortText, details: optionalText }))
+    .max(10)
+    .default([]),
+  announcement: optionalText,
+  heroTitle: optionalText,
+  heroBody: optionalText,
+  supportTitle: optionalText,
+  supportBody: optionalText,
   defaultNewArrivalDays: z.coerce.number().int().min(1).max(365).default(30),
 });
 
