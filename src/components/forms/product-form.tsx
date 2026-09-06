@@ -172,6 +172,19 @@ function toLines(value: string): string[] {
     .filter(Boolean);
 }
 
+function appendLine(value: string, item: string): string {
+  return toLines(value).includes(item) ? value : [...toLines(value), item].join('\n');
+}
+
+const COMMON_PLATFORMS = [
+  'Amazon Alexa',
+  'Google Home',
+  'Apple Home',
+  'Samsung SmartThings',
+  'Home Assistant',
+];
+const COMMON_PROTOCOLS = ['Wi-Fi', 'Zigbee', 'Matter', 'Thread', 'Bluetooth', 'Z-Wave'];
+
 export function ProductForm({
   initial,
   categories,
@@ -794,6 +807,18 @@ export function ProductForm({
                 />
               </Field>
             </FieldRow>
+            <CompatibilityQuickValues
+              label="Common platforms"
+              values={COMMON_PLATFORMS}
+              selected={values.platforms}
+              onSelect={(value) => set('platforms', appendLine(values.platforms, value))}
+            />
+            <CompatibilityQuickValues
+              label="Common protocols"
+              values={COMMON_PROTOCOLS}
+              selected={values.protocols}
+              onSelect={(value) => set('protocols', appendLine(values.protocols, value))}
+            />
             <Field label="Ecosystems" htmlFor="ecosystems" hint="One per line">
               <Textarea
                 id="ecosystems"
@@ -1122,5 +1147,37 @@ export function ProductForm({
         </div>
       </Surface>
     </form>
+  );
+}
+
+function CompatibilityQuickValues({
+  label,
+  values,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  values: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  const selectedValues = new Set(toLines(selected));
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] text-ink-4">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {values.map((value) => (
+          <button
+            key={value}
+            type="button"
+            disabled={selectedValues.has(value)}
+            onClick={() => onSelect(value)}
+            className="rounded-control border border-line px-2 py-1 text-[11px] text-ink-3 transition-colors hover:border-accent hover:text-accent disabled:cursor-default disabled:border-accent disabled:bg-accent-soft disabled:text-accent"
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
