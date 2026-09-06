@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { QuoteRequestForm } from '@/components/forms/quote-request-form';
-import { RestockRequestForm } from '@/components/forms/restock-request-form';
 import { ProductOrderPanel } from '@/components/store/product-order-panel';
 import { StorePrice } from '@/components/store/store-price';
 import { Badge } from '@/components/ui/badge';
@@ -188,10 +187,12 @@ async function Loader({ params }: { params: Params }) {
 
           <div className="mt-4">
             <ProductOrderPanel
+              productId={product.id}
               productName={product.name}
               variants={product.variants}
               srdRate={srdRate}
               whatsapp={whatsapp}
+              restockNotificationsEnabled={product.restockNotificationsEnabled}
             />
           </div>
 
@@ -206,16 +207,6 @@ async function Loader({ params }: { params: Params }) {
               <QuoteRequestForm productId={product.id} productName={product.name} />
             </div>
           </details>
-
-          {!inStock && product.restockNotificationsEnabled ? (
-            <section className="mt-4 border-t border-line-subtle pt-4">
-              <h2 className="text-[14px] font-semibold text-ink">Notify me when it’s back</h2>
-              <p className="mt-1 text-[12px] text-ink-3">
-                We’ll keep your request for the Nextly team. Nothing is sent automatically.
-              </p>
-              <RestockRequestForm productId={product.id} />
-            </section>
-          ) : null}
 
           {product.compatibility.platforms.length ||
           product.compatibility.protocols.length ||
