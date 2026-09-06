@@ -58,27 +58,6 @@ export function ProductCard({
           spotlight ? 'aspect-square' : 'aspect-[4/3]',
         )}
       >
-        {/* Availability pill floats over the field, Fairphone-style.
-         *  `pointer-events-none` so it never steals a click from the card's
-         *  stretched link underneath — it's a label, not a control. */}
-        <span
-          className={`pointer-events-none absolute top-3 left-3 z-10 rounded-control px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
-            inStock
-              ? 'bg-white/85 text-accent backdrop-blur-sm'
-              : 'bg-store-navy/80 text-white backdrop-blur-sm'
-          }`}
-        >
-          {inStock
-            ? `${product.onHand} in stock`
-            : product.incoming > 0
-              ? `${product.incoming} on the way`
-              : 'Sold out'}
-        </span>
-        {isNew && inStock ? (
-          <span className="pointer-events-none absolute top-3 right-3 z-10 rounded-control bg-store-bright px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] text-store-navy uppercase">
-            New
-          </span>
-        ) : null}
         {product.image ? (
           <Image
             src={product.image.url}
@@ -101,6 +80,16 @@ export function ProductCard({
       </div>
 
       <div className={cn('flex flex-1 flex-col gap-1.5', spotlight ? 'p-6 pt-5' : 'p-5 pt-4')}>
+        <div className="flex items-center justify-between gap-2 text-[10px] font-semibold tracking-[0.06em] text-ink-4 uppercase">
+          <span>
+            {inStock
+              ? `${product.onHand} in stock`
+              : product.incoming > 0
+                ? `${product.incoming} on the way`
+                : 'Sold out'}
+          </span>
+          {isNew && inStock ? <span className="text-accent">New</span> : null}
+        </div>
         {product.brandName || product.categoryName ? (
           <p className="text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
             {[product.brandName, product.categoryName].filter(Boolean).join(' · ')}

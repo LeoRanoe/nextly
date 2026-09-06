@@ -71,15 +71,6 @@ function FeaturedProduct({
   return (
     <div className="store-card grid overflow-hidden lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       <div className="store-field relative aspect-square lg:aspect-auto">
-        <span
-          className={`absolute top-4 left-4 z-10 rounded-control px-2.5 py-1 text-[10px] font-semibold tracking-[0.06em] uppercase ${
-            inStock
-              ? 'bg-white/85 text-accent backdrop-blur-sm'
-              : 'bg-store-navy/80 text-white backdrop-blur-sm'
-          }`}
-        >
-          {inStock ? `${product.onHand} in stock` : 'Sold out'}
-        </span>
         {product.image ? (
           <Image
             src={product.image.url}
@@ -99,6 +90,13 @@ function FeaturedProduct({
       </div>
 
       <div className="flex flex-col justify-center gap-3 p-8 lg:p-12">
+        <p className="text-[10px] font-semibold tracking-[0.06em] text-ink-4 uppercase">
+          {inStock
+            ? `${product.onHand} in stock`
+            : product.incoming > 0
+              ? `${product.incoming} on the way`
+              : 'Sold out'}
+        </p>
         {product.categoryName ? (
           <p className="text-[11px] font-medium text-ink-4 tracking-[0.08em] uppercase">
             {product.categoryName}
@@ -121,8 +119,8 @@ function FeaturedProduct({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <WhatsAppCta
             number={whatsapp}
-            message={`Hallo Nextly, ik ben geïnteresseerd in ${product.name}${
-              inStock ? '. Is het op voorraad?' : '. Wanneer komt de volgende levering?'
+            message={`Hi Nextly, I’m interested in ${product.name}${
+              inStock ? '. Is it in stock?' : '. When is the next delivery expected?'
             }`}
             label={inStock ? 'Ask on WhatsApp' : 'Ask about restock'}
             className="h-11 rounded-full px-6 text-[14px]"
