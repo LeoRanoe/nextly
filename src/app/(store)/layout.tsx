@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Wordmark } from '@/components/shell/wordmark';
 import { StoreFooterBanner } from '@/components/store/store-hero';
 import { whatsappDigits } from '@/lib/whatsapp';
-import { listCatalogCategories } from '@/server/queries/catalog';
+import { listCatalogBundles, listCatalogCategories } from '@/server/queries/catalog';
 import { getSettings } from '@/server/queries/reference';
 
 // The footer shows this year, not a frozen build-time year. `use cache` keeps
@@ -64,9 +64,10 @@ function instagramUrl(raw: string): string {
 }
 
 export default async function StoreLayout({ children }: { children: ReactNode }) {
-  const [settings, categories, year] = await Promise.all([
+  const [settings, categories, bundles, year] = await Promise.all([
     getSettings(),
     listCatalogCategories(),
+    listCatalogBundles(1),
     currentYear(),
   ]);
   const address = [settings?.addressLine, settings?.city].filter(Boolean).join(', ');
@@ -124,7 +125,7 @@ export default async function StoreLayout({ children }: { children: ReactNode })
       <footer>
         <StoreFooterBanner />
         <div className="border-line-subtle border-t bg-sunken">
-          <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[1.5fr_1fr_1fr] lg:px-6">
+          <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-[1.35fr_.8fr_.8fr_1fr] lg:px-6">
             <div className="min-w-0">
               <Wordmark />
               <p className="mt-3 max-w-[40ch] text-[13px] text-ink-3 leading-relaxed">
@@ -135,20 +136,66 @@ export default async function StoreLayout({ children }: { children: ReactNode })
 
             <div className="text-[13px]">
               <h2 className="mb-2 font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
-                Visit
+                Shop
               </h2>
               <ul className="space-y-1 text-ink-3">
-                {address ? <li>{address}</li> : null}
-                {settings?.openingHours ? <li>{settings.openingHours}</li> : null}
-                {!address && !settings?.openingHours ? <li>Paramaribo, Suriname</li> : null}
+                {categories.slice(0, 5).map((category) => (
+                  <li key={category.slug}>
+                    <Link
+                      href={`/?category=${category.slug}`}
+                      className="transition-colors hover:text-accent"
+                    >
+                      {category.name}
+                    </Link>
+                  </li>
+                ))}
+                {bundles.length ? (
+                  <li>
+                    <Link href="/#setups" className="transition-colors hover:text-accent">
+                      Starter setups
+                    </Link>
+                  </li>
+                ) : null}
+                {categories.length === 0 ? (
+                  <li>
+                    <Link href="/#catalog" className="transition-colors hover:text-accent">
+                      All products
+                    </Link>
+                  </li>
+                ) : null}
               </ul>
             </div>
 
             <div className="text-[13px]">
               <h2 className="mb-2 font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
-                Get in touch
+                Help
               </h2>
               <ul className="space-y-1 text-ink-3">
+                <li>
+                  <Link href="/#catalog" className="transition-colors hover:text-accent">
+                    Compatibility
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/#buying" className="transition-colors hover:text-accent">
+                    Pickup &amp; delivery
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/#support" className="transition-colors hover:text-accent">
+                    Warranty &amp; support
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="text-[13px]">
+              <h2 className="mb-2 font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+                Nextly
+              </h2>
+              <ul className="space-y-1 text-ink-3">
+                {address ? <li>{address}</li> : <li>Paramaribo, Suriname</li>}
+                {settings?.openingHours ? <li>{settings.openingHours}</li> : null}
                 {settings?.phone ? (
                   <li>
                     <a

@@ -404,7 +404,7 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
 
   if (!row) return null;
 
-  const [variants, images, related] = await Promise.all([
+  const [variants, related, images] = await Promise.all([
     db.execute<Record<string, string | null>>(sql`
       SELECT v.id, v.name, v.sku, v.list_price_cents::text,
              COALESCE(s.on_hand, 0)::text AS on_hand
@@ -417,6 +417,10 @@ export async function getCatalogProduct(slug: string): Promise<CatalogProduct | 
       SELECT rp.name, rp.slug, rp.summary, pr.relationship_type
         FROM product_relationships pr JOIN products rp ON rp.id = pr.related_product_id
        WHERE pr.product_id = ${row.id} AND rp.catalog_published AND rp.status = 'active'
+         AND EXISTS (
+           SELECT 1 FROM product_variants rv
+            WHERE rv.product_id = rp.id AND rv.is_active AND rv.list_price_cents > 0
+         )
        ORDER BY pr.position, rp.name
     `),
     db.execute<Record<string, string | null>>(sql`

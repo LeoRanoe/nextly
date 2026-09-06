@@ -100,7 +100,7 @@ export async function StoreValues() {
   const supportBody =
     settings?.supportBody?.trim() || 'Tell us what you already use and we’ll help you choose.';
   return (
-    <section className="mt-16 border-line-subtle border-t pt-12">
+    <section id="support" className="mt-16 border-line-subtle border-t pt-12">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start lg:gap-16">
         <div>
           <p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">
@@ -130,6 +130,41 @@ export async function StoreValues() {
           </div>
         </dl>
       </div>
+    </section>
+  );
+}
+
+/** A concise operational sequence, not a set of invented service promises. */
+export async function HowBuyingWorks() {
+  const settings = await getSettings();
+  const collectionStep = settings?.pickupEnabled
+    ? 'Collect your order or arrange delivery.'
+    : settings?.deliveryEnabled
+      ? 'Arrange delivery with Nextly.'
+      : 'Confirm collection or delivery with Nextly.';
+
+  return (
+    <section
+      id="buying"
+      className="mx-auto mb-12 w-full max-w-6xl scroll-mt-20 border-line-subtle border-y px-4 py-8 lg:px-6"
+    >
+      <p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">
+        How buying works
+      </p>
+      <ol className="mt-4 grid gap-5 sm:grid-cols-4">
+        {[
+          ['1', 'Choose', 'Find the device that fits your home.'],
+          ['2', 'Message or order', 'Ask a question or place your order with Nextly.'],
+          ['3', 'Confirm', 'We confirm the option, price and availability.'],
+          ['4', 'Collect or receive', collectionStep],
+        ].map(([number, title, body]) => (
+          <li key={number} className="border-line-subtle border-l pl-3">
+            <span className="text-[11px] font-semibold text-accent">{number}</span>
+            <h2 className="mt-1 text-[13px] font-semibold text-ink">{title}</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-ink-3">{body}</p>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

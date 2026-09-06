@@ -5,11 +5,11 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { QuoteRequestForm } from '@/components/forms/quote-request-form';
 import { RestockRequestForm } from '@/components/forms/restock-request-form';
-import { StorePrice } from '@/components/store/store-price';
 import { ProductOrderPanel } from '@/components/store/product-order-panel';
+import { StorePrice } from '@/components/store/store-price';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getCatalogProduct } from '@/server/queries/catalog';
+import { type CatalogProduct, getCatalogProduct } from '@/server/queries/catalog';
 import { getCurrentRate } from '@/server/queries/overview';
 import { getSettings } from '@/server/queries/reference';
 
@@ -54,15 +54,6 @@ async function Loader({ params }: { params: Params }) {
 
   const srdRate = rate?.rateMicros;
   const whatsapp = settings?.whatsapp ?? null;
-  // Aggregate range excludes unpriced (draft) variants — same rule as the
-  // grid's LATERAL in queries/catalog.ts. The Options list below still shows
-  // every variant's own price untouched, zero included: that is real
-  // per-variant data broken out, not a headline figure.
-  const pricedVariants = product.variants
-    .map((variant) => variant.listPriceCents)
-    .filter((cents) => cents > 0);
-  const minPrice = pricedVariants.length > 0 ? Math.min(...pricedVariants) : 0;
-  const maxPrice = pricedVariants.length > 0 ? Math.max(...pricedVariants) : 0;
   const onHand = product.variants.reduce((total, variant) => total + variant.onHand, 0);
   const inStock = onHand > 0;
   const paragraphs = product.description
@@ -72,6 +63,18 @@ async function Loader({ params }: { params: Params }) {
         .filter(Boolean)
     : [];
   const specs = Object.entries(product.specs);
+  const offers = product.variants
+    .filter((variant) => variant.listPriceCents > 0)
+    .map((variant) => ({
+      '@type': 'Offer',
+      sku: variant.sku,
+      name: variant.name,
+      priceCurrency: 'USD',
+      price: (variant.listPriceCents / 100).toFixed(2),
+      availability:
+        variant.onHand > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/NewCondition',
+    }));
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -80,16 +83,8 @@ async function Loader({ params }: { params: Params }) {
     description: product.seoDescription ?? product.summary ?? undefined,
     sku: product.code,
     image: product.images.map((image) => image.url),
-    brand: product.brandName
-      ? { '@type': 'Brand', name: product.brandName }
-      : undefined,
-    offers: {
-      '@type': 'Offer',
-      priceCurrency: 'USD',
-      price: (minPrice / 100).toFixed(2),
-      availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-      itemCondition: 'https://schema.org/NewCondition',
-    },
+    brand: product.brandName ? { '@type': 'Brand', name: product.brandName } : undefined,
+    ...(offers.length ? { offers } : {}),
   };
   // Product fields are editable by staff. Escaping '<' prevents a catalog
   // value containing </script> from terminating the JSON-LD script element.
@@ -191,7 +186,14 @@ async function Loader({ params }: { params: Params }) {
             <p className="mt-2 text-[13px] text-ink-3 leading-relaxed">{product.summary}</p>
           ) : null}
 
-          <div className="mt-4"><ProductOrderPanel productName={product.name} variants={product.variants} srdRate={srdRate} whatsapp={whatsapp} /></div>
+          <div className="mt-4">
+            <ProductOrderPanel
+              productName={product.name}
+              variants={product.variants}
+              srdRate={srdRate}
+              whatsapp={whatsapp}
+            />
+          </div>
 
           {/* F-5: the alternative channel for visitors who would rather type an
               enquiry than open WhatsApp. The form files a quote request against
@@ -208,24 +210,67 @@ async function Loader({ params }: { params: Params }) {
           {!inStock && product.restockNotificationsEnabled ? (
             <section className="mt-4 border-t border-line-subtle pt-4">
               <h2 className="text-[14px] font-semibold text-ink">Notify me when it’s back</h2>
-              <p className="mt-1 text-[12px] text-ink-3">We’ll keep your request for the Nextly team. Nothing is sent automatically.</p>
+              <p className="mt-1 text-[12px] text-ink-3">
+                We’ll keep your request for the Nextly team. Nothing is sent automatically.
+              </p>
               <RestockRequestForm productId={product.id} />
             </section>
           ) : null}
 
-          {product.compatibility.platforms.length || product.compatibility.protocols.length || product.compatibility.ecosystems.length ? (
+          {product.compatibility.platforms.length ||
+          product.compatibility.protocols.length ||
+          product.compatibility.ecosystems.length ? (
             <section className="mt-6 border-t border-line-subtle pt-5">
-              <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Compatibility</h2>
-              <Compatibility label="Works with" values={[...product.compatibility.platforms, ...product.compatibility.ecosystems]} />
+              <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+                Compatibility
+              </h2>
+              <Compatibility
+                label="Works with"
+                values={[
+                  ...product.compatibility.platforms,
+                  ...product.compatibility.ecosystems,
+                ]}
+              />
               <Compatibility label="Connection" values={product.compatibility.protocols} />
             </section>
           ) : null}
 
-          {Object.keys(product.buyerRequirements).length > 0 ? <Requirements values={product.buyerRequirements} /> : null}
-          {product.keyFeatures.length ? <ListSection title="Key features" values={product.keyFeatures} /> : null}
-          {product.nextlyTake ? <section className="mt-6 border-l-2 border-store-bright pl-4"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Nextly’s take</h2><p className="mt-2 text-[13px] text-ink-2 leading-relaxed">{product.nextlyTake}</p></section> : null}
-          {product.boxContents.length ? <ListSection title="What’s in the box" values={product.boxContents} /> : null}
-          {product.faqItems.length ? <section className="mt-6 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Questions answered</h2><dl className="mt-3 divide-y divide-line-subtle border-y border-line-subtle">{product.faqItems.map((item) => <div key={item.question} className="py-3"><dt className="text-[13px] font-medium text-ink">{item.question}</dt><dd className="mt-1 text-[13px] leading-relaxed text-ink-2">{item.answer}</dd></div>)}</dl></section> : null}
+          {Object.keys(product.buyerRequirements).length > 0 ? (
+            <Requirements values={product.buyerRequirements} />
+          ) : null}
+          {product.keyFeatures.length ? (
+            <ListSection title="Key features" values={product.keyFeatures} />
+          ) : null}
+          {product.nextlyTake ? (
+            <section className="mt-6 border-l-2 border-store-bright pl-4">
+              <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+                Nextly’s take
+              </h2>
+              <p className="mt-2 text-[13px] text-ink-2 leading-relaxed">
+                {product.nextlyTake}
+              </p>
+            </section>
+          ) : null}
+          {product.boxContents.length ? (
+            <ListSection title="What’s in the box" values={product.boxContents} />
+          ) : null}
+          {product.faqItems.length ? (
+            <section className="mt-6 border-t border-line-subtle pt-5">
+              <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+                Questions answered
+              </h2>
+              <dl className="mt-3 divide-y divide-line-subtle border-y border-line-subtle">
+                {product.faqItems.map((item) => (
+                  <div key={item.question} className="py-3">
+                    <dt className="text-[13px] font-medium text-ink">{item.question}</dt>
+                    <dd className="mt-1 text-[13px] leading-relaxed text-ink-2">
+                      {item.answer}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
           <GettingOrder settings={settings} warrantyMonths={product.warrantyMonths} />
 
           {paragraphs.length > 0 ? (
@@ -287,7 +332,7 @@ async function Loader({ params }: { params: Params }) {
               </dl>
             </section>
           ) : null}
-          {product.related.length ? <section className="mt-8 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Works well with</h2><div className="mt-3 space-y-2">{product.related.map((item) => <Link key={`${item.relationshipType}-${item.slug}`} href={`/p/${item.slug}`} className="block text-[13px] text-ink hover:text-accent hover:underline"><span className="font-medium">{item.name}</span>{item.summary ? <span className="text-ink-3"> · {item.summary}</span> : null}</Link>)}</div></section> : null}
+          <RelatedProducts items={product.related} />
         </div>
       </div>
     </article>
@@ -296,13 +341,194 @@ async function Loader({ params }: { params: Params }) {
 
 function Compatibility({ label, values }: { label: string; values: string[] }) {
   if (!values.length) return null;
-  return <div className="mt-3"><p className="mb-1.5 text-[12px] text-ink-3">{label}</p><div className="flex flex-wrap gap-1.5">{values.map((value) => <span key={value} className="rounded-control border border-line px-2 py-1 text-[11px] text-ink">{value}</span>)}</div></div>;
+  return (
+    <div className="mt-3">
+      <p className="mb-1.5 text-[12px] text-ink-3">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {values.map((value) => (
+          <span
+            key={value}
+            className="rounded-control border border-line px-2 py-1 text-[11px] text-ink"
+          >
+            {value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
-function ListSection({ title, values }: { title: string; values: string[] }) { return <section className="mt-6"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">{title}</h2><ul className="mt-2 space-y-1 text-[13px] text-ink-2">{values.map((value) => <li key={value}>• {value}</li>)}</ul></section>; }
-function GettingOrder({ settings, warrantyMonths }: { settings: Awaited<ReturnType<typeof getSettings>>; warrantyMonths: number }) { const methods = settings?.paymentMethods ?? []; if (!settings?.pickupEnabled && !settings?.deliveryEnabled && !methods.length && warrantyMonths <= 0) return null; return <section className="mt-6 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Getting your order</h2>{settings?.pickupEnabled ? <p className="mt-2 text-[13px] text-ink-2"><strong>Pickup.</strong> {[settings.pickupLabel, settings.pickupDetails, settings.sameDayPickupEnabled ? `Same-day pickup${settings.pickupCutoffTime ? ` before ${settings.pickupCutoffTime}` : ''}.` : null].filter(Boolean).join(' ')}</p> : null}{settings?.deliveryEnabled ? <p className="mt-2 text-[13px] text-ink-2"><strong>Delivery.</strong> {[settings.deliveryDetails, settings.deliveryAreas, settings.deliveryFeeDisplay, settings.deliveryEstimateDisplay].filter(Boolean).join(' ')}</p> : null}{methods.length ? <p className="mt-2 text-[13px] text-ink-2"><strong>Payment.</strong> {methods.map((method) => method.details ? `${method.name} (${method.details})` : method.name).join(' · ')}</p> : null}{warrantyMonths > 0 ? <p className="mt-2 text-[13px] text-ink-2"><strong>Warranty.</strong> {warrantyMonths} month{warrantyMonths === 1 ? '' : 's'} from the day of sale.</p> : null}</section>; }
+function ListSection({ title, values }: { title: string; values: string[] }) {
+  return (
+    <section className="mt-6">
+      <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+        {title}
+      </h2>
+      <ul className="mt-2 space-y-1 text-[13px] text-ink-2">
+        {values.map((value) => (
+          <li key={value}>• {value}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+function GettingOrder({
+  settings,
+  warrantyMonths,
+}: {
+  settings: Awaited<ReturnType<typeof getSettings>>;
+  warrantyMonths: number;
+}) {
+  const methods = settings?.paymentMethods ?? [];
+  if (
+    !settings?.pickupEnabled &&
+    !settings?.deliveryEnabled &&
+    !methods.length &&
+    warrantyMonths <= 0
+  )
+    return null;
+  return (
+    <section className="mt-6 border-t border-line-subtle pt-5">
+      <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+        Getting your order
+      </h2>
+      {settings?.pickupEnabled ? (
+        <p className="mt-2 text-[13px] text-ink-2">
+          <strong>Pickup.</strong>{' '}
+          {[
+            settings.pickupLabel,
+            settings.pickupDetails,
+            settings.sameDayPickupEnabled
+              ? `Same-day pickup${settings.pickupCutoffTime ? ` before ${settings.pickupCutoffTime}` : ''}.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        </p>
+      ) : null}
+      {settings?.deliveryEnabled ? (
+        <p className="mt-2 text-[13px] text-ink-2">
+          <strong>Delivery.</strong>{' '}
+          {[
+            settings.deliveryDetails,
+            settings.deliveryAreas,
+            settings.deliveryFeeDisplay,
+            settings.deliveryEstimateDisplay,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        </p>
+      ) : null}
+      {methods.length ? (
+        <p className="mt-2 text-[13px] text-ink-2">
+          <strong>Payment.</strong>{' '}
+          {methods
+            .map((method) =>
+              method.details ? `${method.name} (${method.details})` : method.name,
+            )
+            .join(' · ')}
+        </p>
+      ) : null}
+      {warrantyMonths > 0 ? (
+        <p className="mt-2 text-[13px] text-ink-2">
+          <strong>Warranty.</strong> {warrantyMonths} month{warrantyMonths === 1 ? '' : 's'}{' '}
+          from the day of sale.
+        </p>
+      ) : null}
+    </section>
+  );
+}
 function Requirements({ values }: { values: Record<string, unknown> }) {
-  const labels: Record<string, string> = { hubRequired: 'Hub required', hubName: 'Hub', appRequired: 'App required', appName: 'App', wifiRequired: 'Wi-Fi required', wifiBands: 'Wi-Fi bands', subscription: 'Subscription', indoorOutdoor: 'Use', powerSource: 'Power', batteryType: 'Battery', installationNotes: 'Installation', regionalNotes: 'Regional notes' };
-  const entries = Object.entries(values).filter(([key, value]) => labels[key] && value !== undefined && value !== '' && !(Array.isArray(value) && value.length === 0));
+  const labels: Record<string, string> = {
+    hubRequired: 'Hub required',
+    hubName: 'Hub',
+    appRequired: 'App required',
+    appName: 'App',
+    wifiRequired: 'Wi-Fi required',
+    wifiBands: 'Wi-Fi bands',
+    subscription: 'Subscription',
+    indoorOutdoor: 'Use',
+    powerSource: 'Power',
+    batteryType: 'Battery',
+    installationNotes: 'Installation',
+    regionalNotes: 'Regional notes',
+  };
+  const entries = Object.entries(values).filter(
+    ([key, value]) =>
+      labels[key] &&
+      value !== undefined &&
+      value !== '' &&
+      !(Array.isArray(value) && value.length === 0),
+  );
   if (!entries.length) return null;
-  return <section className="mt-6 border-t border-line-subtle pt-5"><h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">Before you buy</h2><dl className="mt-2 space-y-1.5">{entries.map(([key, value]) => <div key={key} className="grid grid-cols-[110px_1fr] gap-2 text-[12px]"><dt className="text-ink-3">{labels[key]}</dt><dd className="text-ink">{Array.isArray(value) ? value.join(', ') : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</dd></div>)}</dl></section>;
+  return (
+    <section className="mt-6 border-t border-line-subtle pt-5">
+      <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+        Before you buy
+      </h2>
+      <dl className="mt-2 space-y-1.5">
+        {entries.map(([key, value]) => (
+          <div key={key} className="grid grid-cols-[110px_1fr] gap-2 text-[12px]">
+            <dt className="text-ink-3">{labels[key]}</dt>
+            <dd className="text-ink">
+              {Array.isArray(value)
+                ? value.join(', ')
+                : typeof value === 'boolean'
+                  ? value
+                    ? 'Yes'
+                    : 'No'
+                  : String(value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  accessory: 'Accessories',
+  works_with: 'Works well with',
+  alternative: 'Alternatives',
+  cheaper_alternative: 'Lower-cost alternatives',
+  premium_alternative: 'Premium alternatives',
+  required_accessory: 'Required accessories',
+};
+
+function RelatedProducts({ items }: { items: CatalogProduct['related'] }) {
+  if (!items.length) return null;
+  const groups = items.reduce<Record<string, CatalogProduct['related']>>((result, item) => {
+    const group = result[item.relationshipType] ?? [];
+    group.push(item);
+    result[item.relationshipType] = group;
+    return result;
+  }, {});
+
+  return (
+    <section className="mt-8 border-t border-line-subtle pt-5">
+      <h2 className="font-medium text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+        Related products
+      </h2>
+      <div className="mt-3 space-y-5">
+        {Object.entries(groups).map(([type, group]) => (
+          <div key={type}>
+            <h3 className="text-[12px] font-medium text-ink">
+              {RELATIONSHIP_LABELS[type] ?? 'Related products'}
+            </h3>
+            <div className="mt-2 space-y-2">
+              {group.map((item) => (
+                <Link
+                  key={item.slug}
+                  href={`/p/${item.slug}`}
+                  className="block text-[13px] text-ink hover:text-accent hover:underline"
+                >
+                  <span className="font-medium">{item.name}</span>
+                  {item.summary ? <span className="text-ink-3"> · {item.summary}</span> : null}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }

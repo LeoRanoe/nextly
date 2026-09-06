@@ -10,7 +10,7 @@ import { CatalogSort } from '@/components/store/catalog-sort';
 import { CatalogSpotlight } from '@/components/store/catalog-spotlight';
 import { CategoryPills } from '@/components/store/category-pills';
 import { ProductCard } from '@/components/store/product-card';
-import { StoreHero, StoreValues } from '@/components/store/store-hero';
+import { HowBuyingWorks, StoreHero, StoreValues } from '@/components/store/store-hero';
 import { StorePrice } from '@/components/store/store-price';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +72,9 @@ export default function CatalogPage({
       <Suspense fallback={null}>
         <ComingNextSection />
       </Suspense>
+      <Suspense fallback={null}>
+        <HowBuyingWorks />
+      </Suspense>
 
       <section
         id="catalog"
@@ -105,7 +108,7 @@ async function BundleSection() {
   ]);
   if (!bundles.length) return null;
   return (
-    <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6">
+    <section id="setups" className="mx-auto mb-12 w-full max-w-6xl scroll-mt-20 px-4 lg:px-6">
       <p className="text-[11px] font-semibold text-accent tracking-[0.08em] uppercase">
         Starter setups
       </p>
