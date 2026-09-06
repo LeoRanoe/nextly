@@ -72,11 +72,11 @@ describe('runtime environment validation', () => {
 });
 
 describe('public application URL', () => {
-  it('uses the Vercel deployment origin only when the configured URL is the local default', () => {
-    expect(resolvePublicAppUrl('http://localhost:3000', 'nextly-black.vercel.app')).toBe(
-      'https://nextly-black.vercel.app',
+  it('uses a trusted Vercel origin only when the configured URL is the local default', () => {
+    expect(resolvePublicAppUrl('http://localhost:3000', 'nextly.example')).toBe(
+      'https://nextly.example',
     );
-    expect(resolvePublicAppUrl('https://nextly.example', 'nextly-black.vercel.app')).toBe(
+    expect(resolvePublicAppUrl('https://nextly.example', 'nextly-production.vercel.app')).toBe(
       'https://nextly.example',
     );
   });

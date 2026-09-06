@@ -137,7 +137,10 @@ export function resolvePublicAppUrl(configuredUrl: string, deploymentHost?: stri
 }
 
 export function publicAppUrl(): string {
-  return resolvePublicAppUrl(publicEnv().NEXT_PUBLIC_APP_URL, process.env.VERCEL_URL);
+  return resolvePublicAppUrl(
+    publicEnv().NEXT_PUBLIC_APP_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL,
+  );
 }
 
 /** True once the database is reachable in this environment. Lets pages render
