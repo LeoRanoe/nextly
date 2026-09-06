@@ -6,7 +6,15 @@ import { maybe, num, text } from './row';
 /** Dashboard-only operational totals. This is intentionally separate from the
  * public catalog query and includes no supplier or cost values. */
 export async function getStorefrontOverview() {
-  if (!isDatabaseConfigured()) return { published: 0, inStock: 0, outOfStock: 0, incoming: 0, waitingRestocks: 0, recentQuotes: 0 };
+  if (!isDatabaseConfigured())
+    return {
+      published: 0,
+      inStock: 0,
+      outOfStock: 0,
+      incoming: 0,
+      waitingRestocks: 0,
+      recentQuotes: 0,
+    };
   const [row] = await db.execute<Record<string, string | null>>(sql`
     SELECT
       (SELECT COUNT(*) FROM products WHERE catalog_published AND status = 'active')::text AS published,
@@ -16,7 +24,14 @@ export async function getStorefrontOverview() {
       (SELECT COUNT(*) FROM restock_requests WHERE status = 'waiting')::text AS waiting_restocks,
       (SELECT COUNT(*) FROM quote_requests WHERE created_at >= now() - interval '30 days')::text AS recent_quotes
   `);
-  return { published: num(row?.published), inStock: num(row?.in_stock), outOfStock: num(row?.out_of_stock), incoming: num(row?.incoming), waitingRestocks: num(row?.waiting_restocks), recentQuotes: num(row?.recent_quotes) };
+  return {
+    published: num(row?.published),
+    inStock: num(row?.in_stock),
+    outOfStock: num(row?.out_of_stock),
+    incoming: num(row?.incoming),
+    waitingRestocks: num(row?.waiting_restocks),
+    recentQuotes: num(row?.recent_quotes),
+  };
 }
 
 export async function listRestockRequests() {
@@ -28,7 +43,45 @@ export async function listRestockRequests() {
       LEFT JOIN product_variants v ON v.id = r.variant_id
      ORDER BY r.created_at DESC
   `);
-  return rows.map((row) => ({ id: text(row.id), contact: text(row.contact), channel: text(row.channel), status: text(row.status) as 'waiting' | 'contacted' | 'converted' | 'cancelled', createdAt: text(row.created_at), productName: text(row.product_name), variantName: maybe(row.variant_name) }));
+  return rows.map((row) => ({
+    id: text(row.id),
+    contact: text(row.contact),
+    channel: text(row.channel),
+    status: text(row.status) as 'waiting' | 'contacted' | 'converted' | 'cancelled',
+    createdAt: text(row.created_at),
+    productName: text(row.product_name),
+    variantName: maybe(row.variant_name),
+  }));
+}
+
+/** Waiting interest becomes actionable only once the requested variant (or a
+ * product-level request) has real on-hand stock. No outbound contact is sent. */
+export async function listActionableRestockAlerts() {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await db.execute<Record<string, string | null>>(sql`
+    SELECT p.name AS product_name, v.name AS variant_name, COUNT(*)::text AS waiting_count
+      FROM restock_requests r
+      JOIN products p ON p.id = r.product_id
+      LEFT JOIN product_variants v ON v.id = r.variant_id
+      LEFT JOIN v_stock_levels requested_stock ON requested_stock.variant_id = r.variant_id
+     WHERE r.status = 'waiting'
+       AND (
+         (r.variant_id IS NOT NULL AND COALESCE(requested_stock.on_hand, 0) > 0)
+         OR (r.variant_id IS NULL AND EXISTS (
+           SELECT 1 FROM product_variants product_variant
+           JOIN v_stock_levels product_stock ON product_stock.variant_id = product_variant.id
+           WHERE product_variant.product_id = r.product_id
+             AND product_variant.is_active AND product_stock.on_hand > 0
+         ))
+       )
+     GROUP BY p.name, v.name
+     ORDER BY waiting_count DESC, p.name, v.name
+  `);
+  return rows.map((row) => ({
+    productName: text(row.product_name),
+    variantName: maybe(row.variant_name),
+    waitingCount: num(row.waiting_count),
+  }));
 }
 
 /** Private collection management read model. It intentionally includes only
@@ -45,20 +98,33 @@ export async function listStorefrontCollectionsForDashboard() {
      ORDER BY c.position, c.name
   `);
   return rows.map((row) => ({
-    id: text(row.id), name: text(row.name), slug: text(row.slug),
-    description: maybe(row.description), active: row.active === 'true',
-    homepageVisible: row.homepage_visible === 'true', position: num(row.position),
+    id: text(row.id),
+    name: text(row.name),
+    slug: text(row.slug),
+    description: maybe(row.description),
+    active: row.active === 'true',
+    homepageVisible: row.homepage_visible === 'true',
+    position: num(row.position),
     productCount: num(row.product_count),
   }));
 }
 
 export async function listProductStorefrontCollections(productId: string) {
   if (!isDatabaseConfigured()) return [];
-  const rows = await db.execute<Record<string, string | null>>(sql`SELECT c.id, c.name, c.slug, cp.position::text FROM storefront_collection_products cp JOIN storefront_collections c ON c.id = cp.collection_id WHERE cp.product_id = ${productId} ORDER BY cp.position, c.name`);
-  return rows.map((row) => ({ id: text(row.id), name: text(row.name), slug: text(row.slug), position: num(row.position) }));
+  const rows = await db.execute<Record<string, string | null>>(
+    sql`SELECT c.id, c.name, c.slug, cp.position::text FROM storefront_collection_products cp JOIN storefront_collections c ON c.id = cp.collection_id WHERE cp.product_id = ${productId} ORDER BY cp.position, c.name`,
+  );
+  return rows.map((row) => ({
+    id: text(row.id),
+    name: text(row.name),
+    slug: text(row.slug),
+    position: num(row.position),
+  }));
 }
 export async function listStorefrontCollectionOptions() {
   if (!isDatabaseConfigured()) return [];
-  const rows = await db.execute<Record<string, string | null>>(sql`SELECT id, name FROM storefront_collections ORDER BY position, name`);
+  const rows = await db.execute<Record<string, string | null>>(
+    sql`SELECT id, name FROM storefront_collections ORDER BY position, name`,
+  );
   return rows.map((row) => ({ id: text(row.id), name: text(row.name) }));
 }
