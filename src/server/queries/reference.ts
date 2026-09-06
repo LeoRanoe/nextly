@@ -387,6 +387,14 @@ export type SettingsRow = {
   supportTitle: string | null;
   supportBody: string | null;
   defaultNewArrivalDays: number;
+  homepageAvailableNowEnabled: boolean;
+  homepageAvailableNowLimit: number;
+  homepageFeaturedBundlesEnabled: boolean;
+  homepageFeaturedBundlesLimit: number;
+  homepageJustArrivedEnabled: boolean;
+  homepageJustArrivedLimit: number;
+  homepageComingNextEnabled: boolean;
+  homepageComingNextLimit: number;
 };
 
 export async function getSettings(): Promise<SettingsRow | null> {
@@ -401,7 +409,11 @@ export async function getSettings(): Promise<SettingsRow | null> {
            legal_name, address_line, city, phone, whatsapp, email, tax_id, logo_url, invoice_footer,
            instagram, opening_hours, pickup_enabled::text, pickup_label, pickup_details, same_day_pickup_enabled::text, pickup_cutoff_time,
            delivery_enabled::text, delivery_details, delivery_areas, delivery_fee_display, delivery_estimate_display,
-           payment_methods::text, announcement, hero_title, hero_body, support_title, support_body, default_new_arrival_days::text
+           payment_methods::text, announcement, hero_title, hero_body, support_title, support_body, default_new_arrival_days::text,
+           homepage_available_now_enabled::text, homepage_available_now_limit::text,
+           homepage_featured_bundles_enabled::text, homepage_featured_bundles_limit::text,
+           homepage_just_arrived_enabled::text, homepage_just_arrived_limit::text,
+           homepage_coming_next_enabled::text, homepage_coming_next_limit::text
       FROM settings LIMIT 1
   `);
 
@@ -448,6 +460,14 @@ export async function getSettings(): Promise<SettingsRow | null> {
     supportTitle: row.support_title ?? null,
     supportBody: row.support_body ?? null,
     defaultNewArrivalDays: num(row.default_new_arrival_days, 30),
+    homepageAvailableNowEnabled: bool(row.homepage_available_now_enabled),
+    homepageAvailableNowLimit: num(row.homepage_available_now_limit, 6),
+    homepageFeaturedBundlesEnabled: bool(row.homepage_featured_bundles_enabled),
+    homepageFeaturedBundlesLimit: num(row.homepage_featured_bundles_limit, 3),
+    homepageJustArrivedEnabled: bool(row.homepage_just_arrived_enabled),
+    homepageJustArrivedLimit: num(row.homepage_just_arrived_limit, 4),
+    homepageComingNextEnabled: bool(row.homepage_coming_next_enabled),
+    homepageComingNextLimit: num(row.homepage_coming_next_limit, 4),
   };
 }
 

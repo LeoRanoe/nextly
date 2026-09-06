@@ -636,6 +636,14 @@ export const settingsSchema = z.object({
   supportTitle: optionalText,
   supportBody: optionalText,
   defaultNewArrivalDays: z.coerce.number().int().min(1).max(365).default(30),
+  homepageAvailableNowEnabled: z.boolean().default(true),
+  homepageAvailableNowLimit: z.coerce.number().int().min(1).max(24).default(6),
+  homepageFeaturedBundlesEnabled: z.boolean().default(true),
+  homepageFeaturedBundlesLimit: z.coerce.number().int().min(1).max(24).default(3),
+  homepageJustArrivedEnabled: z.boolean().default(true),
+  homepageJustArrivedLimit: z.coerce.number().int().min(1).max(24).default(4),
+  homepageComingNextEnabled: z.boolean().default(true),
+  homepageComingNextLimit: z.coerce.number().int().min(1).max(24).default(4),
 });
 
 export const memberSchema = z.object({

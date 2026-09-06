@@ -58,6 +58,9 @@ export default function CatalogPage({
       <StoreHero />
 
       <Suspense fallback={null}>
+        <AvailableNowSection />
+      </Suspense>
+      <Suspense fallback={null}>
         <GoalCollections />
       </Suspense>
       <Suspense fallback={null}>
@@ -94,7 +97,12 @@ export default function CatalogPage({
 }
 
 async function BundleSection() {
-  const [bundles, rate] = await Promise.all([listCatalogBundles(), getCurrentRate()]);
+  const settings = await getSettings();
+  if (!settings?.homepageFeaturedBundlesEnabled) return null;
+  const [bundles, rate] = await Promise.all([
+    listCatalogBundles(settings.homepageFeaturedBundlesLimit),
+    getCurrentRate(),
+  ]);
   if (!bundles.length) return null;
   return (
     <section className="mx-auto mb-12 w-full max-w-6xl px-4 lg:px-6">
@@ -128,6 +136,28 @@ async function BundleSection() {
         ))}
       </div>
     </section>
+  );
+}
+
+async function AvailableNowSection() {
+  const settings = await getSettings();
+  if (!settings?.homepageAvailableNowEnabled) return null;
+  const [products, rate] = await Promise.all([
+    listCatalogProducts({
+      availability: 'in-stock',
+      limit: settings.homepageAvailableNowLimit,
+    }),
+    getCurrentRate(),
+  ]);
+  if (!products.length) return null;
+  return (
+    <ProductStrip
+      eyebrow="Available right now"
+      title="On the shelf in Paramaribo."
+      products={products}
+      rate={rate?.rateMicros}
+      whatsapp={settings.whatsapp}
+    />
   );
 }
 
@@ -170,10 +200,11 @@ async function GoalCollections() {
 }
 
 async function NewArrivalsSection() {
-  const [products, rate, settings] = await Promise.all([
-    listCatalogProducts({ newArrival: true, limit: 4 }),
+  const settings = await getSettings();
+  if (!settings?.homepageJustArrivedEnabled) return null;
+  const [products, rate] = await Promise.all([
+    listCatalogProducts({ newArrival: true, limit: settings.homepageJustArrivedLimit }),
     getCurrentRate(),
-    getSettings(),
   ]);
   if (!products.length) return null;
   return (
@@ -182,16 +213,17 @@ async function NewArrivalsSection() {
       title="New products, with a real arrival window."
       products={products}
       rate={rate?.rateMicros}
-      whatsapp={settings?.whatsapp ?? null}
+      whatsapp={settings.whatsapp}
     />
   );
 }
 
 async function ComingNextSection() {
-  const [products, rate, settings] = await Promise.all([
-    listCatalogProducts({ availability: 'incoming', limit: 4 }),
+  const settings = await getSettings();
+  if (!settings?.homepageComingNextEnabled) return null;
+  const [products, rate] = await Promise.all([
+    listCatalogProducts({ availability: 'incoming', limit: settings.homepageComingNextLimit }),
     getCurrentRate(),
-    getSettings(),
   ]);
   if (!products.length) return null;
   return (
@@ -200,7 +232,7 @@ async function ComingNextSection() {
       title="Already on the way to Paramaribo."
       products={products}
       rate={rate?.rateMicros}
-      whatsapp={settings?.whatsapp ?? null}
+      whatsapp={settings.whatsapp}
     />
   );
 }

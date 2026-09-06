@@ -155,6 +155,14 @@ export type SettingsInitial = {
   supportTitle: string;
   supportBody: string;
   defaultNewArrivalDays: number;
+  homepageAvailableNowEnabled: boolean;
+  homepageAvailableNowLimit: number;
+  homepageFeaturedBundlesEnabled: boolean;
+  homepageFeaturedBundlesLimit: number;
+  homepageJustArrivedEnabled: boolean;
+  homepageJustArrivedLimit: number;
+  homepageComingNextEnabled: boolean;
+  homepageComingNextLimit: number;
 };
 
 export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
@@ -197,20 +205,54 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
   const [pickupEnabled, setPickupEnabled] = useState(initial.pickupEnabled);
   const [pickupLabel, setPickupLabel] = useState(initial.pickupLabel);
   const [pickupDetails, setPickupDetails] = useState(initial.pickupDetails);
-  const [sameDayPickupEnabled, setSameDayPickupEnabled] = useState(initial.sameDayPickupEnabled);
+  const [sameDayPickupEnabled, setSameDayPickupEnabled] = useState(
+    initial.sameDayPickupEnabled,
+  );
   const [pickupCutoffTime, setPickupCutoffTime] = useState(initial.pickupCutoffTime);
   const [deliveryEnabled, setDeliveryEnabled] = useState(initial.deliveryEnabled);
   const [deliveryDetails, setDeliveryDetails] = useState(initial.deliveryDetails);
   const [deliveryAreas, setDeliveryAreas] = useState(initial.deliveryAreas);
   const [deliveryFeeDisplay, setDeliveryFeeDisplay] = useState(initial.deliveryFeeDisplay);
-  const [deliveryEstimateDisplay, setDeliveryEstimateDisplay] = useState(initial.deliveryEstimateDisplay);
-  const [paymentMethodsText, setPaymentMethodsText] = useState(initial.paymentMethods.map((method) => method.details ? `${method.name} | ${method.details}` : method.name).join('\n'));
+  const [deliveryEstimateDisplay, setDeliveryEstimateDisplay] = useState(
+    initial.deliveryEstimateDisplay,
+  );
+  const [paymentMethodsText, setPaymentMethodsText] = useState(
+    initial.paymentMethods
+      .map((method) => (method.details ? `${method.name} | ${method.details}` : method.name))
+      .join('\n'),
+  );
   const [announcement, setAnnouncement] = useState(initial.announcement);
   const [heroTitle, setHeroTitle] = useState(initial.heroTitle);
   const [heroBody, setHeroBody] = useState(initial.heroBody);
   const [supportTitle, setSupportTitle] = useState(initial.supportTitle);
   const [supportBody, setSupportBody] = useState(initial.supportBody);
-  const [defaultNewArrivalDays, setDefaultNewArrivalDays] = useState(String(initial.defaultNewArrivalDays));
+  const [defaultNewArrivalDays, setDefaultNewArrivalDays] = useState(
+    String(initial.defaultNewArrivalDays),
+  );
+  const [homepageAvailableNowEnabled, setHomepageAvailableNowEnabled] = useState(
+    initial.homepageAvailableNowEnabled,
+  );
+  const [homepageAvailableNowLimit, setHomepageAvailableNowLimit] = useState(
+    String(initial.homepageAvailableNowLimit),
+  );
+  const [homepageFeaturedBundlesEnabled, setHomepageFeaturedBundlesEnabled] = useState(
+    initial.homepageFeaturedBundlesEnabled,
+  );
+  const [homepageFeaturedBundlesLimit, setHomepageFeaturedBundlesLimit] = useState(
+    String(initial.homepageFeaturedBundlesLimit),
+  );
+  const [homepageJustArrivedEnabled, setHomepageJustArrivedEnabled] = useState(
+    initial.homepageJustArrivedEnabled,
+  );
+  const [homepageJustArrivedLimit, setHomepageJustArrivedLimit] = useState(
+    String(initial.homepageJustArrivedLimit),
+  );
+  const [homepageComingNextEnabled, setHomepageComingNextEnabled] = useState(
+    initial.homepageComingNextEnabled,
+  );
+  const [homepageComingNextLimit, setHomepageComingNextLimit] = useState(
+    String(initial.homepageComingNextLimit),
+  );
 
   const { execute, isPending } = useAction(updateSettings, {
     onSuccess() {
@@ -271,14 +313,38 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
               invoiceFooter: invoiceFooter || undefined,
               instagram: instagram || undefined,
               openingHours: openingHours || undefined,
-              pickupEnabled, pickupLabel: pickupLabel || undefined, pickupDetails: pickupDetails || undefined,
-              sameDayPickupEnabled, pickupCutoffTime: pickupCutoffTime || undefined,
-              deliveryEnabled, deliveryDetails: deliveryDetails || undefined, deliveryAreas: deliveryAreas || undefined,
-              deliveryFeeDisplay: deliveryFeeDisplay || undefined, deliveryEstimateDisplay: deliveryEstimateDisplay || undefined,
-              paymentMethods: paymentMethodsText.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => { const [name = '', ...detail] = line.split('|'); return { name: name.trim(), details: detail.join('|').trim() || undefined }; }),
-              announcement: announcement || undefined, heroTitle: heroTitle || undefined, heroBody: heroBody || undefined,
-              supportTitle: supportTitle || undefined, supportBody: supportBody || undefined,
+              pickupEnabled,
+              pickupLabel: pickupLabel || undefined,
+              pickupDetails: pickupDetails || undefined,
+              sameDayPickupEnabled,
+              pickupCutoffTime: pickupCutoffTime || undefined,
+              deliveryEnabled,
+              deliveryDetails: deliveryDetails || undefined,
+              deliveryAreas: deliveryAreas || undefined,
+              deliveryFeeDisplay: deliveryFeeDisplay || undefined,
+              deliveryEstimateDisplay: deliveryEstimateDisplay || undefined,
+              paymentMethods: paymentMethodsText
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => {
+                  const [name = '', ...detail] = line.split('|');
+                  return { name: name.trim(), details: detail.join('|').trim() || undefined };
+                }),
+              announcement: announcement || undefined,
+              heroTitle: heroTitle || undefined,
+              heroBody: heroBody || undefined,
+              supportTitle: supportTitle || undefined,
+              supportBody: supportBody || undefined,
               defaultNewArrivalDays: Number(defaultNewArrivalDays),
+              homepageAvailableNowEnabled,
+              homepageAvailableNowLimit: Number(homepageAvailableNowLimit),
+              homepageFeaturedBundlesEnabled,
+              homepageFeaturedBundlesLimit: Number(homepageFeaturedBundlesLimit),
+              homepageJustArrivedEnabled,
+              homepageJustArrivedLimit: Number(homepageJustArrivedLimit),
+              homepageComingNextEnabled,
+              homepageComingNextLimit: Number(homepageComingNextLimit),
             });
           }}
         >
@@ -513,20 +579,204 @@ export function SettingsSheet({ initial }: { initial: SettingsInitial }) {
             </Field>
           </SheetSection>
 
-          <SheetSection title="Pickup and delivery" hint="Informational storefront details; do not enter unconfirmed fees or estimates.">
-            <label className="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" checked={pickupEnabled} onChange={(event) => setPickupEnabled(event.target.checked)} /> Pickup available</label>
-            {pickupEnabled ? <><Field label="Pickup label" htmlFor="pickupLabel" hint="e.g. Pickup in Paramaribo"><Input id="pickupLabel" value={pickupLabel} onChange={(event) => setPickupLabel(event.target.value)} /></Field><Field label="Pickup details" htmlFor="pickupDetails"><Textarea id="pickupDetails" value={pickupDetails} onChange={(event) => setPickupDetails(event.target.value)} /></Field><label className="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" checked={sameDayPickupEnabled} onChange={(event) => setSameDayPickupEnabled(event.target.checked)} /> Same-day pickup</label>{sameDayPickupEnabled ? <Field label="Same-day cutoff" htmlFor="pickupCutoffTime" hint="e.g. Orders before 15:00"><Input id="pickupCutoffTime" value={pickupCutoffTime} onChange={(event) => setPickupCutoffTime(event.target.value)} /></Field> : null}</> : null}
-            <label className="mt-3 flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" checked={deliveryEnabled} onChange={(event) => setDeliveryEnabled(event.target.checked)} /> Delivery available</label>
-            {deliveryEnabled ? <><Field label="Delivery details" htmlFor="deliveryDetails"><Textarea id="deliveryDetails" value={deliveryDetails} onChange={(event) => setDeliveryDetails(event.target.value)} /></Field><Field label="Areas" htmlFor="deliveryAreas"><Input id="deliveryAreas" value={deliveryAreas} onChange={(event) => setDeliveryAreas(event.target.value)} /></Field><FieldRow><Field label="Fee display" htmlFor="deliveryFeeDisplay" hint="Only if confirmed"><Input id="deliveryFeeDisplay" value={deliveryFeeDisplay} onChange={(event) => setDeliveryFeeDisplay(event.target.value)} /></Field><Field label="Estimate display" htmlFor="deliveryEstimateDisplay"><Input id="deliveryEstimateDisplay" value={deliveryEstimateDisplay} onChange={(event) => setDeliveryEstimateDisplay(event.target.value)} /></Field></FieldRow></> : null}
+          <SheetSection
+            title="Pickup and delivery"
+            hint="Informational storefront details; do not enter unconfirmed fees or estimates."
+          >
+            <label className="flex items-center gap-2 text-[13px] text-ink">
+              <input
+                type="checkbox"
+                checked={pickupEnabled}
+                onChange={(event) => setPickupEnabled(event.target.checked)}
+              />{' '}
+              Pickup available
+            </label>
+            {pickupEnabled ? (
+              <>
+                <Field
+                  label="Pickup label"
+                  htmlFor="pickupLabel"
+                  hint="e.g. Pickup in Paramaribo"
+                >
+                  <Input
+                    id="pickupLabel"
+                    value={pickupLabel}
+                    onChange={(event) => setPickupLabel(event.target.value)}
+                  />
+                </Field>
+                <Field label="Pickup details" htmlFor="pickupDetails">
+                  <Textarea
+                    id="pickupDetails"
+                    value={pickupDetails}
+                    onChange={(event) => setPickupDetails(event.target.value)}
+                  />
+                </Field>
+                <label className="flex items-center gap-2 text-[13px] text-ink">
+                  <input
+                    type="checkbox"
+                    checked={sameDayPickupEnabled}
+                    onChange={(event) => setSameDayPickupEnabled(event.target.checked)}
+                  />{' '}
+                  Same-day pickup
+                </label>
+                {sameDayPickupEnabled ? (
+                  <Field
+                    label="Same-day cutoff"
+                    htmlFor="pickupCutoffTime"
+                    hint="e.g. Orders before 15:00"
+                  >
+                    <Input
+                      id="pickupCutoffTime"
+                      value={pickupCutoffTime}
+                      onChange={(event) => setPickupCutoffTime(event.target.value)}
+                    />
+                  </Field>
+                ) : null}
+              </>
+            ) : null}
+            <label className="mt-3 flex items-center gap-2 text-[13px] text-ink">
+              <input
+                type="checkbox"
+                checked={deliveryEnabled}
+                onChange={(event) => setDeliveryEnabled(event.target.checked)}
+              />{' '}
+              Delivery available
+            </label>
+            {deliveryEnabled ? (
+              <>
+                <Field label="Delivery details" htmlFor="deliveryDetails">
+                  <Textarea
+                    id="deliveryDetails"
+                    value={deliveryDetails}
+                    onChange={(event) => setDeliveryDetails(event.target.value)}
+                  />
+                </Field>
+                <Field label="Areas" htmlFor="deliveryAreas">
+                  <Input
+                    id="deliveryAreas"
+                    value={deliveryAreas}
+                    onChange={(event) => setDeliveryAreas(event.target.value)}
+                  />
+                </Field>
+                <FieldRow>
+                  <Field
+                    label="Fee display"
+                    htmlFor="deliveryFeeDisplay"
+                    hint="Only if confirmed"
+                  >
+                    <Input
+                      id="deliveryFeeDisplay"
+                      value={deliveryFeeDisplay}
+                      onChange={(event) => setDeliveryFeeDisplay(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Estimate display" htmlFor="deliveryEstimateDisplay">
+                    <Input
+                      id="deliveryEstimateDisplay"
+                      value={deliveryEstimateDisplay}
+                      onChange={(event) => setDeliveryEstimateDisplay(event.target.value)}
+                    />
+                  </Field>
+                </FieldRow>
+              </>
+            ) : null}
           </SheetSection>
 
-          <SheetSection title="Storefront content" hint="Only configured payment methods and copy appear publicly.">
-            <Field label="Payment methods" htmlFor="paymentMethods" hint="One per line. Add details after a |"><Textarea id="paymentMethods" value={paymentMethodsText} onChange={(event) => setPaymentMethodsText(event.target.value)} placeholder={'Cash\nBank transfer | Details confirmed on order'} /></Field>
-            <Field label="Announcement" htmlFor="announcement"><Input id="announcement" value={announcement} onChange={(event) => setAnnouncement(event.target.value)} /></Field>
-            <Field label="Hero title" htmlFor="heroTitle"><Input id="heroTitle" value={heroTitle} onChange={(event) => setHeroTitle(event.target.value)} /></Field>
-            <Field label="Hero body" htmlFor="heroBody"><Textarea id="heroBody" value={heroBody} onChange={(event) => setHeroBody(event.target.value)} /></Field>
-            <FieldRow><Field label="Support title" htmlFor="supportTitle"><Input id="supportTitle" value={supportTitle} onChange={(event) => setSupportTitle(event.target.value)} /></Field><Field label="Default new-arrival days" htmlFor="defaultNewArrivalDays"><Input id="defaultNewArrivalDays" numeric inputMode="numeric" value={defaultNewArrivalDays} onChange={(event) => setDefaultNewArrivalDays(event.target.value)} /></Field></FieldRow>
-            <Field label="Support body" htmlFor="supportBody"><Textarea id="supportBody" value={supportBody} onChange={(event) => setSupportBody(event.target.value)} /></Field>
+          <SheetSection
+            title="Storefront content"
+            hint="Only configured payment methods and copy appear publicly."
+          >
+            <Field
+              label="Payment methods"
+              htmlFor="paymentMethods"
+              hint="One per line. Add details after a |"
+            >
+              <Textarea
+                id="paymentMethods"
+                value={paymentMethodsText}
+                onChange={(event) => setPaymentMethodsText(event.target.value)}
+                placeholder={'Cash\nBank transfer | Details confirmed on order'}
+              />
+            </Field>
+            <Field label="Announcement" htmlFor="announcement">
+              <Input
+                id="announcement"
+                value={announcement}
+                onChange={(event) => setAnnouncement(event.target.value)}
+              />
+            </Field>
+            <Field label="Hero title" htmlFor="heroTitle">
+              <Input
+                id="heroTitle"
+                value={heroTitle}
+                onChange={(event) => setHeroTitle(event.target.value)}
+              />
+            </Field>
+            <Field label="Hero body" htmlFor="heroBody">
+              <Textarea
+                id="heroBody"
+                value={heroBody}
+                onChange={(event) => setHeroBody(event.target.value)}
+              />
+            </Field>
+            <FieldRow>
+              <Field label="Support title" htmlFor="supportTitle">
+                <Input
+                  id="supportTitle"
+                  value={supportTitle}
+                  onChange={(event) => setSupportTitle(event.target.value)}
+                />
+              </Field>
+              <Field label="Default new-arrival days" htmlFor="defaultNewArrivalDays">
+                <Input
+                  id="defaultNewArrivalDays"
+                  numeric
+                  inputMode="numeric"
+                  value={defaultNewArrivalDays}
+                  onChange={(event) => setDefaultNewArrivalDays(event.target.value)}
+                />
+              </Field>
+            </FieldRow>
+            <Field label="Support body" htmlFor="supportBody">
+              <Textarea
+                id="supportBody"
+                value={supportBody}
+                onChange={(event) => setSupportBody(event.target.value)}
+              />
+            </Field>
+            <div className="space-y-3 border-line-subtle border-t pt-4">
+              <p className="text-[11px] text-ink-4 uppercase tracking-[0.08em]">
+                Homepage sections
+              </p>
+              <HomepageSectionToggle
+                label="Available right now"
+                enabled={homepageAvailableNowEnabled}
+                setEnabled={setHomepageAvailableNowEnabled}
+                limit={homepageAvailableNowLimit}
+                setLimit={setHomepageAvailableNowLimit}
+              />
+              <HomepageSectionToggle
+                label="Featured bundles"
+                enabled={homepageFeaturedBundlesEnabled}
+                setEnabled={setHomepageFeaturedBundlesEnabled}
+                limit={homepageFeaturedBundlesLimit}
+                setLimit={setHomepageFeaturedBundlesLimit}
+              />
+              <HomepageSectionToggle
+                label="Just arrived"
+                enabled={homepageJustArrivedEnabled}
+                setEnabled={setHomepageJustArrivedEnabled}
+                limit={homepageJustArrivedLimit}
+                setLimit={setHomepageJustArrivedLimit}
+              />
+              <HomepageSectionToggle
+                label="Coming next"
+                enabled={homepageComingNextEnabled}
+                setEnabled={setHomepageComingNextEnabled}
+                limit={homepageComingNextLimit}
+                setLimit={setHomepageComingNextLimit}
+              />
+            </div>
           </SheetSection>
         </form>
       </Sheet>
@@ -785,6 +1035,43 @@ function Line({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-[12px] text-ink-3">{label}</dt>
       <dd className="tabular text-[13px] text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function HomepageSectionToggle({
+  label,
+  enabled,
+  setEnabled,
+  limit,
+  setLimit,
+}: {
+  label: string;
+  enabled: boolean;
+  setEnabled: (value: boolean) => void;
+  limit: string;
+  setLimit: (value: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label className="flex items-center gap-2 text-[13px] text-ink">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => setEnabled(event.target.checked)}
+        />{' '}
+        {label}
+      </label>
+      <Input
+        aria-label={`${label} limit`}
+        type="number"
+        min="1"
+        max="24"
+        numeric
+        className="w-20"
+        value={limit}
+        onChange={(event) => setLimit(event.target.value)}
+      />
     </div>
   );
 }
